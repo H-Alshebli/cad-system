@@ -33,6 +33,7 @@ export default function CasesDashboard() {
               <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
               <p><strong>Level:</strong> {c.level}</p>
               <p><strong>Status:</strong> {c.status}</p>
+              <p><strong>AmbulanceAssign:</strong> {c.ambulanceId}</p>
               <p><strong>Location:</strong> {c.location}</p>
               <p className="text-gray-400 text-sm mt-1">Click to open →</p>
             </div>
