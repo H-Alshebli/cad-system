@@ -70,10 +70,11 @@ export default function ClientCaseDetails({ caseId }: { caseId: string }) {
         <div className="mt-6">
           <h2 className="text-xl font-bold mb-2">Location Map</h2>
           <Map
-            lat={Number(caseData.lat)}
-            lng={Number(caseData.lng)}
-            label={caseData.locationText}
-          />
+  latitude={Number(caseData.lat)}
+  longitude={Number(caseData.lng)}
+  name={caseData.locationText || "Location"}
+/>
+
         </div>
       )}
     </div>
