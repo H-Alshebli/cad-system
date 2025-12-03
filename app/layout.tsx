@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
+import Navbar from "./components/Navbar"; // ✅ Important!
 
 const inter = Inter({
   subsets: ["latin"],
@@ -17,7 +18,11 @@ export const metadata: Metadata = {
   description: "Emergency Dispatch System",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <head>
@@ -26,8 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         />
       </head>
+
       <body className={`${inter.variable} ${mono.variable}`}>
-        {children}
+        {/* ✅ Navbar appears on every page */}
+        <Navbar />
+
+        {/* Page Content */}
+        <main className="p-4">{children}</main>
       </body>
     </html>
   );
