@@ -1,126 +1,170 @@
 "use client";
 
-import { useState } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
+
 
 export default function NewCasePage() {
   const [patientName, setPatientName] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
-  const [locationInput, setLocationInput] = useState("");
+  const [locationText, setLocationText] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
-  const handleSubmit = async (e: any) => {
+  const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [selectedAmbulance, setSelectedAmbulance] = useState("");
+
+  // Load available ambulances
+  interface Ambulance {
+  id: string;
+  code: string;
+  crew: string;
+  location: string;
+  status: string;
+  currentCase?: string | null;
+  }
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
+      const list = snap.docs
+        .map((d) => ({ docId: d.id, ...d.data()as Ambulance }))
+        //.filter((a) => a.status === "available"); // Only available ambulances
+
+      setAmbulances(list);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Convert "24.7, 46.6" into lat/lng numbers
+  function parseLatLng(input: string) {
+    if (!input.includes(",")) return;
+
+    const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
+    setLat(la);
+    setLng(ln);
+  }
+
+  // Submit new case
+  async function handleSubmit(e: any) {
     e.preventDefault();
 
-    // ---------- LOCATION PARSING ----------
-    let lat = null;
-    let lng = null;
-    let locationText = locationInput.trim();
-
-    if (locationInput.includes(",")) {
-      const parts = locationInput.split(",");
-      lat = Number(parts[0].trim());
-      lng = Number(parts[1].trim());
+    if (!patientName || !chiefComplaint || !level) {
+      alert("Please fill all required fields");
+      return;
     }
 
-    // Ensure both lat & lng are valid numbers
-    if (!isNaN(lat!) && !isNaN(lng!)) {
-      console.log("Parsed coordinates:", lat, lng);
-    } else {
-      lat = null;
-      lng = null;
-    }
+    // Create case document
+    const caseRef = await addDoc(collection(db, "cases"), {
+      patientName,
+      chiefComplaint,
+      level,
+      locationText,
+      lat,
+      lng,
+      status: "Received",
+      timestamp: new Date(),
+      ambulanceId: selectedAmbulance || null,
+    });
 
-    // ---------- SAVE TO FIRESTORE ----------
-    try {
-      await addDoc(collection(db, "cases"), {
-        patientName,
-        chiefComplaint,
-        level,
-        dispatcherId: "demo-dispatcher",
-        lat,
-        lng,
-        locationText,
-        status: "Received",
-        timestamp: serverTimestamp(),
+    // Mark ambulance as busy
+    if (selectedAmbulance) {
+      await updateDoc(doc(db, "ambulances", selectedAmbulance), {
+        status: "busy",
+        currentCase: caseRef.id,
       });
-
-      alert("Case created successfully!");
-      setPatientName("");
-      setChiefComplaint("");
-      setLevel("");
-      setLocationInput("");
-    } catch (error) {
-      console.error("Error creating case:", error);
-      alert("Error creating case");
     }
-  };
+
+    alert("Case created successfully!");
+    window.location.href = "/cases";
+  }
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Patient Name */}
         <div>
-          <label>Patient Name</label>
+          <label className="font-semibold">Patient Name</label>
           <input
-            className="border w-full p-2 rounded"
-            type="text"
+            className="w-full border p-2 rounded"
             value={patientName}
             onChange={(e) => setPatientName(e.target.value)}
-            required
           />
         </div>
 
+        {/* Complaint */}
         <div>
-          <label>Chief Complaint</label>
+          <label className="font-semibold">Chief Complaint</label>
           <input
-            className="border w-full p-2 rounded"
-            type="text"
+            className="w-full border p-2 rounded"
             value={chiefComplaint}
             onChange={(e) => setChiefComplaint(e.target.value)}
-            required
           />
         </div>
 
+        {/* Level */}
         <div>
-          <label>Level (Triage)</label>
+          <label className="font-semibold">Level (Triage)</label>
           <select
-            className="border w-full p-2 rounded"
+            className="w-full border p-2 rounded"
             value={level}
             onChange={(e) => setLevel(e.target.value)}
-            required
           >
             <option value="">Select Level</option>
-            <option value="1">Level 1</option>
-            <option value="2">Level 2</option>
-            <option value="3">Level 3</option>
-            <option value="4">Level 4</option>
+            <option value="1">Level 1 - Critical</option>
+            <option value="2">Level 2 - Emergency</option>
+            <option value="3">Level 3 - Urgent</option>
+            <option value="4">Level 4 - Non-Urgent</option>
           </select>
         </div>
 
+        {/* Location */}
         <div>
-          <label>Location</label>
+          <label className="font-semibold">Location</label>
           <input
-            className="border w-full p-2 rounded"
-            placeholder="24.7136, 46.6753"
-            type="text"
-            value={locationInput}
-            onChange={(e) => setLocationInput(e.target.value)}
-            required
+            className="w-full border p-2 rounded"
+            placeholder="24.7136, 46.6753 or address"
+            value={locationText}
+            onChange={(e) => {
+              setLocationText(e.target.value);
+              parseLatLng(e.target.value);
+            }}
           />
-          <p className="text-sm text-gray-600 mt-1">
-            Use format: <strong>latitude, longitude</strong><br />
-            Example: <code>24.8743, 46.6116</code>
-          </p>
         </div>
 
+        {/* Ambulance Selection */}
+        <div>
+          <label className="font-semibold">Assign Ambulance</label>
+          <select
+            className="w-full border p-2 rounded"
+            value={selectedAmbulance}
+            onChange={(e) => setSelectedAmbulance(e.target.value)}
+          >
+            <option value="">Select ambulance…</option>
+            {ambulances.map((amb) => (
+              <option key={amb.id} value={amb.id}>
+                {amb.code} — {amb.location}— {amb.status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Submit button */}
         <button
           type="submit"
-          className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
+          className="bg-blue-600 text-white px-4 py-2 rounded w-full"
         >
-          Create Case
+          Submit Case
         </button>
       </form>
     </div>
