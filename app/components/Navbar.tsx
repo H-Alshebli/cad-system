@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     <nav className="w-full bg-white border-b p-4 shadow-sm">
       <div className="max-w-5xl mx-auto flex gap-6">
-        <Link className={linkClass("/")} href="/">
+        <Link className={linkClass("/")} href="/dashboard">
           Home
         </Link>
 
