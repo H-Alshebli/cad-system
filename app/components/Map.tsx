@@ -4,31 +4,31 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-interface MapProps {
-  lat: number;
-  lng: number;
-  label?: string;
+export interface MapProps {
+  latitude: number;
+  longitude: number;
 }
 
-const defaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+const markerIcon = new L.Icon({
+  iconUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
 
-export default function Map({ lat, lng, label }: MapProps) {
+export default function Map({ latitude, longitude }: MapProps) {
   return (
-    <div style={{ height: "300px", width: "100%", borderRadius: "10px", overflow: "hidden" }}>
+    <div style={{ height: "300px", width: "100%" }}>
       <MapContainer
-        center={[lat, lng]}
-        zoom={15}
+        center={[latitude, longitude]}
+        zoom={14}
+        scrollWheelZoom={true}
         style={{ height: "100%", width: "100%" }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        <Marker position={[lat, lng]} icon={defaultIcon}>
-          <Popup>{label || "Location"}</Popup>
+        <Marker position={[latitude, longitude]} icon={markerIcon}>
+          <Popup>Case Location</Popup>
         </Marker>
       </MapContainer>
     </div>
