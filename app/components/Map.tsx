@@ -7,7 +7,9 @@ import "leaflet/dist/leaflet.css";
 export interface MapProps {
   latitude: number;
   longitude: number;
+  name?: string;  // optional
 }
+
 
 const markerIcon = new L.Icon({
   iconUrl:
@@ -16,7 +18,8 @@ const markerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-export default function Map({ latitude, longitude }: MapProps) {
+export default function Map({ latitude, longitude, name }: MapProps) {
+
   return (
     <div style={{ height: "300px", width: "100%" }}>
       <MapContainer
