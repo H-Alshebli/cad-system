@@ -225,7 +225,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* MAP */}
       {caseData.lat && caseData.lng && (
         <div className="mt-10">
-          <h2 className="text-xl font-bold mb-2">Location Map</h2>
+          <h2 className="text-xl font-bold mb-2">Location Map1</h2>
 
           <Map
             lat={Number(caseData.lat)}
