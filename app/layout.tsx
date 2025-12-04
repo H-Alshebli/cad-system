@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
 import Navbar from "./components/Navbar"; // ✅ Important!
 
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -39,6 +40,7 @@ export default function RootLayout({
         {/* Page Content */}
         <main className="p-4">{children}</main>
       </body>
+      
     </html>
   );
 }

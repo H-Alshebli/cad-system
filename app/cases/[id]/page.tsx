@@ -21,9 +21,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --------------------------------------------------------------------
-  // LIVE LISTENER FOR THIS CASE
-  // --------------------------------------------------------------------
+  // LISTENER FOR CASE DATA
   useEffect(() => {
     const ref = doc(db, "cases", caseId);
 
@@ -34,9 +32,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     return () => unsub();
   }, [caseId]);
 
-  // --------------------------------------------------------------------
   // LOAD AMBULANCES
-  // --------------------------------------------------------------------
   useEffect(() => {
     const loadAmbulances = async () => {
       const ambSnap = await getDocs(collection(db, "ambulances"));
@@ -51,35 +47,28 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
   if (loading || !caseData) return <p className="p-6">Loading...</p>;
 
-  // --------------------------------------------------------------------
-  // UPDATE STATUS + TIMELINE
-  // --------------------------------------------------------------------
-  const handleStatusUpdate = async (newStatus: string) => {
-    try {
-      const caseRef = doc(db, "cases", caseId);
-      const timestamp = new Date().toISOString();
+  // STATUS UPDATE
+ const handleStatusUpdate = async (newStatus: string) => {
+  try {
+    const caseRef = doc(db, "cases", caseId);
+    const timestamp = new Date().toISOString();
 
-      await updateDoc(caseRef, {
-        status: newStatus,
-        [`timeline.${newStatus}`]: timestamp,
-      });
+    await updateDoc(caseRef, {
+      status: newStatus,
+      [`timeline.${newStatus}`]: timestamp,
+    });
 
-      setCaseData((prev: any) => ({
-        ...prev,
-        status: newStatus,
-        timeline: {
-          ...prev.timeline,
-          [newStatus]: timestamp,
-        },
-      }));
-    } catch (err) {
-      console.error("Error updating:", err);
-    }
-  };
+    setCaseData((prev: any) => ({
+      ...prev,
+      status: newStatus,
+      timeline: { ...prev.timeline, [newStatus]: timestamp },
+    }));
+  } catch (err) {
+    console.error("Error updating:", err);
+  }
+};
 
-  // --------------------------------------------------------------------
   // ASSIGN AMBULANCE
-  // --------------------------------------------------------------------
   const handleAssignAmbulance = async (newAmbId: string) => {
     try {
       const caseRef = doc(db, "cases", caseId);
@@ -107,9 +96,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     }
   };
 
-  // --------------------------------------------------------------------
   // SAVE EDITS
-  // --------------------------------------------------------------------
   const saveEdits = async () => {
     try {
       await updateDoc(doc(db, "cases", caseId), {
@@ -125,9 +112,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     }
   };
 
-  // --------------------------------------------------------------------
-  // UI
-  // --------------------------------------------------------------------
+  // PAGE UI
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
@@ -142,7 +127,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         <p><strong>Ambulance:</strong> {caseData.ambulanceId || "None"}</p>
       </div>
 
-      {/* STATUS BUTTONS + TIMELINE UPDATE */}
+      {/* STATUS UPDATE */}
       <h2 className="text-xl font-semibold mb-2">Update Status</h2>
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
         {["Received", "Assigned", "EnRoute", "OnScene", "Transporting", "Hospital", "Closed"].map(
@@ -241,9 +226,10 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {caseData.lat && caseData.lng && (
         <div className="mt-10">
           <h2 className="text-xl font-bold mb-2">Location Map</h2>
+
           <Map
-            latitude={Number(caseData.lat)}
-            longitude={Number(caseData.lng)}
+            lat={Number(caseData.lat)}
+            lng={Number(caseData.lng)}
             name={caseData.locationText}
           />
         </div>

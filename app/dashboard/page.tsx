@@ -60,7 +60,7 @@ export default function Dashboard() {
     <p className="mt-2 text-sm">
       Active: <span className="font-bold">{activeCases}</span>
       {" — "}
-      Solved: <span className="font-bold">{closedCases}</span>
+      treated: <span className="font-bold">{closedCases}</span>
     </p>
   </div>
 

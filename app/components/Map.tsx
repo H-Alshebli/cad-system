@@ -1,38 +1,53 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-export interface MapProps {
-  latitude: number;
-  longitude: number;
-  name?: string;  // optional
+// ✅ Custom event type (simple & 100% safe)
+type LeafletClickEvent = {
+  latlng: {
+    lat: number;
+    lng: number;
+  };
+};
+
+function OpenGoogleMapsOnClick() {
+  useMapEvents({
+    click(e: LeafletClickEvent) {
+      const { lat, lng } = e.latlng;
+
+      window.open(
+        `https://www.google.com/maps?q=${lat},${lng}`,
+        "_blank"
+      );
+    },
+  });
+
+  return null;
 }
 
-
-const markerIcon = new L.Icon({
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-export default function Map({ latitude, longitude, name }: MapProps) {
-
+export default function Map({
+  lat,
+  lng,
+}: {
+  lat: number;
+  lng: number;
+}) {
   return (
-    <div style={{ height: "300px", width: "100%" }}>
+    <div className="w-full h-72 rounded-lg overflow-hidden">
       <MapContainer
-        center={[latitude, longitude]}
-        zoom={14}
-        scrollWheelZoom={true}
-        style={{ height: "100%", width: "100%" }}
+        center={[lat, lng]}
+        zoom={15}
+        style={{ width: "100%", height: "100%" }}
       >
+        {/* OpenStreetMap Tile */}
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        <Marker position={[latitude, longitude]} icon={markerIcon}>
-          <Popup>Case Location</Popup>
-        </Marker>
+        {/* Marker Position */}
+        <Marker position={[lat, lng]} />
+
+        {/* Click-to-open-GoogleMaps handler */}
+        <OpenGoogleMapsOnClick />
       </MapContainer>
     </div>
   );
