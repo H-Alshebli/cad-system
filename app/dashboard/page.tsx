@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
 
 export default function Dashboard() {
@@ -10,25 +10,31 @@ export default function Dashboard() {
   const [ambulances, setAmbulances] = useState<any[]>([]);
 
   useEffect(() => {
-    // 🔥 Live cases listener
-    const unsubCases = onSnapshot(collection(db, "cases"), (snap) => {
-      const list: any[] = [];
-      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-      setCases(list);
-    });
+  // 🔥 Live sorted cases listener
+  const casesQuery = query(
+    collection(db, "cases"),
+    orderBy("createdAt", "desc")   // NEW → OLD
+  );
 
-    // 🔥 Live ambulances listener
-    const unsubAmb = onSnapshot(collection(db, "ambulances"), (snap) => {
-      const list: any[] = [];
-      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-      setAmbulances(list);
-    });
+  const unsubCases = onSnapshot(casesQuery, (snap) => {
+    const list: any[] = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    setCases(list);
+  });
 
-    return () => {
-      unsubCases();
-      unsubAmb();
-    };
-  }, []);
+  // 🔥 Live ambulances listener
+  const unsubAmb = onSnapshot(collection(db, "ambulances"), (snap) => {
+    const list: any[] = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    setAmbulances(list);
+  });
+
+  return () => {
+    unsubCases();
+    unsubAmb();
+  };
+}, []);
+
 
   // 📌 Stats
   const totalCases = cases.length;

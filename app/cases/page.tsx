@@ -2,15 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import Link from "next/link";
 
 export default function CasesDashboard() {
   const [cases, setCases] = useState<any[]>([]);
 
   useEffect(() => {
-    // Listen to cases collection in real-time
-    const unsub = onSnapshot(collection(db, "cases"), (snapshot) => {
+    // 🔥 SORT BY createdAt DESC
+    const q = query(
+      collection(db, "cases"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),

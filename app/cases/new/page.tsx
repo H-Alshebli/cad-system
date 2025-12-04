@@ -8,8 +8,8 @@ import {
   onSnapshot,
   updateDoc,
   doc,
+  serverTimestamp, // ✅ Add this
 } from "firebase/firestore";
-
 
 export default function NewCasePage() {
   const [patientName, setPatientName] = useState("");
@@ -22,21 +22,21 @@ export default function NewCasePage() {
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [selectedAmbulance, setSelectedAmbulance] = useState("");
 
-  // Load available ambulances
   interface Ambulance {
-  id: string;
-  code: string;
-  crew: string;
-  location: string;
-  status: string;
-  currentCase?: string | null;
+    id: string;
+    code: string;
+    crew: string;
+    location: string;
+    status: string;
+    currentCase?: string | null;
   }
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
-      const list = snap.docs
-        .map((d) => ({ docId: d.id, ...d.data()as Ambulance }))
-        //.filter((a) => a.status === "available"); // Only available ambulances
+      const list = snap.docs.map((d) => ({
+        docId: d.id,
+        ...d.data() as Ambulance
+      }));
 
       setAmbulances(list);
     });
@@ -44,7 +44,6 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
-  // Convert "24.7, 46.6" into lat/lng numbers
   function parseLatLng(input: string) {
     if (!input.includes(",")) return;
 
@@ -53,7 +52,6 @@ export default function NewCasePage() {
     setLng(ln);
   }
 
-  // Submit new case
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -62,7 +60,7 @@ export default function NewCasePage() {
       return;
     }
 
-    // Create case document
+    // 🔥 Create case with correct timestamp
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -71,11 +69,11 @@ export default function NewCasePage() {
       lat,
       lng,
       status: "Received",
-      timestamp: new Date(),
+      createdAt: serverTimestamp(), // ✅ REAL TIME Firestore timestamp
       ambulanceId: selectedAmbulance || null,
     });
 
-    // Mark ambulance as busy
+    // Mark ambulance busy
     if (selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -153,13 +151,12 @@ export default function NewCasePage() {
             <option value="">Select ambulance…</option>
             {ambulances.map((amb) => (
               <option key={amb.id} value={amb.id}>
-                {amb.code} — {amb.location}— {amb.status}
+                {amb.code} — {amb.location} — {amb.status}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Submit button */}
         <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded w-full"
