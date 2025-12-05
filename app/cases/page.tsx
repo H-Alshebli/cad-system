@@ -12,16 +12,33 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 
-export default function CasesDashboard() {
-  const [cases, setCases] = useState<any[]>([]);
+// ✅ FIX: Case interface so TS accepts ambulanceCode
+interface CaseData {
+  id: string;
+  patientName?: string;
+  chiefComplaint?: string;
+  level?: string;
+  status?: string;
+  locationText?: string;
+  ambulanceId?: string;
+  ambulanceCode?: string;
+  createdAt?: any;
+  [key: string]: any; // allow extra fields
+}
 
-  // Access control
+export default function CasesDashboard() {
+  const [cases, setCases] = useState<CaseData[]>([]);
+
+  // Access Control
   const [isAdmin, setIsAdmin] = useState(false);
   const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
   const [showPopup, setShowPopup] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // LOAD SAVED LOGIN (admin or ambulance)
+  // Real-time alert tracking
+  const [lastCaseCount, setLastCaseCount] = useState(0);
+
+  // Load saved login on page load
   useEffect(() => {
     const savedCode = localStorage.getItem("accessCode");
 
@@ -32,40 +49,62 @@ export default function CasesDashboard() {
       } else if (savedCode.startsWith("AMB-")) {
         setAmbulanceFilter(savedCode);
         setShowPopup(false);
-      } else {
-        setShowPopup(true);
       }
     }
   }, []);
 
-  // Load cases sorted by newest first
+  // 🔊 Play Alert Sound
+  function playAlertSound() {
+    const audio = new Audio("/alert.mp3");
+    audio.play().catch(() => {});
+  }
+
+  // ⚠️ Visual Alert
+  function showVisualAlert() {
+    alert("🚨 New Case Assigned to You!");
+  }
+
+  // Load cases + alert detection
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map((doc) => ({
+      const list: CaseData[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Cases belonging to this ambulance
+      const myCases = ambulanceFilter
+        ? list.filter((c) => c.ambulanceCode === ambulanceFilter)
+        : list;
+
+      // Detect NEW case assigned to this ambulance
+      if (ambulanceFilter && myCases.length > lastCaseCount) {
+        playAlertSound();
+        showVisualAlert();
+      }
+
+      setLastCaseCount(myCases.length);
       setCases(list);
     });
 
     return () => unsub();
-  }, []);
+  }, [ambulanceFilter, lastCaseCount]);
 
-  // Handle delete (Admin Only)
+  // Delete Case (Admin Only)
   async function deleteCase(id: string) {
     if (!confirm("Are you sure you want to delete this case?")) return;
     await deleteDoc(doc(db, "cases", id));
     alert("Case deleted successfully");
   }
 
-  // Handle login code submission
+  // Handle Login Code
   function handleCodeSubmit() {
-    const codeInput = document.getElementById("accessCode") as HTMLInputElement;
-    const code = codeInput.value.trim();
+    const input = document.getElementById("accessCode") as HTMLInputElement;
+    const code = input.value.trim();
 
-    // Admin login
+    // Admin Login
     if (code === "1234") {
       setIsAdmin(true);
       setShowPopup(false);
@@ -73,7 +112,7 @@ export default function CasesDashboard() {
       return;
     }
 
-    // Ambulance login
+    // Ambulance Login (AMB-001, AMB-002...)
     if (code.startsWith("AMB-")) {
       setAmbulanceFilter(code);
       setIsAdmin(false);
@@ -82,30 +121,30 @@ export default function CasesDashboard() {
       return;
     }
 
-    // Wrong code
+    // Wrong Code
     setErrorMessage("❌ Incorrect code. Please enter a valid access code.");
   }
 
-  // Logout button
+  // Logout Handler
   function handleLogout() {
     localStorage.removeItem("accessCode");
-    setIsAdmin(false);
     setAmbulanceFilter(null);
+    setIsAdmin(false);
     setShowPopup(true);
+    setLastCaseCount(0);
   }
 
-  // Filter cases for ambulance view
+  // Apply filtering
   let filteredCases = cases;
+
   if (ambulanceFilter) {
-    filteredCases = cases.filter(
-      (c) => c.ambulanceCode === ambulanceFilter
-    );
+    filteredCases = cases.filter((c) => c.ambulanceCode === ambulanceFilter);
   }
 
   return (
     <div className="p-6">
 
-      {/* ░░░░ ACCESS CODE POPUP ░░░░ */}
+      {/* POPUP LOGIN SCREEN */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-80 text-center">
@@ -132,11 +171,10 @@ export default function CasesDashboard() {
         </div>
       )}
 
-      {/* Header with LOGOUT button */}
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Dispatch Dashboard</h1>
 
-        {/* Show logout only if logged in */}
         {!showPopup && (
           <button
             onClick={handleLogout}
@@ -147,10 +185,11 @@ export default function CasesDashboard() {
         )}
       </div>
 
+      {/* CASE LIST */}
       <div className="space-y-3">
         {filteredCases.map((c) => (
           <div key={c.id} className="border p-4 rounded shadow-sm bg-white">
-
+            
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer hover:bg-gray-100">
                 <h2 className="text-xl font-bold">{c.patientName}</h2>
@@ -163,7 +202,7 @@ export default function CasesDashboard() {
               </div>
             </Link>
 
-            {/* DELETE BUTTON — ONLY ADMIN */}
+            {/* ADMIN DELETE BUTTON */}
             {isAdmin && (
               <button
                 onClick={() => deleteCase(c.id)}

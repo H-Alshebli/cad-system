@@ -18,28 +18,15 @@ export default function NewCasePage() {
   const [locationText, setLocationText] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [selectedAmbulance, setSelectedAmbulance] = useState("");
 
-  interface Ambulance {
-    id: string;
-    code: string;
-    crew: string;
-    location: string;
-    status: string;
-    currentCase?: string | null;
-    docId?: string;
-  }
-
-  // Load ambulances in real-time
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({
         docId: d.id,
         ...d.data(),
-      })) as Ambulance[];
-
+      }));
       setAmbulances(list);
     });
 
@@ -54,7 +41,6 @@ export default function NewCasePage() {
     setLng(ln);
   }
 
-  // SUBMIT CASE
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -63,10 +49,10 @@ export default function NewCasePage() {
       return;
     }
 
-    // 1️⃣ Get selected ambulance object
+    // Get selected ambulance object
     const amb = ambulances.find((a) => a.docId === selectedAmbulance);
 
-    // 2️⃣ Create case with ambulanceCode
+    // Add case with ambulanceCode
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -76,11 +62,13 @@ export default function NewCasePage() {
       lng,
       status: "Received",
       createdAt: serverTimestamp(),
-      ambulanceId: selectedAmbulance,         // Firestore ID
-      ambulanceCode: amb?.code || null,       // 🔥 Human code (AMB-002)
+
+      // 🔥 CRITICAL: Required for ambulance filtering + alerts
+      ambulanceId: selectedAmbulance,
+      ambulanceCode: amb?.code || null, // "AMB-002"
     });
 
-    // 3️⃣ Mark ambulance as busy
+    // Mark ambulance busy
     if (selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -88,16 +76,7 @@ export default function NewCasePage() {
       });
     }
 
-    // 4️⃣ Reset form (optional)
-    setPatientName("");
-    setChiefComplaint("");
-    setLevel("");
-    setLocationText("");
-    setLat(null);
-    setLng(null);
-    setSelectedAmbulance("");
-
-    alert("Case created successfully!");
+    alert("Case Created Successfully!");
     window.location.href = "/cases";
   }
 
@@ -106,7 +85,6 @@ export default function NewCasePage() {
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        
         {/* Patient Name */}
         <div>
           <label className="font-semibold">Patient Name</label>
@@ -127,7 +105,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Triage Level */}
+        {/* Level */}
         <div>
           <label className="font-semibold">Level (Triage)</label>
           <select
@@ -157,7 +135,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Ambulance Selection */}
+        {/* Ambulance */}
         <div>
           <label className="font-semibold">Assign Ambulance</label>
           <select
