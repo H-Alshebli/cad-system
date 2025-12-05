@@ -115,7 +115,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   // PAGE UI
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Case Details  work</h1>
+      <h1 className="text-3xl font-bold mb-6">Case Details</h1>
 
       {/* CASE INFO */}
       <div className="bg-white border p-6 rounded-lg shadow mb-6">
