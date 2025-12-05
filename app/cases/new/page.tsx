@@ -8,7 +8,7 @@ import {
   onSnapshot,
   updateDoc,
   doc,
-  serverTimestamp, // ✅ Add this
+  serverTimestamp,
 } from "firebase/firestore";
 
 export default function NewCasePage() {
@@ -29,14 +29,16 @@ export default function NewCasePage() {
     location: string;
     status: string;
     currentCase?: string | null;
+    docId?: string;
   }
 
+  // Load ambulances in real-time
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({
         docId: d.id,
-        ...d.data() as Ambulance
-      }));
+        ...d.data(),
+      })) as Ambulance[];
 
       setAmbulances(list);
     });
@@ -52,6 +54,7 @@ export default function NewCasePage() {
     setLng(ln);
   }
 
+  // SUBMIT CASE
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -60,7 +63,10 @@ export default function NewCasePage() {
       return;
     }
 
-    // 🔥 Create case with correct timestamp
+    // 1️⃣ Get selected ambulance object
+    const amb = ambulances.find((a) => a.docId === selectedAmbulance);
+
+    // 2️⃣ Create case with ambulanceCode
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -69,17 +75,27 @@ export default function NewCasePage() {
       lat,
       lng,
       status: "Received",
-      createdAt: serverTimestamp(), // ✅ REAL TIME Firestore timestamp
-      ambulanceId: selectedAmbulance || null,
+      createdAt: serverTimestamp(),
+      ambulanceId: selectedAmbulance,         // Firestore ID
+      ambulanceCode: amb?.code || null,       // 🔥 Human code (AMB-002)
     });
 
-    // Mark ambulance busy
+    // 3️⃣ Mark ambulance as busy
     if (selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
         currentCase: caseRef.id,
       });
     }
+
+    // 4️⃣ Reset form (optional)
+    setPatientName("");
+    setChiefComplaint("");
+    setLevel("");
+    setLocationText("");
+    setLat(null);
+    setLng(null);
+    setSelectedAmbulance("");
 
     alert("Case created successfully!");
     window.location.href = "/cases";
@@ -90,6 +106,7 @@ export default function NewCasePage() {
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        
         {/* Patient Name */}
         <div>
           <label className="font-semibold">Patient Name</label>
@@ -110,7 +127,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Level */}
+        {/* Triage Level */}
         <div>
           <label className="font-semibold">Level (Triage)</label>
           <select
@@ -131,7 +148,7 @@ export default function NewCasePage() {
           <label className="font-semibold">Location</label>
           <input
             className="w-full border p-2 rounded"
-            placeholder="24.7136, 46.6753 or address"
+            placeholder="24.7136, 46.6753"
             value={locationText}
             onChange={(e) => {
               setLocationText(e.target.value);
@@ -150,7 +167,7 @@ export default function NewCasePage() {
           >
             <option value="">Select ambulance…</option>
             {ambulances.map((amb) => (
-              <option key={amb.id} value={amb.id}>
+              <option key={amb.docId} value={amb.docId}>
                 {amb.code} — {amb.location} — {amb.status}
               </option>
             ))}
