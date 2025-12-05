@@ -11,13 +11,8 @@ import {
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import StatusButtons from "@/app/components/StatusButtons";
-import dynamic from "next/dynamic";
+import Map from "@/app/components/Map";
 import CaseTimeline from "@/app/components/CaseTimeline";
-
-// ✅ FIX: Leaflet must load client-side only
-const Map = dynamic(() => import("@/app/components/Map"), {
-  ssr: false,
-});
 
 export default function CaseDetailsPage({ params }: { params: { id: string } }) {
   const caseId = params.id;
@@ -29,9 +24,11 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   // LISTENER FOR CASE DATA
   useEffect(() => {
     const ref = doc(db, "cases", caseId);
+
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) setCaseData({ id: snap.id, ...snap.data() });
     });
+
     return () => unsub();
   }, [caseId]);
 
@@ -51,25 +48,25 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   if (loading || !caseData) return <p className="p-6">Loading...</p>;
 
   // STATUS UPDATE
-  const handleStatusUpdate = async (newStatus: string) => {
-    try {
-      const caseRef = doc(db, "cases", caseId);
-      const timestamp = new Date().toISOString();
+ const handleStatusUpdate = async (newStatus: string) => {
+  try {
+    const caseRef = doc(db, "cases", caseId);
+    const timestamp = new Date().toISOString();
 
-      await updateDoc(caseRef, {
-        status: newStatus,
-        [`timeline.${newStatus}`]: timestamp,
-      });
+    await updateDoc(caseRef, {
+      status: newStatus,
+      [`timeline.${newStatus}`]: timestamp,
+    });
 
-      setCaseData((prev: any) => ({
-        ...prev,
-        status: newStatus,
-        timeline: { ...prev.timeline, [newStatus]: timestamp },
-      }));
-    } catch (err) {
-      console.error("Error updating:", err);
-    }
-  };
+    setCaseData((prev: any) => ({
+      ...prev,
+      status: newStatus,
+      timeline: { ...prev.timeline, [newStatus]: timestamp },
+    }));
+  } catch (err) {
+    console.error("Error updating:", err);
+  }
+};
 
   // ASSIGN AMBULANCE
   const handleAssignAmbulance = async (newAmbId: string) => {
@@ -115,9 +112,10 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     }
   };
 
+  // PAGE UI
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Case Details</h1>
+      <h1 className="text-3xl font-bold mb-6">Case Details  work</h1>
 
       {/* CASE INFO */}
       <div className="bg-white border p-6 rounded-lg shadow mb-6">
@@ -227,12 +225,12 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* MAP */}
       {caseData.lat && caseData.lng && (
         <div className="mt-10">
-          <h2 className="text-xl font-bold mb-2">Location Map1</h2>
+          <h2 className="text-xl font-bold mb-2">Location Map</h2>
 
           <Map
             lat={Number(caseData.lat)}
             lng={Number(caseData.lng)}
-            name={caseData.locationText}
+          
           />
         </div>
       )}
