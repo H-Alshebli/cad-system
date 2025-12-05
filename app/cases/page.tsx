@@ -18,12 +18,27 @@ export default function CasesDashboard() {
   // Access control
   const [isAdmin, setIsAdmin] = useState(false);
   const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
-
-  // popup must stay open until correct code entered
   const [showPopup, setShowPopup] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Load all cases sorted by newest first
+  // LOAD SAVED LOGIN (admin or ambulance)
+  useEffect(() => {
+    const savedCode = localStorage.getItem("accessCode");
+
+    if (savedCode) {
+      if (savedCode === "1234") {
+        setIsAdmin(true);
+        setShowPopup(false);
+      } else if (savedCode.startsWith("AMB-")) {
+        setAmbulanceFilter(savedCode);
+        setShowPopup(false);
+      } else {
+        setShowPopup(true);
+      }
+    }
+  }, []);
+
+  // Load cases sorted by newest first
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
@@ -38,40 +53,49 @@ export default function CasesDashboard() {
     return () => unsub();
   }, []);
 
-  // Admin delete function
+  // Handle delete (Admin Only)
   async function deleteCase(id: string) {
     if (!confirm("Are you sure you want to delete this case?")) return;
     await deleteDoc(doc(db, "cases", id));
     alert("Case deleted successfully");
   }
 
-  // Handle popup code submission
+  // Handle login code submission
   function handleCodeSubmit() {
     const codeInput = document.getElementById("accessCode") as HTMLInputElement;
     const code = codeInput.value.trim();
 
-    // Admin Code
+    // Admin login
     if (code === "1234") {
       setIsAdmin(true);
       setShowPopup(false);
+      localStorage.setItem("accessCode", code);
       return;
     }
 
-    // Ambulance Code Example: AMB-001, AMB-002, AMB-003
+    // Ambulance login
     if (code.startsWith("AMB-")) {
       setAmbulanceFilter(code);
       setIsAdmin(false);
       setShowPopup(false);
+      localStorage.setItem("accessCode", code);
       return;
     }
 
-    // WRONG CODE → popup stays open
-    setErrorMessage("Incorrect code. Please enter a valid access code.");
+    // Wrong code
+    setErrorMessage("❌ Incorrect code. Please enter a valid access code.");
   }
 
-  // Filter cases
-  let filteredCases = cases;
+  // Logout button
+  function handleLogout() {
+    localStorage.removeItem("accessCode");
+    setIsAdmin(false);
+    setAmbulanceFilter(null);
+    setShowPopup(true);
+  }
 
+  // Filter cases for ambulance view
+  let filteredCases = cases;
   if (ambulanceFilter) {
     filteredCases = cases.filter(
       (c) => c.ambulanceCode === ambulanceFilter
@@ -81,7 +105,7 @@ export default function CasesDashboard() {
   return (
     <div className="p-6">
 
-      {/* ACCESS CODE POPUP */}
+      {/* ░░░░ ACCESS CODE POPUP ░░░░ */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-80 text-center">
@@ -90,7 +114,7 @@ export default function CasesDashboard() {
             <input
               id="accessCode"
               type="text"
-              placeholder="Enter code (Admin or Ambulance)"
+              placeholder="Enter Admin or Ambulance Code"
               className="border p-2 rounded w-full mb-3"
             />
 
@@ -108,7 +132,20 @@ export default function CasesDashboard() {
         </div>
       )}
 
-      <h1 className="text-2xl font-bold mb-4">Dispatch Dashboard</h1>
+      {/* Header with LOGOUT button */}
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Dispatch Dashboard</h1>
+
+        {/* Show logout only if logged in */}
+        {!showPopup && (
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 text-white px-3 py-1 rounded"
+          >
+            Logout
+          </button>
+        )}
+      </div>
 
       <div className="space-y-3">
         {filteredCases.map((c) => (
@@ -120,13 +157,13 @@ export default function CasesDashboard() {
                 <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
                 <p><strong>Level:</strong> {c.level}</p>
                 <p><strong>Status:</strong> {c.status}</p>
-                <p><strong>Ambulance Code:</strong> {c.ambulanceCode}</p>
+                <p><strong>Ambulance:</strong> {c.ambulanceCode}</p>
                 <p><strong>Location:</strong> {c.locationText}</p>
                 <p className="text-gray-400 text-sm mt-1">Click to open →</p>
               </div>
             </Link>
 
-            {/* Delete Case — Only Admin */}
+            {/* DELETE BUTTON — ONLY ADMIN */}
             {isAdmin && (
               <button
                 onClick={() => deleteCase(c.id)}
