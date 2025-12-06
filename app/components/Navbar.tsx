@@ -8,16 +8,14 @@ export default function Navbar() {
   const pathname = usePathname();
   const [dark, setDark] = useState(false);
 
-  // Load theme from localStorage
   useEffect(() => {
-    const storedTheme = localStorage.getItem("theme");
-    if (storedTheme === "dark") {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") {
       document.documentElement.classList.add("dark");
       setDark(true);
     }
   }, []);
 
-  // Toggle theme button
   function toggleTheme() {
     if (dark) {
       document.documentElement.classList.remove("dark");
@@ -37,37 +35,19 @@ export default function Navbar() {
 
   return (
     <nav className="w-full bg-white dark:bg-gray-900 border-b dark:border-gray-700 p-4 shadow-sm">
-      <div className="max-w-5xl mx-auto flex gap-6 items-center justify-between">
+      <div className="max-w-6xl mx-auto flex justify-between items-center">
 
-        {/* LEFT MENU LINKS */}
         <div className="flex gap-6">
-          <Link className={linkClass("/dashboard")} href="/dashboard">
-            Dashboard
-          </Link>
-
-          <Link className={linkClass("/cases")} href="/cases">
-            Cases
-          </Link>
-
-          <Link className={linkClass("/cases/new")} href="/cases/new">
-            New Case
-          </Link>
-
-          <Link className={linkClass("/clinic")} href="/clinic">
-            Clinic
-          </Link>
-
-          <Link className={linkClass("/ambulances")} href="/ambulances">
-            Ambulances
-          </Link>
+          <Link className={linkClass("/dashboard")} href="/dashboard">Dashboard</Link>
+          <Link className={linkClass("/cases")} href="/cases">Cases</Link>
+          <Link className={linkClass("/cases/new")} href="/cases/new">New Case</Link>
+          <Link className={linkClass("/clinic")} href="/clinic">Clinic</Link>
+          <Link className={linkClass("/ambulances")} href="/ambulances">Ambulances</Link>
         </div>
 
-        {/* DARK MODE BUTTON */}
         <button
           onClick={toggleTheme}
-          className="px-3 py-1 text-sm border rounded dark:border-gray-600
-                     bg-gray-100 dark:bg-gray-800
-                     text-black dark:text-white"
+          className="px-3 py-1 border rounded bg-gray-100 dark:bg-gray-800 dark:border-gray-600 text-black dark:text-white"
         >
           {dark ? "☀️ Light" : "🌙 Dark"}
         </button>

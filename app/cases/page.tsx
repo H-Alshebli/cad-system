@@ -19,7 +19,7 @@ let alarmInterval: NodeJS.Timeout | null = null;
 let globalAudio: HTMLAudioElement | null = null;
 
 /* ---------------------------------------------------------
-   COMPONENT
+   TYPES
 ----------------------------------------------------------*/
 interface CaseData {
   id: string;
@@ -39,11 +39,10 @@ export default function CasesDashboard() {
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [lastCaseCount, setLastCaseCount] = useState(0);
 
   /* ---------------------------------------------------------
-     🔊 PRIME AUDIO FOR SAFARI
+     🔊 PRIME AUDIO (Safari/iOS fix)
 ----------------------------------------------------------*/
   function primeAudio() {
     const a = new Audio("/sounds/alert.mp3");
@@ -56,7 +55,7 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     🔊 START ALARM (Manual Loop)
+     🔊 START ALARM LOOP
 ----------------------------------------------------------*/
   function startAlarm() {
     if (!globalAudio) {
@@ -64,13 +63,10 @@ export default function CasesDashboard() {
       globalAudio.volume = 1.0;
     }
 
-    // Stop previous alarm if any
     stopAlarm();
 
-    // Play instantly
     globalAudio.play().catch(() => {});
 
-    // Repeat every 1.5 seconds
     alarmInterval = setInterval(() => {
       globalAudio!.currentTime = 0;
       globalAudio!.play().catch(() => {});
@@ -83,19 +79,19 @@ export default function CasesDashboard() {
      🛑 STOP ALARM
 ----------------------------------------------------------*/
   function stopAlarm() {
-    if (alarmInterval) {
-      clearInterval(alarmInterval);
-      alarmInterval = null;
-    }
+    if (alarmInterval) clearInterval(alarmInterval);
+    alarmInterval = null;
+
     if (globalAudio) {
       globalAudio.pause();
       globalAudio.currentTime = 0;
     }
+
     setShowAlarmPopup(false);
   }
 
   /* ---------------------------------------------------------
-     LOAD LOGIN
+     LOAD LOGIN DATA
 ----------------------------------------------------------*/
   useEffect(() => {
     const saved = localStorage.getItem("accessCode");
@@ -113,7 +109,7 @@ export default function CasesDashboard() {
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LISTENER
+     FIRESTORE LIVE LISTENER
 ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
@@ -128,7 +124,6 @@ export default function CasesDashboard() {
         ? list.filter((c) => c.ambulanceCode === ambulanceFilter)
         : list;
 
-      // New case detected
       if (ambulanceFilter && myCases.length > lastCaseCount) {
         startAlarm();
       }
@@ -177,18 +172,15 @@ export default function CasesDashboard() {
     setLastCaseCount(0);
     stopAlarm();
   }
-  
-/* ---------------------------------------------------------
-   DELETE CASE (Admin Only)
+
+  /* ---------------------------------------------------------
+     DELETE CASE (Admin Only)
 ----------------------------------------------------------*/
-async function deleteCase(id: string) {
-  if (!confirm("Are you sure you want to delete this case?")) return;
-
-  await deleteDoc(doc(db, "cases", id));
-
-  alert("Case deleted successfully.");
-}
-
+  async function deleteCase(id: string) {
+    if (!confirm("Are you sure you want to delete this case?")) return;
+    await deleteDoc(doc(db, "cases", id));
+    alert("Case deleted successfully.");
+  }
 
   /* ---------------------------------------------------------
      FILTER CASES
@@ -201,21 +193,21 @@ async function deleteCase(id: string) {
      RENDER UI
 ----------------------------------------------------------*/
   return (
-    <div className="p-6">
+    <div className="p-6 dark:bg-gray-900 min-h-screen">
 
-      {/* -----------------------------------------------------
-         LOGIN POPUP
-      ------------------------------------------------------*/}
+      {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded shadow-lg w-80 text-center">
-            <h2 className="text-xl font-bold mb-4">Enter Access Code</h2>
+          <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-80 text-center">
+            <h2 className="text-xl font-bold mb-4 dark:text-white">
+              Enter Access Code
+            </h2>
 
             <input
               id="accessCode"
               type="text"
               placeholder="Admin or Ambulance Code"
-              className="border p-2 rounded w-full mb-3"
+              className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white dark:border-gray-600"
             />
 
             {errorMessage && (
@@ -232,13 +224,11 @@ async function deleteCase(id: string) {
         </div>
       )}
 
-      {/* -----------------------------------------------------
-         🔥 ALARM POPUP (CENTER)
-      ------------------------------------------------------*/}
+      {/* ALARM POPUP */}
       {showAlarmPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[60]">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
-            <h2 className="text-xl font-bold text-red-600 mb-4">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
+            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">
               🚨 New Case Assigned!
             </h2>
 
@@ -254,7 +244,9 @@ async function deleteCase(id: string) {
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Dispatch Dashboard</h1>
+        <h1 className="text-2xl font-bold dark:text-white">
+          Dispatch Dashboard
+        </h1>
 
         {!showLoginPopup && (
           <button
@@ -269,9 +261,18 @@ async function deleteCase(id: string) {
       {/* CASE LIST */}
       <div className="space-y-3">
         {filteredCases.map((c) => (
-          <div key={c.id} className="border p-4 rounded bg-white shadow-sm">
+          <div
+            key={c.id}
+            className="
+              border rounded shadow-sm p-4 
+              bg-white text-gray-900 
+              hover:bg-gray-100 
+              dark:bg-gray-800 dark:text-white dark:border-gray-700 
+              dark:hover:bg-gray-700
+            "
+          >
             <Link href={`/cases/${c.id}`}>
-              <div className="cursor-pointer hover:bg-gray-100">
+              <div className="cursor-pointer">
                 <h2 className="text-xl font-bold">{c.patientName}</h2>
                 <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
                 <p><strong>Level:</strong> {c.level}</p>
@@ -284,7 +285,7 @@ async function deleteCase(id: string) {
             {isAdmin && (
               <button
                 onClick={() => deleteCase(c.id)}
-                className="mt-2 text-red-600 underline"
+                className="mt-2 text-red-500 underline dark:text-red-400"
               >
                 Delete Case
               </button>
