@@ -1,46 +1,37 @@
 import "./globals.css";
-import type { Metadata } from "next";
-import { Inter, Roboto_Mono } from "next/font/google";
-import Navbar from "./components/Navbar"; // ✅ Important!
-
+import { Inter } from "next/font/google";
+import Navbar from "./components/Navbar"; // <-- MAKE SURE THIS PATH IS CORRECT
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-inter",
 });
 
-const mono = Roboto_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-});
-
-export const metadata: Metadata = {
+export const metadata = {
   title: "CAD System",
   description: "Emergency Dispatch System",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Leaflet CSS */}
         <link
           rel="stylesheet"
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          precedence="default"
         />
       </head>
 
-      <body className={`${inter.variable} ${mono.variable}`}>
-        {/* ✅ Navbar appears on every page */}
+      <body className={inter.className}>
+        {/* ✅ NAVBAR ALWAYS ON TOP */}
         <Navbar />
 
-        {/* Page Content */}
-        <main className="p-4">{children}</main>
+        {/* MAIN CONTENT */}
+        <main className="p-6">
+          {children}
+        </main>
       </body>
-      
     </html>
   );
 }

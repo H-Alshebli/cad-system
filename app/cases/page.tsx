@@ -12,7 +12,14 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 
-// ✅ FIX: Case interface so TS accepts ambulanceCode
+/* ---------------------------------------------------------
+   🔊 GLOBAL AUDIO OBJECT (must be outside component)
+----------------------------------------------------------*/
+let globalAlertAudio: HTMLAudioElement | null = null;
+
+/* ---------------------------------------------------------
+   COMPONENT
+----------------------------------------------------------*/
 interface CaseData {
   id: string;
   patientName?: string;
@@ -20,68 +27,104 @@ interface CaseData {
   level?: string;
   status?: string;
   locationText?: string;
-  ambulanceId?: string;
   ambulanceCode?: string;
-  createdAt?: any;
-  [key: string]: any; // allow extra fields
+  [key: string]: any;
 }
 
 export default function CasesDashboard() {
   const [cases, setCases] = useState<CaseData[]>([]);
-
-  // Access Control
   const [isAdmin, setIsAdmin] = useState(false);
   const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
   const [showPopup, setShowPopup] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-
-  // Real-time alert tracking
   const [lastCaseCount, setLastCaseCount] = useState(0);
 
-  // Load saved login on page load
-  useEffect(() => {
-    const savedCode = localStorage.getItem("accessCode");
+  /* ---------------------------------------------------------
+     🔊 Unlock audio (required by Chrome/iPhone)
+  ----------------------------------------------------------*/
+  function primeAudio() {
+    const a = new Audio("/sounds/alert.mp3");
+    a.play()
+      .then(() => {
+        a.pause();
+        a.currentTime = 0;
+        console.log("Audio unlocked.");
+      })
+      .catch(() => {});
+  }
 
-    if (savedCode) {
-      if (savedCode === "1234") {
+  /* ---------------------------------------------------------
+     🔊 Looping alarm sound (REPEATS non-stop)
+  ----------------------------------------------------------*/
+  function playAlertSoundLoop() {
+    if (!globalAlertAudio) {
+      globalAlertAudio = new Audio("/sounds/alert.mp3");
+      globalAlertAudio.loop = true;
+      globalAlertAudio.volume = 1.0;
+    }
+    globalAlertAudio.play().catch(() => {});
+  }
+
+  /* ---------------------------------------------------------
+     🛑 Stop alarm sound
+  ----------------------------------------------------------*/
+  function stopAlertSound() {
+    if (globalAlertAudio) {
+      globalAlertAudio.pause();
+      globalAlertAudio.currentTime = 0;
+    }
+  }
+
+  /* ---------------------------------------------------------
+     ⚠️ Visual popup + STOP after click
+  ----------------------------------------------------------*/
+  function showVisualAlert() {
+    playAlertSoundLoop();
+
+    setTimeout(() => {
+      alert("🚨 New Case Assigned to You!");
+      stopAlertSound();
+    }, 200);
+  }
+
+  /* ---------------------------------------------------------
+     Load login from localStorage
+  ----------------------------------------------------------*/
+  useEffect(() => {
+    const saved = localStorage.getItem("accessCode");
+
+    if (saved) {
+      if (saved === "1234") {
         setIsAdmin(true);
         setShowPopup(false);
-      } else if (savedCode.startsWith("AMB-")) {
-        setAmbulanceFilter(savedCode);
+      } else if (saved.startsWith("AMB-")) {
+        setAmbulanceFilter(saved);
         setShowPopup(false);
       }
+
+      primeAudio();
     }
   }, []);
 
-  // 🔊 Play Alert Sound
-  function playAlertSound() {
-    const audio = new Audio("/alert.mp3");
-    audio.play().catch(() => {});
-  }
-
-  // ⚠️ Visual Alert
-  function showVisualAlert() {
-    alert("🚨 New Case Assigned to You!");
-  }
-
-  // Load cases + alert detection
+  /* ---------------------------------------------------------
+     Firestore listener
+  ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const list: CaseData[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const list: CaseData[] = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
       }));
 
-      // Cases belonging to this ambulance
+      // Filter for ambulance
       const myCases = ambulanceFilter
         ? list.filter((c) => c.ambulanceCode === ambulanceFilter)
         : list;
 
-      // Detect NEW case assigned to this ambulance
+      // Detect new case → trigger alert
       if (ambulanceFilter && myCases.length > lastCaseCount) {
-        playAlertSound();
         showVisualAlert();
       }
 
@@ -92,40 +135,45 @@ export default function CasesDashboard() {
     return () => unsub();
   }, [ambulanceFilter, lastCaseCount]);
 
-  // Delete Case (Admin Only)
+  /* ---------------------------------------------------------
+     Delete case
+  ----------------------------------------------------------*/
   async function deleteCase(id: string) {
-    if (!confirm("Are you sure you want to delete this case?")) return;
+    if (!confirm("Delete this case?")) return;
     await deleteDoc(doc(db, "cases", id));
-    alert("Case deleted successfully");
+    alert("Case deleted.");
   }
 
-  // Handle Login Code
+  /* ---------------------------------------------------------
+     Login submit
+  ----------------------------------------------------------*/
   function handleCodeSubmit() {
     const input = document.getElementById("accessCode") as HTMLInputElement;
     const code = input.value.trim();
 
-    // Admin Login
     if (code === "1234") {
       setIsAdmin(true);
       setShowPopup(false);
       localStorage.setItem("accessCode", code);
+      primeAudio();
       return;
     }
 
-    // Ambulance Login (AMB-001, AMB-002...)
     if (code.startsWith("AMB-")) {
       setAmbulanceFilter(code);
       setIsAdmin(false);
       setShowPopup(false);
       localStorage.setItem("accessCode", code);
+      primeAudio();
       return;
     }
 
-    // Wrong Code
-    setErrorMessage("❌ Incorrect code. Please enter a valid access code.");
+    setErrorMessage("❌ Incorrect code. Try again.");
   }
 
-  // Logout Handler
+  /* ---------------------------------------------------------
+     Logout
+  ----------------------------------------------------------*/
   function handleLogout() {
     localStorage.removeItem("accessCode");
     setAmbulanceFilter(null);
@@ -134,17 +182,23 @@ export default function CasesDashboard() {
     setLastCaseCount(0);
   }
 
-  // Apply filtering
+  /* ---------------------------------------------------------
+     Case Filtering
+  ----------------------------------------------------------*/
   let filteredCases = cases;
-
   if (ambulanceFilter) {
-    filteredCases = cases.filter((c) => c.ambulanceCode === ambulanceFilter);
+    filteredCases = cases.filter(
+      (c) => c.ambulanceCode === ambulanceFilter
+    );
   }
 
+  /* ---------------------------------------------------------
+     RENDER UI
+  ----------------------------------------------------------*/
   return (
     <div className="p-6">
 
-      {/* POPUP LOGIN SCREEN */}
+      {/* POPUP LOGIN */}
       {showPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-80 text-center">
@@ -153,7 +207,7 @@ export default function CasesDashboard() {
             <input
               id="accessCode"
               type="text"
-              placeholder="Enter Admin or Ambulance Code"
+              placeholder="Admin or Ambulance Code"
               className="border p-2 rounded w-full mb-3"
             />
 
@@ -188,8 +242,7 @@ export default function CasesDashboard() {
       {/* CASE LIST */}
       <div className="space-y-3">
         {filteredCases.map((c) => (
-          <div key={c.id} className="border p-4 rounded shadow-sm bg-white">
-            
+          <div key={c.id} className="border p-4 rounded bg-white shadow-sm">
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer hover:bg-gray-100">
                 <h2 className="text-xl font-bold">{c.patientName}</h2>
@@ -198,11 +251,9 @@ export default function CasesDashboard() {
                 <p><strong>Status:</strong> {c.status}</p>
                 <p><strong>Ambulance:</strong> {c.ambulanceCode}</p>
                 <p><strong>Location:</strong> {c.locationText}</p>
-                <p className="text-gray-400 text-sm mt-1">Click to open →</p>
               </div>
             </Link>
 
-            {/* ADMIN DELETE BUTTON */}
             {isAdmin && (
               <button
                 onClick={() => deleteCase(c.id)}
@@ -214,6 +265,7 @@ export default function CasesDashboard() {
           </div>
         ))}
       </div>
+
     </div>
   );
 }

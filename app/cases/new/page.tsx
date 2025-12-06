@@ -18,9 +18,11 @@ export default function NewCasePage() {
   const [locationText, setLocationText] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [selectedAmbulance, setSelectedAmbulance] = useState("");
 
+  // Load ambulances live
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({
@@ -33,14 +35,15 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
+  // Parse Lat/Lng from input
   function parseLatLng(input: string) {
     if (!input.includes(",")) return;
-
     const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
     setLat(la);
     setLng(ln);
   }
 
+  // Submit case
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -49,10 +52,10 @@ export default function NewCasePage() {
       return;
     }
 
-    // Get selected ambulance object
+    // Find selected ambulance object
     const amb = ambulances.find((a) => a.docId === selectedAmbulance);
 
-    // Add case with ambulanceCode
+    // Add case to Firestore
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -63,12 +66,12 @@ export default function NewCasePage() {
       status: "Received",
       createdAt: serverTimestamp(),
 
-      // 🔥 CRITICAL: Required for ambulance filtering + alerts
+      // 🔥 REQUIRED FOR FILTERING + ALERTS
       ambulanceId: selectedAmbulance,
-      ambulanceCode: amb?.code || null, // "AMB-002"
+      ambulanceCode: amb?.code || null,  // e.g. "AMB-002"
     });
 
-    // Mark ambulance busy
+    // Mark ambulance as busy
     if (selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -76,7 +79,16 @@ export default function NewCasePage() {
       });
     }
 
-    alert("Case Created Successfully!");
+    // Clear form
+    setPatientName("");
+    setChiefComplaint("");
+    setLevel("");
+    setLocationText("");
+    setLat(null);
+    setLng(null);
+    setSelectedAmbulance("");
+
+    alert("Case created successfully!");
     window.location.href = "/cases";
   }
 
@@ -85,6 +97,7 @@ export default function NewCasePage() {
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+
         {/* Patient Name */}
         <div>
           <label className="font-semibold">Patient Name</label>
