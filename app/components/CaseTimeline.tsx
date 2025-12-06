@@ -16,10 +16,16 @@ const ORDER = [
 
 export default function CaseTimeline({ timeline }: TimelineProps) {
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm mt-4">
-      <h3 className="text-lg font-bold mb-3">Timeline</h3>
+    <div
+      className="
+        p-4 border rounded-lg shadow-sm mt-4
+        bg-white text-gray-900
+        dark:bg-gray-800 dark:border-gray-700 dark:text-white
+      "
+    >
+      <h3 className="text-lg font-bold mb-3 dark:text-white">Timeline</h3>
 
-      {/* HORIZONTAL LIST */}
+      {/* HORIZONTAL TIMELINE */}
       <div className="flex items-center space-x-8 overflow-x-auto scrollbar-hide py-4">
 
         {ORDER.map((status, i) => {
@@ -30,22 +36,31 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
 
               {/* Connector Line */}
               {i !== 0 && (
-                <div className="absolute -left-8 top-2 w-8 h-1 bg-gray-300"></div>
+                <div
+                  className="
+                    absolute -left-8 top-2 w-8 h-1
+                    bg-gray-300
+                    dark:bg-gray-600
+                  "
+                ></div>
               )}
 
               {/* Status Dot */}
               <span
-                className={`w-4 h-4 rounded-full mb-2 ${
-                  time ? "bg-green-500" : "bg-gray-400"
-                }`}
+                className={`
+                  w-4 h-4 rounded-full mb-2
+                  ${time ? "bg-green-500" : "bg-gray-400 dark:bg-gray-500"}
+                `}
               ></span>
 
               {/* Label */}
-              <span className="font-semibold text-sm">{status}</span>
+              <span className="font-semibold text-sm dark:text-gray-200">
+                {status}
+              </span>
 
-              {/* Time */}
+              {/* Time Label */}
               {time && (
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                   {new Date(time).toLocaleTimeString("en-US", {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -55,7 +70,6 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
             </div>
           );
         })}
-
       </div>
     </div>
   );

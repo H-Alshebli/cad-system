@@ -10,31 +10,23 @@ export default function Dashboard() {
   const [ambulances, setAmbulances] = useState<any[]>([]);
 
   useEffect(() => {
-  // 🔥 Live sorted cases listener
-  const casesQuery = query(
-    collection(db, "cases"),
-    orderBy("createdAt", "desc")   // NEW → OLD
-  );
+    const casesQuery = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
-  const unsubCases = onSnapshot(casesQuery, (snap) => {
-    const list: any[] = [];
-    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-    setCases(list);
-  });
+    const unsubCases = onSnapshot(casesQuery, (snap) => {
+      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setCases(list);
+    });
 
-  // 🔥 Live ambulances listener
-  const unsubAmb = onSnapshot(collection(db, "ambulances"), (snap) => {
-    const list: any[] = [];
-    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-    setAmbulances(list);
-  });
+    const unsubAmb = onSnapshot(collection(db, "ambulances"), (snap) => {
+      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setAmbulances(list);
+    });
 
-  return () => {
-    unsubCases();
-    unsubAmb();
-  };
-}, []);
-
+    return () => {
+      unsubCases();
+      unsubAmb();
+    };
+  }, []);
 
   // 📌 Stats
   const totalCases = cases.length;
@@ -42,59 +34,77 @@ export default function Dashboard() {
   const activeCases = cases.filter((c) => c.status !== "Closed").length;
   const closedCases = cases.filter((c) => c.status === "Closed").length;
   const transportingCases = cases.filter((c) => c.status === "Transporting").length;
-
   const totalAmbulances = ambulances.length;
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Dispatch Dashboard</h1>
+    <div className="p-6 dark:bg-gray-900 min-h-screen">
 
-     {/* ================== TOP SUMMARY CARDS ================== */}
-<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+      <h1 className="text-3xl font-bold mb-6 dark:text-white">Dispatch Dashboard</h1>
 
-  {/* TOTAL CASES CARD */}
-  <div className="p-4 border rounded shadow text-blue" style={{ background: "white" }}>
-    <h3 className="text-lg font-bold">Total Cases</h3>
-    <p className="text-4xl font-extrabold">{totalCases}</p>
+      {/* ================== TOP SUMMARY CARDS ================== */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
 
-    <p className="mt-2 text-sm">
-      Active: <span className="font-bold">{activeCases}</span>
-      {" — "}
-      treated: <span className="font-bold">{closedCases}</span>
-    </p>
-  </div>
+        {/* TOTAL CASES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white text-gray-900 
+          dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-lg font-bold dark:text-gray-200">Total Cases</h3>
+          <p className="text-4xl font-extrabold">{totalCases}</p>
 
-  {/* ACTIVE CASES */}
-  <div className="p-4 bg-white border rounded shadow">
-    <h3 className="text-sm text-gray-600">OnScene</h3>
-    <p className="text-2xl font-bold text-blue-600">{OnSceneCases}</p>
-  </div>
+          <p className="mt-2 text-sm dark:text-gray-300">
+            Active: <span className="font-bold">{activeCases}</span> — treated:{" "}
+            <span className="font-bold">{closedCases}</span>
+          </p>
+        </div>
 
-  {/* TRANSPORTING */}
-  <div className="p-4 bg-white border rounded shadow">
-    <h3 className="text-sm text-gray-600">Transporting</h3>
-    <p className="text-2xl font-bold text-orange-600">{transportingCases}</p>
-  </div>
+        {/* ACTIVE CASES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">OnScene</h3>
+          <p className="text-2xl font-bold text-blue-600">{OnSceneCases}</p>
+        </div>
 
-  {/* AMBULANCES */}
-  <div className="p-4 bg-white border rounded shadow">
-    <h3 className="text-sm text-gray-600">Ambulances</h3>
-    <p className="text-2xl font-bold text-purple-600">{totalAmbulances}</p>
-  </div>
+        {/* TRANSPORTING */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">Transporting</h3>
+          <p className="text-2xl font-bold text-orange-600">{transportingCases}</p>
+        </div>
 
-</div>
+        {/* TOTAL AMBULANCES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">Ambulances</h3>
+          <p className="text-2xl font-bold text-purple-600">{totalAmbulances}</p>
+        </div>
+      </div>
 
-
-
-      {/* ================== CASES WITH TIMELINES ================== */}
+      {/* ================== CASE LIST WITH TIMELINES ================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {cases.map((c) => (
-          <div key={c.id} className="p-4 bg-white rounded shadow border">
-            <h2 className="text-xl font-bold">
+          <div
+            key={c.id}
+            className="
+              p-4 border rounded shadow 
+              bg-white text-gray-900 
+              dark:bg-gray-800 dark:text-white dark:border-gray-700
+            "
+          >
+            <h2 className="text-xl font-bold dark:text-white">
               {c.patientName} — Level {c.level}
             </h2>
-            <p className="text-gray-600">{c.locationText}</p>
 
+            <p className="text-gray-600 dark:text-gray-300">{c.locationText}</p>
+
+            {/* Timeline now supports dark mode automatically */}
             <CaseTimeline timeline={c.timeline || {}} />
           </div>
         ))}

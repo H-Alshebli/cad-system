@@ -35,7 +35,7 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
-  // Parse Lat/Lng from input
+  // Parse Lat/Lng
   function parseLatLng(input: string) {
     if (!input.includes(",")) return;
     const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
@@ -52,10 +52,8 @@ export default function NewCasePage() {
       return;
     }
 
-    // Find selected ambulance object
     const amb = ambulances.find((a) => a.docId === selectedAmbulance);
 
-    // Add case to Firestore
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -66,12 +64,10 @@ export default function NewCasePage() {
       status: "Received",
       createdAt: serverTimestamp(),
 
-      // 🔥 REQUIRED FOR FILTERING + ALERTS
       ambulanceId: selectedAmbulance,
-      ambulanceCode: amb?.code || null,  // e.g. "AMB-002"
+      ambulanceCode: amb?.code || null,
     });
 
-    // Mark ambulance as busy
     if (selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -79,7 +75,6 @@ export default function NewCasePage() {
       });
     }
 
-    // Clear form
     setPatientName("");
     setChiefComplaint("");
     setLevel("");
@@ -94,15 +89,30 @@ export default function NewCasePage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
+
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-
+      <form
+        onSubmit={handleSubmit}
+        className="
+          space-y-4 
+          bg-white dark:bg-gray-800 
+          p-6 rounded-lg shadow-lg
+          border dark:border-gray-700
+        "
+      >
         {/* Patient Name */}
         <div>
-          <label className="font-semibold">Patient Name</label>
+          <label className="font-semibold text-gray-800 dark:text-gray-200">
+            Patient Name
+          </label>
           <input
-            className="w-full border p-2 rounded"
+            className="
+              w-full border p-2 rounded 
+              bg-white dark:bg-gray-700 
+              text-black dark:text-white 
+              border-gray-300 dark:border-gray-600
+            "
             value={patientName}
             onChange={(e) => setPatientName(e.target.value)}
           />
@@ -110,9 +120,16 @@ export default function NewCasePage() {
 
         {/* Complaint */}
         <div>
-          <label className="font-semibold">Chief Complaint</label>
+          <label className="font-semibold text-gray-800 dark:text-gray-200">
+            Chief Complaint
+          </label>
           <input
-            className="w-full border p-2 rounded"
+            className="
+              w-full border p-2 rounded
+              bg-white dark:bg-gray-700 
+              text-black dark:text-white 
+              border-gray-300 dark:border-gray-600
+            "
             value={chiefComplaint}
             onChange={(e) => setChiefComplaint(e.target.value)}
           />
@@ -120,9 +137,16 @@ export default function NewCasePage() {
 
         {/* Level */}
         <div>
-          <label className="font-semibold">Level (Triage)</label>
+          <label className="font-semibold text-gray-800 dark:text-gray-200">
+            Level (Triage)
+          </label>
           <select
-            className="w-full border p-2 rounded"
+            className="
+              w-full border p-2 rounded
+              bg-white dark:bg-gray-700 
+              text-black dark:text-white 
+              border-gray-300 dark:border-gray-600
+            "
             value={level}
             onChange={(e) => setLevel(e.target.value)}
           >
@@ -136,9 +160,16 @@ export default function NewCasePage() {
 
         {/* Location */}
         <div>
-          <label className="font-semibold">Location</label>
+          <label className="font-semibold text-gray-800 dark:text-gray-200">
+            Location
+          </label>
           <input
-            className="w-full border p-2 rounded"
+            className="
+              w-full border p-2 rounded
+              bg-white dark:bg-gray-700 
+              text-black dark:text-white 
+              border-gray-300 dark:border-gray-600
+            "
             placeholder="24.7136, 46.6753"
             value={locationText}
             onChange={(e) => {
@@ -150,9 +181,16 @@ export default function NewCasePage() {
 
         {/* Ambulance */}
         <div>
-          <label className="font-semibold">Assign Ambulance</label>
+          <label className="font-semibold text-gray-800 dark:text-gray-200">
+            Assign Ambulance
+          </label>
           <select
-            className="w-full border p-2 rounded"
+            className="
+              w-full border p-2 rounded
+              bg-white dark:bg-gray-700 
+              text-black dark:text-white 
+              border-gray-300 dark:border-gray-600
+            "
             value={selectedAmbulance}
             onChange={(e) => setSelectedAmbulance(e.target.value)}
           >
@@ -167,7 +205,11 @@ export default function NewCasePage() {
 
         <button
           type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded w-full"
+          className="
+            bg-blue-600 hover:bg-blue-700 
+            text-white px-4 py-2 rounded 
+            w-full font-semibold
+          "
         >
           Submit Case
         </button>

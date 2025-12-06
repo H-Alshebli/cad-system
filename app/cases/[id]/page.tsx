@@ -10,9 +10,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
-import StatusButtons from "@/app/components/StatusButtons";
-import Map from "@/app/components/Map";
 import CaseTimeline from "@/app/components/CaseTimeline";
+import Map from "@/app/components/Map";
 
 export default function CaseDetailsPage({ params }: { params: { id: string } }) {
   const caseId = params.id;
@@ -34,48 +33,47 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
   // LOAD AMBULANCES
   useEffect(() => {
-    const loadAmbulances = async () => {
-      const ambSnap = await getDocs(collection(db, "ambulances"));
+    const load = async () => {
+      const snap = await getDocs(collection(db, "ambulances"));
       const list: any[] = [];
-      ambSnap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
       setAmbulances(list);
       setLoading(false);
     };
-
-    loadAmbulances();
+    load();
   }, []);
 
-  if (loading || !caseData) return <p className="p-6">Loading...</p>;
+  if (loading || !caseData)
+    return <p className="p-6 text-gray-300">Loading...</p>;
 
   // STATUS UPDATE
- const handleStatusUpdate = async (newStatus: string) => {
-  try {
-    const caseRef = doc(db, "cases", caseId);
-    const timestamp = new Date().toISOString();
+  const handleStatusUpdate = async (newStatus: string) => {
+    try {
+      const ts = new Date().toISOString();
 
-    await updateDoc(caseRef, {
-      status: newStatus,
-      [`timeline.${newStatus}`]: timestamp,
-    });
+      await updateDoc(doc(db, "cases", caseId), {
+        status: newStatus,
+        [`timeline.${newStatus}`]: ts,
+      });
 
-    setCaseData((prev: any) => ({
-      ...prev,
-      status: newStatus,
-      timeline: { ...prev.timeline, [newStatus]: timestamp },
-    }));
-  } catch (err) {
-    console.error("Error updating:", err);
-  }
-};
+      setCaseData((prev: any) => ({
+        ...prev,
+        status: newStatus,
+        timeline: { ...prev.timeline, [newStatus]: ts },
+      }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // ASSIGN AMBULANCE
   const handleAssignAmbulance = async (newAmbId: string) => {
     try {
       const caseRef = doc(db, "cases", caseId);
-      const caseSnap = await getDoc(caseRef);
-      if (!caseSnap.exists()) return;
+      const snap = await getDoc(caseRef);
+      if (!snap.exists()) return;
 
-      const oldAmbId = caseSnap.data().ambulanceId || null;
+      const oldAmbId = snap.data().ambulanceId;
 
       await updateDoc(caseRef, { ambulanceId: newAmbId });
 
@@ -105,20 +103,19 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         paramedicNote: caseData.paramedicNote || "",
       });
 
-      alert("Case updated successfully!");
+      alert("Case updated!");
     } catch (err) {
+      alert("Error saving.");
       console.error(err);
-      alert("Error saving changes.");
     }
   };
 
-  // PAGE UI
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto text-gray-900 dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
 
-      {/* CASE INFO */}
-      <div className="bg-white border p-6 rounded-lg shadow mb-6">
+      {/* ======================= CASE CARD ======================= */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 p-6 rounded-lg shadow mb-6">
         <p><strong>Patient:</strong> {caseData.patientName}</p>
         <p><strong>Complaint:</strong> {caseData.chiefComplaint}</p>
         <p><strong>Level:</strong> {caseData.level}</p>
@@ -127,7 +124,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         <p><strong>Ambulance:</strong> {caseData.ambulanceId || "None"}</p>
       </div>
 
-      {/* STATUS UPDATE */}
+      {/* ======================= STATUS BUTTONS ======================= */}
       <h2 className="text-xl font-semibold mb-2">Update Status</h2>
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
         {["Received", "Assigned", "EnRoute", "OnScene", "Transporting", "Hospital", "Closed"].map(
@@ -135,7 +132,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
             <button
               key={s}
               onClick={() => handleStatusUpdate(s)}
-              className={`p-2 rounded text-white ${
+              className={`p-2 rounded text-white text-sm ${
                 caseData.status === s ? "bg-green-600" : "bg-blue-600"
               }`}
             >
@@ -145,17 +142,26 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         )}
       </div>
 
-      <CaseTimeline timeline={caseData.timeline || {}} />
+      {/* ======================= TIMELINE ======================= */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 p-6 rounded-lg shadow mb-10">
+        <CaseTimeline timeline={caseData.timeline || {}} />
+      </div>
 
-      {/* ASSIGN AMBULANCE */}
-      <div className="mt-10 bg-white p-6 rounded-lg shadow max-w-xl">
+      {/* ======================= ASSIGN AMBULANCE ======================= */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 p-6 rounded-lg shadow max-w-xl mb-10">
         <h2 className="text-xl font-bold mb-2">Assign Ambulance</h2>
-        <p className="text-sm text-gray-600 mb-2">
+
+        <p className="text-gray-600 dark:text-gray-300 mb-2">
           Current: {caseData.ambulanceId || "None"}
         </p>
 
         <select
-          className="border p-2 rounded w-full"
+          className="
+            border p-2 rounded w-full
+            bg-white dark:bg-gray-700
+            text-black dark:text-white
+            border-gray-300 dark:border-gray-600
+          "
           value={caseData.ambulanceId || ""}
           onChange={(e) => handleAssignAmbulance(e.target.value)}
         >
@@ -168,32 +174,35 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         </select>
       </div>
 
-      {/* EDIT CASE */}
-      <div className="mt-10 bg-white p-6 rounded-lg shadow max-w-xl">
+      {/* ======================= EDIT CASE ======================= */}
+      <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 p-6 rounded-lg shadow max-w-xl">
         <h2 className="text-xl font-bold mb-4">Edit Case</h2>
 
         <label className="block font-semibold mb-1">Complaint</label>
         <input
-          type="text"
-          className="border p-2 rounded w-full mb-4"
+          className="
+            border p-2 rounded w-full mb-4
+            bg-white dark:bg-gray-700
+            text-black dark:text-white
+            border-gray-300 dark:border-gray-600
+          "
           value={caseData.chiefComplaint}
           onChange={(e) =>
-            setCaseData((prev: any) => ({
-              ...prev,
-              chiefComplaint: e.target.value,
-            }))
+            setCaseData((p: any) => ({ ...p, chiefComplaint: e.target.value }))
           }
         />
 
-        <label className="block font-semibold mb-1">Level (Triage)</label>
+        <label className="block font-semibold mb-1">Level</label>
         <select
+          className="
+            border p-2 rounded w-full mb-4
+            bg-white dark:bg-gray-700
+            text-black dark:text-white
+            border-gray-300 dark:border-gray-600
+          "
           value={caseData.level}
-          className="border p-2 rounded w-full mb-4"
           onChange={(e) =>
-            setCaseData((prev: any) => ({
-              ...prev,
-              level: Number(e.target.value),
-            }))
+            setCaseData((p: any) => ({ ...p, level: Number(e.target.value) }))
           }
         >
           <option value="1">Level 1 - Critical</option>
@@ -204,34 +213,31 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
         <label className="block font-semibold mb-1">Paramedic Note</label>
         <textarea
-          className="border p-2 rounded w-full h-28 mb-4"
+          className="
+            border p-2 rounded w-full h-28 mb-4
+            bg-white dark:bg-gray-700
+            text-black dark:text-white
+            border-gray-300 dark:border-gray-600
+          "
           value={caseData.paramedicNote || ""}
           onChange={(e) =>
-            setCaseData((prev: any) => ({
-              ...prev,
-              paramedicNote: e.target.value,
-            }))
+            setCaseData((p: any) => ({ ...p, paramedicNote: e.target.value }))
           }
         />
 
         <button
           onClick={saveEdits}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold p-3 rounded w-full"
+          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded w-full"
         >
           Save Changes
         </button>
       </div>
 
-      {/* MAP */}
+      {/* ======================= MAP ======================= */}
       {caseData.lat && caseData.lng && (
         <div className="mt-10">
           <h2 className="text-xl font-bold mb-2">Location Map</h2>
-
-          <Map
-            lat={Number(caseData.lat)}
-            lng={Number(caseData.lng)}
-          
-          />
+          <Map lat={Number(caseData.lat)} lng={Number(caseData.lng)} />
         </div>
       )}
     </div>
