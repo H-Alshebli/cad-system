@@ -25,16 +25,14 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
     >
       <h3 className="text-lg font-bold mb-3 dark:text-white">Timeline</h3>
 
-      {/* HORIZONTAL TIMELINE */}
+      {/* Timeline row */}
       <div className="flex items-center space-x-8 overflow-x-auto scrollbar-hide py-4">
-
         {ORDER.map((status, i) => {
           const time = timeline?.[status];
 
           return (
             <div key={status} className="flex flex-col items-center relative">
-
-              {/* Connector Line */}
+              {/* Connector line (except for first item) */}
               {i !== 0 && (
                 <div
                   className="
@@ -45,7 +43,7 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
                 ></div>
               )}
 
-              {/* Status Dot */}
+              {/* Dot */}
               <span
                 className={`
                   w-4 h-4 rounded-full mb-2
@@ -53,12 +51,12 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
                 `}
               ></span>
 
-              {/* Label */}
+              {/* Status label */}
               <span className="font-semibold text-sm dark:text-gray-200">
                 {status}
               </span>
 
-              {/* Time Label */}
+              {/* Timestamp */}
               {time && (
                 <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                   {new Date(time).toLocaleTimeString("en-US", {

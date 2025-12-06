@@ -1,34 +1,16 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-
-type LeafletClickEvent = {
-  latlng: {
-    lat: number;
-    lng: number;
-  };
-};
-
-function OpenGoogleMapsOnClick() {
-  useMapEvents({
-    click(e: LeafletClickEvent) {
-      const { lat, lng } = e.latlng;
-      window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
-    },
-  });
-
-  return null;
-}
 
 export default function Map({
   lat,
   lng,
-  name,              // ✅ include name
+  name,
 }: {
   lat: number;
   lng: number;
-  name?: string;      // ✅ include name
+  name?: string;
 }) {
   return (
     <div className="w-full h-72 rounded-lg overflow-hidden">
@@ -39,11 +21,19 @@ export default function Map({
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        <Marker position={[lat, lng]}>
-          {name && <Popup>{name}</Popup>}   {/* ✅ allow popup */}
+        <Marker
+          position={[lat, lng]}
+          eventHandlers={{
+            click: () => {
+              window.open(
+                `https://www.google.com/maps?q=${lat},${lng}`,
+                "_blank"
+              );
+            },
+          }}
+        >
+          {name && <Popup>{name}</Popup>}
         </Marker>
-
-        <OpenGoogleMapsOnClick />
       </MapContainer>
     </div>
   );
