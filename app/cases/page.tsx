@@ -13,17 +13,16 @@ import {
 import Link from "next/link";
 
 /* ---------------------------------------------------------
-   🔊 GLOBAL VARIABLES
+   GLOBAL ALARM HANDLING
 ----------------------------------------------------------*/
 let alarmInterval: NodeJS.Timeout | null = null;
 let globalAudio: HTMLAudioElement | null = null;
 
 /* ---------------------------------------------------------
-   TYPES
+   CASE TYPE
 ----------------------------------------------------------*/
 interface CaseData {
   id: string;
-  patientName?: string;
   caseCode?: string;
   Ijrny?: string;
   chiefComplaint?: string;
@@ -36,20 +35,20 @@ interface CaseData {
 
 export default function CasesDashboard() {
   const [cases, setCases] = useState<CaseData[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
+  const [role, setRole] = useState<
+    "admin" | "management" | "dispatch" | "ambulance" | null
+  >(null);
 
+  const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
 
-  // NEW FEATURE: Hide closed cases
   const [showCompleted, setShowCompleted] = useState(false);
 
   /* ---------------------------------------------------------
-     🔊 PRIME AUDIO
+     PRIME AUDIO
 ----------------------------------------------------------*/
   function primeAudio() {
     const a = new Audio("/sounds/alert.mp3");
@@ -62,7 +61,7 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     🔊 START ALARM LOOP
+     START ALARM
 ----------------------------------------------------------*/
   function startAlarm() {
     if (!globalAudio) {
@@ -73,7 +72,6 @@ export default function CasesDashboard() {
     stopAlarm();
 
     globalAudio.play().catch(() => {});
-
     alarmInterval = setInterval(() => {
       globalAudio!.currentTime = 0;
       globalAudio!.play().catch(() => {});
@@ -83,7 +81,7 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     🛑 STOP ALARM
+     STOP ALARM
 ----------------------------------------------------------*/
   function stopAlarm() {
     if (alarmInterval) clearInterval(alarmInterval);
@@ -98,25 +96,27 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     LOAD LOGIN
+     AUTO LOGIN
 ----------------------------------------------------------*/
   useEffect(() => {
     const saved = localStorage.getItem("accessCode");
 
-    if (saved) {
-      if (saved === "1234") {
-        setIsAdmin(true);
-        setShowLoginPopup(false);
-      } else if (saved.startsWith("AMB-")) {
-        setAmbulanceFilter(saved);
-        setShowLoginPopup(false);
-      }
-      primeAudio();
+    if (!saved) return;
+
+    if (saved === "727978") setRole("admin");
+    else if (saved === "mng000") setRole("management");
+    else if (saved === "dcp000") setRole("dispatch");
+    else if (saved.startsWith("AMB-")) {
+      setRole("ambulance");
+      setAmbulanceFilter(saved);
     }
+
+    setShowLoginPopup(false);
+    primeAudio();
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LISTENER + ALARM
+     FIRESTORE LISTENER (with fixed spread operator)
 ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
@@ -124,33 +124,39 @@ export default function CasesDashboard() {
     const unsub = onSnapshot(q, (snapshot) => {
       const list: CaseData[] = snapshot.docs.map((d) => ({
         id: d.id,
-        ...d.data(),
+        ...((d.data() || {}) as any), // 🔥 FIXED HERE
       }));
 
       setCases(list);
 
-      if (!ambulanceFilter) return;
+      /* DISPATCH → Alarm for EVERY new case */
+      if (role === "dispatch") {
+        const newest = list[0];
+        if (newest && newest.id !== lastLatestCaseId) {
+          startAlarm();
+          setLastLatestCaseId(newest.id);
+        }
+      }
 
-      const myCases = list.filter(
-        (c) => c.ambulanceCode === ambulanceFilter
-      );
+      /* AMBULANCE → Alarm for assigned cases */
+      if (role === "ambulance" && ambulanceFilter) {
+        const myCases = list.filter((c) => c.ambulanceCode === ambulanceFilter);
+        if (myCases.length === 0) return;
 
-      if (myCases.length === 0) return;
-
-      const newest = myCases[0];
-
-      if (
-        newest &&
-        newest.id !== lastLatestCaseId &&
-        (newest.status === "Received" || newest.status === "Assigned")
-      ) {
-        startAlarm();
-        setLastLatestCaseId(newest.id);
+        const newest = myCases[0];
+        if (
+          newest &&
+          newest.id !== lastLatestCaseId &&
+          (newest.status === "Received" || newest.status === "Assigned")
+        ) {
+          startAlarm();
+          setLastLatestCaseId(newest.id);
+        }
       }
     });
 
     return () => unsub();
-  }, [ambulanceFilter, lastLatestCaseId]);
+  }, [role, ambulanceFilter, lastLatestCaseId]);
 
   /* ---------------------------------------------------------
      LOGIN SUBMIT
@@ -159,23 +165,20 @@ export default function CasesDashboard() {
     const input = document.getElementById("accessCode") as HTMLInputElement;
     const code = input.value.trim();
 
-    if (code === "1234") {
-      setIsAdmin(true);
-      setShowLoginPopup(false);
-      localStorage.setItem("accessCode", code);
-      primeAudio();
-      return;
-    }
-
-    if (code.startsWith("AMB-")) {
+    if (code === "727978") setRole("admin");
+    else if (code === "mng000") setRole("management");
+    else if (code === "dcp000") setRole("dispatch");
+    else if (code.startsWith("AMB-")) {
+      setRole("ambulance");
       setAmbulanceFilter(code);
-      setShowLoginPopup(false);
-      localStorage.setItem("accessCode", code);
-      primeAudio();
+    } else {
+      setErrorMessage("❌ Incorrect code");
       return;
     }
 
-    setErrorMessage("❌ Incorrect code");
+    localStorage.setItem("accessCode", code);
+    setShowLoginPopup(false);
+    primeAudio();
   }
 
   /* ---------------------------------------------------------
@@ -183,36 +186,36 @@ export default function CasesDashboard() {
 ----------------------------------------------------------*/
   function handleLogout() {
     localStorage.removeItem("accessCode");
+    setRole(null);
     setAmbulanceFilter(null);
-    setIsAdmin(false);
-    setShowLoginPopup(true);
     setLastLatestCaseId(null);
     stopAlarm();
+    setShowLoginPopup(true);
   }
 
   /* ---------------------------------------------------------
-     DELETE CASE
+     DELETE CASE (Admin only)
 ----------------------------------------------------------*/
   async function deleteCase(id: string) {
-    if (!confirm("Are you sure?")) return;
+    if (!confirm("Are you sure you want to delete this case?")) return;
     await deleteDoc(doc(db, "cases", id));
     alert("Case deleted.");
   }
 
   /* ---------------------------------------------------------
-     FILTER CASES (HIDE CLOSED)
+     CASE FILTERING (Hide closed)
 ----------------------------------------------------------*/
-  let filteredCases = ambulanceFilter
-    ? cases.filter((c) => c.ambulanceCode === ambulanceFilter)
-    : cases;
+  let visibleCases =
+    role === "ambulance"
+      ? cases.filter((c) => c.ambulanceCode === ambulanceFilter)
+      : cases;
 
-// hide closed unless toggled
   if (!showCompleted) {
-    filteredCases = filteredCases.filter((c) => c.status !== "Closed");
+    visibleCases = visibleCases.filter((c) => c.status !== "Closed");
   }
 
   /* ---------------------------------------------------------
-     UI RENDER     
+     UI (unchanged)
 ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
@@ -228,8 +231,8 @@ export default function CasesDashboard() {
             <input
               id="accessCode"
               type="text"
-              placeholder="Admin or Ambulance Code"
-              className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+              placeholder="Enter role code…"
+              className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white"
             />
 
             {errorMessage && (
@@ -248,11 +251,12 @@ export default function CasesDashboard() {
 
       {/* ALARM POPUP */}
       {showAlarmPopup && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[60]">
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[60]">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
-            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">
+            <h2 className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">
               🚨 New Case Alert!
             </h2>
+
             <button
               className="bg-red-600 text-white px-4 py-2 rounded w-full"
               onClick={stopAlarm}
@@ -289,7 +293,7 @@ export default function CasesDashboard() {
 
       {/* CASE LIST */}
       <div className="space-y-3">
-        {filteredCases.map((c) => (
+        {visibleCases.map((c) => (
           <div
             key={c.id}
             className="
@@ -308,15 +312,27 @@ export default function CasesDashboard() {
                 <h2>
                   <strong>Ijrny Code:</strong> {c.Ijrny || "—"}
                 </h2>
-                <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
-                <p><strong>Level:</strong> {c.level}</p>
-                <p><strong>Status:</strong> {c.status}</p>
-                <p><strong>Ambulance:</strong> {c.ambulanceCode || "None"}</p>
-                <p><strong>Location:</strong> {c.locationText}</p>
+
+                <p>
+                  <strong>Complaint:</strong> {c.chiefComplaint}
+                </p>
+                <p>
+                  <strong>Level:</strong> {c.level}
+                </p>
+                <p>
+                  <strong>Status:</strong> {c.status}
+                </p>
+                <p>
+                  <strong>Ambulance:</strong> {c.ambulanceCode || "None"}
+                </p>
+                <p>
+                  <strong>Location:</strong> {c.locationText}
+                </p>
               </div>
             </Link>
 
-            {isAdmin && (
+            {/* ADMIN DELETE */}
+            {role === "admin" && (
               <button
                 onClick={() => deleteCase(c.id)}
                 className="mt-2 text-red-500 underline dark:text-red-400"
