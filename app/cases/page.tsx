@@ -24,6 +24,8 @@ let globalAudio: HTMLAudioElement | null = null;
 interface CaseData {
   id: string;
   patientName?: string;
+  caseCode?: string;
+  Ijrny?: string;
   chiefComplaint?: string;
   level?: string;
   status?: string;
@@ -36,11 +38,15 @@ export default function CasesDashboard() {
   const [cases, setCases] = useState<CaseData[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
+
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
+
+  // NEW FEATURE: Hide closed cases
+  const [showCompleted, setShowCompleted] = useState(false);
 
   /* ---------------------------------------------------------
      🔊 PRIME AUDIO
@@ -110,7 +116,7 @@ export default function CasesDashboard() {
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LISTENER + NEW ALARM LOGIC
+     FIRESTORE LISTENER + ALARM
 ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
@@ -123,20 +129,16 @@ export default function CasesDashboard() {
 
       setCases(list);
 
-      // Admin never gets alarm
       if (!ambulanceFilter) return;
 
-      // Filter cases for this ambulance
       const myCases = list.filter(
         (c) => c.ambulanceCode === ambulanceFilter
       );
 
       if (myCases.length === 0) return;
 
-      // Get newest case for this ambulance
       const newest = myCases[0];
 
-      // Trigger alarm if the case is new + status is Received or Assigned
       if (
         newest &&
         newest.id !== lastLatestCaseId &&
@@ -198,14 +200,19 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     FILTER CASES
+     FILTER CASES (HIDE CLOSED)
 ----------------------------------------------------------*/
-  const filteredCases = ambulanceFilter
+  let filteredCases = ambulanceFilter
     ? cases.filter((c) => c.ambulanceCode === ambulanceFilter)
     : cases;
 
+// hide closed unless toggled
+  if (!showCompleted) {
+    filteredCases = filteredCases.filter((c) => c.status !== "Closed");
+  }
+
   /* ---------------------------------------------------------
-     UI RENDER
+     UI RENDER     
 ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
@@ -214,7 +221,9 @@ export default function CasesDashboard() {
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-80 text-center">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">Enter Access Code</h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-white">
+              Enter Access Code
+            </h2>
 
             <input
               id="accessCode"
@@ -223,9 +232,14 @@ export default function CasesDashboard() {
               className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white dark:border-gray-600"
             />
 
-            {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="text-red-500 text-sm">{errorMessage}</p>
+            )}
 
-            <button onClick={handleLoginSubmit} className="bg-blue-600 text-white w-full py-2 rounded mt-2">
+            <button
+              onClick={handleLoginSubmit}
+              className="bg-blue-600 text-white w-full py-2 rounded mt-2"
+            >
               Login
             </button>
           </div>
@@ -236,8 +250,13 @@ export default function CasesDashboard() {
       {showAlarmPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[60]">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
-            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">🚨 New Case Alert!</h2>
-            <button className="bg-red-600 text-white px-4 py-2 rounded w-full" onClick={stopAlarm}>
+            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">
+              🚨 New Case Alert!
+            </h2>
+            <button
+              className="bg-red-600 text-white px-4 py-2 rounded w-full"
+              onClick={stopAlarm}
+            >
               STOP ALARM
             </button>
           </div>
@@ -246,7 +265,9 @@ export default function CasesDashboard() {
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold dark:text-white">Dispatch Dashboard</h1>
+        <h1 className="text-2xl font-bold dark:text-white">
+          Dispatch Dashboard
+        </h1>
 
         {!showLoginPopup && (
           <button
@@ -258,22 +279,35 @@ export default function CasesDashboard() {
         )}
       </div>
 
+      {/* SHOW/HIDE COMPLETED BUTTON */}
+      <button
+        onClick={() => setShowCompleted(!showCompleted)}
+        className="bg-gray-700 text-white px-4 py-2 rounded mb-4"
+      >
+        {showCompleted ? "Hide Completed Cases" : "Show Completed Cases"}
+      </button>
+
       {/* CASE LIST */}
       <div className="space-y-3">
         {filteredCases.map((c) => (
           <div
             key={c.id}
             className="
-              border rounded shadow-sm p-4 
-              bg-white text-gray-900 
-              hover:bg-gray-100 
-              dark:bg-gray-800 dark:text-white dark:border-gray-700 
+              border rounded shadow-sm p-4
+              bg-white text-gray-900
+              hover:bg-gray-100
+              dark:bg-gray-800 dark:text-white dark:border-gray-700
               dark:hover:bg-gray-700
             "
           >
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer">
-                <h2 className="text-xl font-bold">{c.patientName}</h2>
+                <h2>
+                  <strong>Lazem Code:</strong> {c.caseCode || "—"}
+                </h2>
+                <h2>
+                  <strong>Ijrny Code:</strong> {c.Ijrny || "—"}
+                </h2>
                 <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
                 <p><strong>Level:</strong> {c.level}</p>
                 <p><strong>Status:</strong> {c.status}</p>

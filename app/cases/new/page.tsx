@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 
 export default function NewCasePage() {
-  const [patientName, setPatientName] = useState("");
+  const [Ijrny, setIjrny] = useState("");   // manual code
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
   const [locationText, setLocationText] = useState("");
@@ -23,12 +23,24 @@ export default function NewCasePage() {
   const [lng, setLng] = useState<number | null>(null);
 
   const [unitType, setUnitType] = useState<"ambulance" | "clinic" | "roaming" | "">("");
-
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [selectedAmbulance, setSelectedAmbulance] = useState("");
 
   const [clinics, setClinics] = useState<any[]>([]);
   const [selectedClinic, setSelectedClinic] = useState("");
+
+  /* ---------------------------------------------------------
+     GENERATE LAZEM CASE CODE
+     Format: CASE-YYYYMMDD-###
+  ---------------------------------------------------------*/
+  function generateLazemCaseCode() {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const rand = String(Math.floor(Math.random() * 999)).padStart(3, "0");
+    return `CASE-${y}${m}${d}-${rand}`;
+  }
 
   /* ---------------------------------------------------------
      LOAD AMBULANCES LIVE
@@ -76,12 +88,12 @@ export default function NewCasePage() {
   async function handleSubmit(e: any) {
     e.preventDefault();
 
-    if (!patientName || !chiefComplaint || !level) {
+    if (!Ijrny || !chiefComplaint || !level) {
       alert("Please fill all required fields");
       return;
     }
 
-    // Assigned Unit Object
+    // Assigned Unit
     let assignedUnit = null;
 
     if (unitType === "ambulance") {
@@ -92,9 +104,6 @@ export default function NewCasePage() {
       assignedUnit = { type: "roaming", id: null };
     }
 
-    /* ---------------------------------------------------------
-       GET REAL AMBULANCE CODE INSTEAD OF DOC ID
-    ---------------------------------------------------------*/
     const ambulanceCode =
       unitType === "ambulance"
         ? ambulances.find((a) => a.docId === selectedAmbulance)?.code || null
@@ -106,10 +115,17 @@ export default function NewCasePage() {
         : null;
 
     /* ---------------------------------------------------------
+       CREATE LAZEM CODE HERE
+    ---------------------------------------------------------*/
+    const caseCode = generateLazemCaseCode();
+
+    /* ---------------------------------------------------------
        SAVE CASE TO FIRESTORE
     ---------------------------------------------------------*/
     const caseRef = await addDoc(collection(db, "cases"), {
-      patientName,
+      Ijrny: Ijrny,        // manual
+      caseCode: caseCode,  // 🔥 auto-generated Lazem code
+
       chiefComplaint,
       level,
       locationText,
@@ -118,10 +134,7 @@ export default function NewCasePage() {
       unitType,
       assignedUnit,
 
-      // 🔥 FIXED: Save the REAL ambulance code
       ambulanceCode: ambulanceCode,
-
-      // (Optional) save clinic name
       clinicId: selectedClinic,
       clinicName: clinicName,
 
@@ -139,7 +152,12 @@ export default function NewCasePage() {
       });
     }
 
-    alert("Case created successfully!");
+    alert(
+      "Case created successfully!\n" +
+      "Lazem Case Code: " + caseCode + "\n" +
+      "Ijrny Code: " + Ijrny
+    );
+
     window.location.href = "/cases";
   }
 
@@ -150,15 +168,18 @@ export default function NewCasePage() {
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-[#1c2333] p-6 rounded-lg border border-gray-700">
-        
-        {/* Patient Name */}
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 bg-[#1c2333] p-6 rounded-lg border border-gray-700"
+      >
+        {/* IJRNY CODE FIELD */}
         <div>
-          <label className="font-semibold">Patient Name</label>
+          <label className="font-semibold">Ijrny Case Code</label>
           <input
             className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-            value={patientName}
-            onChange={(e) => setPatientName(e.target.value)}
+            value={Ijrny}
+            onChange={(e) => setIjrny(e.target.value)}
+            placeholder="Enter IJRNY code"
           />
         </div>
 
@@ -214,7 +235,7 @@ export default function NewCasePage() {
                 value="ambulance"
                 checked={unitType === "ambulance"}
                 onChange={() => setUnitType("ambulance")}
-              />{" "}
+              />
               Ambulance
             </label>
 
@@ -225,7 +246,7 @@ export default function NewCasePage() {
                 value="clinic"
                 checked={unitType === "clinic"}
                 onChange={() => setUnitType("clinic")}
-              />{" "}
+              />
               Clinic
             </label>
 
@@ -236,7 +257,7 @@ export default function NewCasePage() {
                 value="roaming"
                 checked={unitType === "roaming"}
                 onChange={() => setUnitType("roaming")}
-              />{" "}
+              />
               Roaming
             </label>
           </div>

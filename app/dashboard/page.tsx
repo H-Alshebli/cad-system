@@ -99,10 +99,9 @@ export default function Dashboard() {
             "
           >
             <h2 className="text-xl font-bold dark:text-white">
-              {c.patientName} — Level {c.level}
+             <strong>Lazem Code:</strong> {c.caseCode} — Level {c.level}
             </h2>
-
-            <p className="text-gray-600 dark:text-gray-300">{c.locationText}</p>
+            <p className="text-gray-600 dark:text-gray-300"><strong>Ijrny Code:</strong> {c.Ijrny}</p>
 
             {/* Timeline now supports dark mode automatically */}
             <CaseTimeline timeline={c.timeline || {}} />

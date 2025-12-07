@@ -184,7 +184,10 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         "
       >
         <p>
-          <strong>Patient:</strong> {caseData.patientName}
+          <strong>Lazem Code:</strong> {caseData.caseCode}
+        </p>
+         <p>
+          <strong>Ijrny Code:</strong> {caseData.Ijrny}
         </p>
         <p>
           <strong>Complaint:</strong> {caseData.chiefComplaint}
