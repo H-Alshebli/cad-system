@@ -29,6 +29,7 @@ interface CaseData {
   status?: string;
   locationText?: string;
   ambulanceCode?: string;
+  createdAt?: any;
   [key: string]: any;
 }
 
@@ -39,7 +40,7 @@ export default function CasesDashboard() {
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [lastCaseCount, setLastCaseCount] = useState(0);
+  const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
 
   /* ---------------------------------------------------------
      🔊 PRIME AUDIO (Safari/iOS fix)
@@ -109,7 +110,7 @@ export default function CasesDashboard() {
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LIVE LISTENER
+     FIRESTORE LIVE LISTENER + SMART ALARM
 ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
@@ -120,20 +121,34 @@ export default function CasesDashboard() {
         ...d.data(),
       }));
 
-      const myCases = ambulanceFilter
-        ? list.filter((c) => c.ambulanceCode === ambulanceFilter)
-        : list;
-
-      if (ambulanceFilter && myCases.length > lastCaseCount) {
-        startAlarm();
-      }
-
-      setLastCaseCount(myCases.length);
       setCases(list);
+
+      // Admin = no alarm
+      if (!ambulanceFilter) return;
+
+      // Get only this ambulance cases
+      const myCases = list.filter(
+        (c) => c.ambulanceCode === ambulanceFilter
+      );
+
+      if (myCases.length === 0) return;
+
+      // Newest case for this ambulance
+      const newest = myCases[0];
+
+      // If newest case is different from last time AND status is Assigned → play alarm
+      if (
+        newest &&
+        newest.id !== lastLatestCaseId &&
+        newest.status === "Assigned"
+      ) {
+        startAlarm();
+        setLastLatestCaseId(newest.id);
+      }
     });
 
     return () => unsub();
-  }, [ambulanceFilter, lastCaseCount]);
+  }, [ambulanceFilter, lastLatestCaseId]);
 
   /* ---------------------------------------------------------
      LOGIN SUBMIT
@@ -169,7 +184,7 @@ export default function CasesDashboard() {
     setAmbulanceFilter(null);
     setIsAdmin(false);
     setShowLoginPopup(true);
-    setLastCaseCount(0);
+    setLastLatestCaseId(null);
     stopAlarm();
   }
 
@@ -194,7 +209,6 @@ export default function CasesDashboard() {
 ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
-
       {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
