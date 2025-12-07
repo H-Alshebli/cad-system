@@ -30,7 +30,9 @@ export default function NewCasePage() {
   const [clinics, setClinics] = useState<any[]>([]);
   const [selectedClinic, setSelectedClinic] = useState("");
 
-  // Load Ambulances Live
+  /* ---------------------------------------------------------
+     LOAD AMBULANCES LIVE
+  ---------------------------------------------------------*/
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({ docId: d.id, ...d.data() }));
@@ -39,7 +41,9 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
-  // Load Clinics from Firestore (destinations collection)
+  /* ---------------------------------------------------------
+     LOAD CLINICS FROM FIRESTORE (destinations collection)
+  ---------------------------------------------------------*/
   useEffect(() => {
     const loadClinics = async () => {
       const q = query(collection(db, "destinations"), where("type", "==", "clinic"));
@@ -56,7 +60,9 @@ export default function NewCasePage() {
     loadClinics();
   }, []);
 
-  // Parse Lat/Lng
+  /* ---------------------------------------------------------
+     PARSE LAT/LNG
+  ---------------------------------------------------------*/
   function parseLatLng(input: string) {
     if (!input.includes(",")) return;
     const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
@@ -64,6 +70,9 @@ export default function NewCasePage() {
     setLng(ln);
   }
 
+  /* ---------------------------------------------------------
+     SUBMIT CASE
+  ---------------------------------------------------------*/
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -72,6 +81,7 @@ export default function NewCasePage() {
       return;
     }
 
+    // Assigned Unit Object
     let assignedUnit = null;
 
     if (unitType === "ambulance") {
@@ -82,6 +92,9 @@ export default function NewCasePage() {
       assignedUnit = { type: "roaming", id: null };
     }
 
+    /* ---------------------------------------------------------
+       SAVE CASE TO FIRESTORE (NEW FIX)
+    ---------------------------------------------------------*/
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
       chiefComplaint,
@@ -91,11 +104,18 @@ export default function NewCasePage() {
       lng,
       unitType,
       assignedUnit,
+
+      // 🔥 New fields that fix your Case Details issue:
+      ambulanceCode: unitType === "ambulance" ? selectedAmbulance : null,
+      clinicId: unitType === "clinic" ? selectedClinic : null,
+
       status: "Received",
       createdAt: serverTimestamp(),
     });
 
-    // Mark ambulance busy if selected
+    /* ---------------------------------------------------------
+       MARK AMBULANCE AS BUSY
+    ---------------------------------------------------------*/
     if (unitType === "ambulance" && selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -107,6 +127,9 @@ export default function NewCasePage() {
     window.location.href = "/cases";
   }
 
+  /* ---------------------------------------------------------
+     UI
+  ---------------------------------------------------------*/
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
@@ -203,7 +226,7 @@ export default function NewCasePage() {
           </div>
         </div>
 
-        {/* If ambulance selected → show dropdown */}
+        {/* Ambulance Dropdown */}
         {unitType === "ambulance" && (
           <div>
             <label className="font-semibold">Select Ambulance</label>
@@ -222,7 +245,7 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* If clinic selected → show dropdown */}
+        {/* Clinic Dropdown */}
         {unitType === "clinic" && (
           <div>
             <label className="font-semibold">Select Clinic</label>
