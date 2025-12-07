@@ -42,7 +42,7 @@ export default function NewCasePage() {
   }, []);
 
   /* ---------------------------------------------------------
-     LOAD CLINICS FROM FIRESTORE (destinations collection)
+     LOAD CLINICS
   ---------------------------------------------------------*/
   useEffect(() => {
     const loadClinics = async () => {
@@ -93,7 +93,20 @@ export default function NewCasePage() {
     }
 
     /* ---------------------------------------------------------
-       SAVE CASE TO FIRESTORE (NEW FIX)
+       GET REAL AMBULANCE CODE INSTEAD OF DOC ID
+    ---------------------------------------------------------*/
+    const ambulanceCode =
+      unitType === "ambulance"
+        ? ambulances.find((a) => a.docId === selectedAmbulance)?.code || null
+        : null;
+
+    const clinicName =
+      unitType === "clinic"
+        ? clinics.find((c) => c.id === selectedClinic)?.name || null
+        : null;
+
+    /* ---------------------------------------------------------
+       SAVE CASE TO FIRESTORE
     ---------------------------------------------------------*/
     const caseRef = await addDoc(collection(db, "cases"), {
       patientName,
@@ -105,16 +118,19 @@ export default function NewCasePage() {
       unitType,
       assignedUnit,
 
-      // 🔥 New fields that fix your Case Details issue:
-      ambulanceCode: unitType === "ambulance" ? selectedAmbulance : null,
-      clinicId: unitType === "clinic" ? selectedClinic : null,
+      // 🔥 FIXED: Save the REAL ambulance code
+      ambulanceCode: ambulanceCode,
+
+      // (Optional) save clinic name
+      clinicId: selectedClinic,
+      clinicName: clinicName,
 
       status: "Received",
       createdAt: serverTimestamp(),
     });
 
     /* ---------------------------------------------------------
-       MARK AMBULANCE AS BUSY
+       MARK AMBULANCE BUSY
     ---------------------------------------------------------*/
     if (unitType === "ambulance" && selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
