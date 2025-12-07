@@ -29,7 +29,6 @@ interface CaseData {
   status?: string;
   locationText?: string;
   ambulanceCode?: string;
-  createdAt?: any;
   [key: string]: any;
 }
 
@@ -40,10 +39,11 @@ export default function CasesDashboard() {
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
   const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
 
   /* ---------------------------------------------------------
-     🔊 PRIME AUDIO (Safari/iOS fix)
+     🔊 PRIME AUDIO
 ----------------------------------------------------------*/
   function primeAudio() {
     const a = new Audio("/sounds/alert.mp3");
@@ -92,7 +92,7 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     LOAD LOGIN DATA
+     LOAD LOGIN
 ----------------------------------------------------------*/
   useEffect(() => {
     const saved = localStorage.getItem("accessCode");
@@ -110,7 +110,7 @@ export default function CasesDashboard() {
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LIVE LISTENER + SMART ALARM
+     FIRESTORE LISTENER + NEW ALARM LOGIC
 ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
@@ -123,24 +123,24 @@ export default function CasesDashboard() {
 
       setCases(list);
 
-      // Admin = no alarm
+      // Admin never gets alarm
       if (!ambulanceFilter) return;
 
-      // Get only this ambulance cases
+      // Filter cases for this ambulance
       const myCases = list.filter(
         (c) => c.ambulanceCode === ambulanceFilter
       );
 
       if (myCases.length === 0) return;
 
-      // Newest case for this ambulance
+      // Get newest case for this ambulance
       const newest = myCases[0];
 
-      // If newest case is different from last time AND status is Assigned → play alarm
+      // Trigger alarm if the case is new + status is Received or Assigned
       if (
         newest &&
         newest.id !== lastLatestCaseId &&
-        newest.status === "Assigned"
+        (newest.status === "Received" || newest.status === "Assigned")
       ) {
         startAlarm();
         setLastLatestCaseId(newest.id);
@@ -189,12 +189,12 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     DELETE CASE (Admin Only)
+     DELETE CASE
 ----------------------------------------------------------*/
   async function deleteCase(id: string) {
-    if (!confirm("Are you sure you want to delete this case?")) return;
+    if (!confirm("Are you sure?")) return;
     await deleteDoc(doc(db, "cases", id));
-    alert("Case deleted successfully.");
+    alert("Case deleted.");
   }
 
   /* ---------------------------------------------------------
@@ -205,17 +205,16 @@ export default function CasesDashboard() {
     : cases;
 
   /* ---------------------------------------------------------
-     RENDER UI
+     UI RENDER
 ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
+
       {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-80 text-center">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">
-              Enter Access Code
-            </h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-white">Enter Access Code</h2>
 
             <input
               id="accessCode"
@@ -224,14 +223,9 @@ export default function CasesDashboard() {
               className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white dark:border-gray-600"
             />
 
-            {errorMessage && (
-              <p className="text-red-500 text-sm">{errorMessage}</p>
-            )}
+            {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
 
-            <button
-              onClick={handleLoginSubmit}
-              className="bg-blue-600 text-white w-full py-2 rounded mt-2"
-            >
+            <button onClick={handleLoginSubmit} className="bg-blue-600 text-white w-full py-2 rounded mt-2">
               Login
             </button>
           </div>
@@ -242,14 +236,8 @@ export default function CasesDashboard() {
       {showAlarmPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[60]">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
-            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">
-              🚨 New Case Assigned!
-            </h2>
-
-            <button
-              className="bg-red-600 text-white px-4 py-2 rounded w-full"
-              onClick={stopAlarm}
-            >
+            <h2 className="text-xl font-bold text-red-600 mb-4 dark:text-red-400">🚨 New Case Alert!</h2>
+            <button className="bg-red-600 text-white px-4 py-2 rounded w-full" onClick={stopAlarm}>
               STOP ALARM
             </button>
           </div>
@@ -258,9 +246,7 @@ export default function CasesDashboard() {
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold dark:text-white">
-          Dispatch Dashboard
-        </h1>
+        <h1 className="text-2xl font-bold dark:text-white">Dispatch Dashboard</h1>
 
         {!showLoginPopup && (
           <button
@@ -291,7 +277,7 @@ export default function CasesDashboard() {
                 <p><strong>Complaint:</strong> {c.chiefComplaint}</p>
                 <p><strong>Level:</strong> {c.level}</p>
                 <p><strong>Status:</strong> {c.status}</p>
-                <p><strong>Ambulance:</strong> {c.ambulanceCode}</p>
+                <p><strong>Ambulance:</strong> {c.ambulanceCode || "None"}</p>
                 <p><strong>Location:</strong> {c.locationText}</p>
               </div>
             </Link>
