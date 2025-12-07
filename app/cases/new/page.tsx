@@ -15,14 +15,17 @@ import {
 } from "firebase/firestore";
 
 export default function NewCasePage() {
-  const [Ijrny, setIjrny] = useState("");   // manual code
+  const [Ijrny, setIjrny] = useState(""); // MANUAL ENTRY
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
   const [locationText, setLocationText] = useState("");
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  const [lat, setLat] = useState<number | null>(24.7136);
+  const [lng, setLng] = useState<number | null>(46.6753);
 
-  const [unitType, setUnitType] = useState<"ambulance" | "clinic" | "roaming" | "">("");
+  const [unitType, setUnitType] = useState<
+    "ambulance" | "clinic" | "roaming" | ""
+  >("");
+
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [selectedAmbulance, setSelectedAmbulance] = useState("");
 
@@ -30,21 +33,8 @@ export default function NewCasePage() {
   const [selectedClinic, setSelectedClinic] = useState("");
 
   /* ---------------------------------------------------------
-     GENERATE LAZEM CASE CODE
-     Format: CASE-YYYYMMDD-###
-  ---------------------------------------------------------*/
-  function generateLazemCaseCode() {
-    const date = new Date();
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    const rand = String(Math.floor(Math.random() * 999)).padStart(3, "0");
-    return `CASE-${y}${m}${d}-${rand}`;
-  }
-
-  /* ---------------------------------------------------------
      LOAD AMBULANCES LIVE
-  ---------------------------------------------------------*/
+  ----------------------------------------------------------*/
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({ docId: d.id, ...d.data() }));
@@ -55,7 +45,7 @@ export default function NewCasePage() {
 
   /* ---------------------------------------------------------
      LOAD CLINICS
-  ---------------------------------------------------------*/
+  ----------------------------------------------------------*/
   useEffect(() => {
     const loadClinics = async () => {
       const q = query(collection(db, "destinations"), where("type", "==", "clinic"));
@@ -73,8 +63,22 @@ export default function NewCasePage() {
   }, []);
 
   /* ---------------------------------------------------------
+     AUTO-GENERATE LAZEM CASE CODE
+     Example: CASE-20251207-119
+  ----------------------------------------------------------*/
+  function generateCaseCode() {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const random = String(Math.floor(Math.random() * 999)).padStart(3, "0");
+
+    return `CASE-${y}${m}${d}-${random}`;
+  }
+
+  /* ---------------------------------------------------------
      PARSE LAT/LNG
-  ---------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function parseLatLng(input: string) {
     if (!input.includes(",")) return;
     const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
@@ -84,7 +88,7 @@ export default function NewCasePage() {
 
   /* ---------------------------------------------------------
      SUBMIT CASE
-  ---------------------------------------------------------*/
+  ----------------------------------------------------------*/
   async function handleSubmit(e: any) {
     e.preventDefault();
 
@@ -93,7 +97,10 @@ export default function NewCasePage() {
       return;
     }
 
-    // Assigned Unit
+    const now = new Date().toISOString();
+
+    const caseCode = generateCaseCode();
+
     let assignedUnit = null;
 
     if (unitType === "ambulance") {
@@ -115,36 +122,35 @@ export default function NewCasePage() {
         : null;
 
     /* ---------------------------------------------------------
-       CREATE LAZEM CODE HERE
-    ---------------------------------------------------------*/
-    const caseCode = generateLazemCaseCode();
-
-    /* ---------------------------------------------------------
-       SAVE CASE TO FIRESTORE
-    ---------------------------------------------------------*/
+       SAVE NEW CASE WITH TIMELINE (Received + Assigned)
+    ----------------------------------------------------------*/
     const caseRef = await addDoc(collection(db, "cases"), {
-      Ijrny: Ijrny,        // manual
-      caseCode: caseCode,  // 🔥 auto-generated Lazem code
-
+      caseCode,
+      Ijrny,
       chiefComplaint,
       level,
       locationText,
       lat,
       lng,
+
       unitType,
       assignedUnit,
-
-      ambulanceCode: ambulanceCode,
+      ambulanceCode,
       clinicId: selectedClinic,
-      clinicName: clinicName,
+      clinicName,
 
-      status: "Received",
+      status: "Assigned", // Start as Assigned
+      timeline: {
+        Received: now,
+        Assigned: now,
+      },
+
       createdAt: serverTimestamp(),
     });
 
     /* ---------------------------------------------------------
-       MARK AMBULANCE BUSY
-    ---------------------------------------------------------*/
+       SET AMBULANCE BUSY
+    ----------------------------------------------------------*/
     if (unitType === "ambulance" && selectedAmbulance) {
       await updateDoc(doc(db, "ambulances", selectedAmbulance), {
         status: "busy",
@@ -152,18 +158,14 @@ export default function NewCasePage() {
       });
     }
 
-    alert(
-      "Case created successfully!\n" +
-      "Lazem Case Code: " + caseCode + "\n" +
-      "Ijrny Code: " + Ijrny
-    );
+    alert("Case created successfully!");
 
     window.location.href = "/cases";
   }
 
   /* ---------------------------------------------------------
      UI
-  ---------------------------------------------------------*/
+  ----------------------------------------------------------*/
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
@@ -172,7 +174,7 @@ export default function NewCasePage() {
         onSubmit={handleSubmit}
         className="space-y-4 bg-[#1c2333] p-6 rounded-lg border border-gray-700"
       >
-        {/* IJRNY CODE FIELD */}
+        {/* IJRNY CODE */}
         <div>
           <label className="font-semibold">Ijrny Case Code</label>
           <input
@@ -183,7 +185,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Complaint */}
+        {/* COMPLAINT */}
         <div>
           <label className="font-semibold">Chief Complaint</label>
           <input
@@ -193,7 +195,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Level */}
+        {/* LEVEL */}
         <div>
           <label className="font-semibold">Level (Triage)</label>
           <select
@@ -209,7 +211,7 @@ export default function NewCasePage() {
           </select>
         </div>
 
-        {/* Location */}
+        {/* LOCATION */}
         <div>
           <label className="font-semibold">Location</label>
           <input
@@ -223,7 +225,7 @@ export default function NewCasePage() {
           />
         </div>
 
-        {/* Assign Unit */}
+        {/* ASSIGN UNIT */}
         <div>
           <label className="font-semibold block">Assign Unit</label>
 
@@ -235,7 +237,7 @@ export default function NewCasePage() {
                 value="ambulance"
                 checked={unitType === "ambulance"}
                 onChange={() => setUnitType("ambulance")}
-              />
+              />{" "}
               Ambulance
             </label>
 
@@ -246,7 +248,7 @@ export default function NewCasePage() {
                 value="clinic"
                 checked={unitType === "clinic"}
                 onChange={() => setUnitType("clinic")}
-              />
+              />{" "}
               Clinic
             </label>
 
@@ -257,13 +259,13 @@ export default function NewCasePage() {
                 value="roaming"
                 checked={unitType === "roaming"}
                 onChange={() => setUnitType("roaming")}
-              />
+              />{" "}
               Roaming
             </label>
           </div>
         </div>
 
-        {/* Ambulance Dropdown */}
+        {/* AMBULANCE DROPDOWN */}
         {unitType === "ambulance" && (
           <div>
             <label className="font-semibold">Select Ambulance</label>
@@ -282,7 +284,7 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* Clinic Dropdown */}
+        {/* CLINIC DROPDOWN */}
         {unitType === "clinic" && (
           <div>
             <label className="font-semibold">Select Clinic</label>
@@ -301,7 +303,7 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* Submit */}
+        {/* SUBMIT BUTTON */}
         <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700"
