@@ -7,37 +7,105 @@ import {
   addDoc,
   onSnapshot,
   updateDoc,
-  doc,
-  serverTimestamp,
   query,
   where,
+  doc,
+  serverTimestamp,
   getDocs,
 } from "firebase/firestore";
 
+/* ---------------------------------------------------------
+   TYPE DEFINITIONS
+----------------------------------------------------------*/
+interface IjrnyCase {
+  id: string;
+  IjrnyId: string;
+  chiefComplaint: string;
+  level: string;
+  lat: number;
+  lng: number;
+  locationText: string;
+  patientName: string;
+  status: "pending" | "used";
+  createdAt: any;
+}
+
 export default function NewCasePage() {
-  const [Ijrny, setIjrny] = useState(""); // MANUAL ENTRY
+  /* ---------------------------------------------------------
+     FORM STATE
+  ----------------------------------------------------------*/
+  const [ijrnyCode, setIjrnyCode] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
   const [locationText, setLocationText] = useState("");
-  const [lat, setLat] = useState<number | null>(24.7136);
-  const [lng, setLng] = useState<number | null>(46.6753);
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
-  const [unitType, setUnitType] = useState<
-    "ambulance" | "clinic" | "roaming" | ""
-  >("");
+  const [unitType, setUnitType] =
+    useState<"ambulance" | "clinic" | "roaming" | "">("");
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
-  const [selectedAmbulance, setSelectedAmbulance] = useState("");
-
   const [clinics, setClinics] = useState<any[]>([]);
-  const [selectedClinic, setSelectedClinic] = useState("");
+  const [selectedUnit, setSelectedUnit] = useState("");
+
+  const [ijrnyCases, setIjrnyCases] = useState<IjrnyCase[]>([]);
+  const [completedCases, setCompletedCases] = useState<IjrnyCase[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   /* ---------------------------------------------------------
-     LOAD AMBULANCES LIVE
-  ----------------------------------------------------------*/
+     GENERATE LAZEM CODE
+----------------------------------------------------------*/
+  function generateLazemCode() {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const random = String(Math.floor(Math.random() * 999) + 1).padStart(3, "0");
+    return `CASE-${y}${m}${d}-${random}`;
+  }
+
+  /* ---------------------------------------------------------
+     LOAD iJRNY PENDING CASES
+----------------------------------------------------------*/
+  useEffect(() => {
+    const q = query(
+      collection(db, "ijrny_cases"),
+      where("status", "==", "pending")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const arr: any[] = [];
+      snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
+      setIjrnyCases(arr as IjrnyCase[]);
+    });
+
+    return () => unsub();
+  }, []);
+
+  /* ---------------------------------------------------------
+     LOAD COMPLETED iJRNY CASES
+----------------------------------------------------------*/
+  useEffect(() => {
+    const q = query(
+      collection(db, "ijrny_cases"),
+      where("status", "==", "used")
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const arr: any[] = [];
+      snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
+      setCompletedCases(arr as IjrnyCase[]);
+    });
+
+    return () => unsub();
+  }, []);
+
+  /* ---------------------------------------------------------
+     LOAD AMBULANCES
+----------------------------------------------------------*/
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
-      const list = snap.docs.map((d) => ({ docId: d.id, ...d.data() }));
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAmbulances(list);
     });
     return () => unsub();
@@ -45,272 +113,229 @@ export default function NewCasePage() {
 
   /* ---------------------------------------------------------
      LOAD CLINICS
-  ----------------------------------------------------------*/
+----------------------------------------------------------*/
   useEffect(() => {
     const loadClinics = async () => {
-      const q = query(collection(db, "destinations"), where("type", "==", "clinic"));
+      const q = query(
+        collection(db, "destinations"),
+        where("type", "==", "clinic")
+      );
       const snap = await getDocs(q);
-
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setClinics(list);
     };
-
     loadClinics();
   }, []);
 
   /* ---------------------------------------------------------
-     AUTO-GENERATE LAZEM CASE CODE
-     Example: CASE-20251207-119
-  ----------------------------------------------------------*/
-  function generateCaseCode() {
-    const date = new Date();
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    const random = String(Math.floor(Math.random() * 999)).padStart(3, "0");
+     AUTO-FILL FROM iJRNY
+----------------------------------------------------------*/
+  const loadIjrnyCase = async (c: IjrnyCase) => {
+    setIjrnyCode(c.IjrnyId);
+    setChiefComplaint(c.chiefComplaint || "");
+    setLevel(c.level || "");
+    setLocationText(c.locationText || "");
+    setLat(c.lat);
+    setLng(c.lng);
 
-    return `CASE-${y}${m}${d}-${random}`;
-  }
-
-  /* ---------------------------------------------------------
-     PARSE LAT/LNG
-  ----------------------------------------------------------*/
-  function parseLatLng(input: string) {
-    if (!input.includes(",")) return;
-    const [la, ln] = input.split(",").map((x) => parseFloat(x.trim()));
-    setLat(la);
-    setLng(ln);
-  }
+    await updateDoc(doc(db, "ijrny_cases", c.id), {
+      status: "used",
+    });
+  };
 
   /* ---------------------------------------------------------
-     SUBMIT CASE
-  ----------------------------------------------------------*/
-  async function handleSubmit(e: any) {
-    e.preventDefault();
-
-    if (!Ijrny || !chiefComplaint || !level) {
-      alert("Please fill all required fields");
+     SUBMIT FORM
+----------------------------------------------------------*/
+  const submitCase = async () => {
+    if (!chiefComplaint || !level || lat === null || lng === null) {
+      alert("Please fill all required fields.");
       return;
     }
 
-    const now = new Date().toISOString();
+    const lazemCode = generateLazemCode();
 
-    const caseCode = generateCaseCode();
-
-    let assignedUnit = null;
+    let assignedUnit: any = null;
 
     if (unitType === "ambulance") {
-      assignedUnit = { type: "ambulance", id: selectedAmbulance };
+      assignedUnit = { type: "ambulance", id: selectedUnit };
     } else if (unitType === "clinic") {
-      assignedUnit = { type: "clinic", id: selectedClinic };
-    } else {
+      assignedUnit = { type: "clinic", id: selectedUnit };
+    } else if (unitType === "roaming") {
       assignedUnit = { type: "roaming", id: null };
     }
 
-    const ambulanceCode =
-      unitType === "ambulance"
-        ? ambulances.find((a) => a.docId === selectedAmbulance)?.code || null
-        : null;
-
-    const clinicName =
-      unitType === "clinic"
-        ? clinics.find((c) => c.id === selectedClinic)?.name || null
-        : null;
-
-    /* ---------------------------------------------------------
-       SAVE NEW CASE WITH TIMELINE (Received + Assigned)
-    ----------------------------------------------------------*/
-    const caseRef = await addDoc(collection(db, "cases"), {
-      caseCode,
-      Ijrny,
+    await addDoc(collection(db, "cases"), {
+      lazemCode,
+      ijrny: ijrnyCode,
       chiefComplaint,
       level,
       locationText,
       lat,
       lng,
-
       unitType,
       assignedUnit,
-      ambulanceCode,
-      clinicId: selectedClinic,
-      clinicName,
-
-      status: "Assigned", // Start as Assigned
-      timeline: {
-        Received: now,
-        Assigned: now,
-      },
-
+      status: "Received",
       createdAt: serverTimestamp(),
+      timeline: {
+        Received: new Date().toISOString(),
+      },
     });
 
-    /* ---------------------------------------------------------
-       SET AMBULANCE BUSY
-    ----------------------------------------------------------*/
-    if (unitType === "ambulance" && selectedAmbulance) {
-      await updateDoc(doc(db, "ambulances", selectedAmbulance), {
-        status: "busy",
-        currentCase: caseRef.id,
-      });
-    }
+    alert("Case submitted successfully!");
 
-    alert("Case created successfully!");
+    setIjrnyCode("");
+    setChiefComplaint("");
+    setLevel("");
+    setLocationText("");
+    setLat(null);
+    setLng(null);
+    setUnitType("");
+    setSelectedUnit("");
+  };
 
-    window.location.href = "/cases";
-  }
-
-  /* ---------------------------------------------------------
+  /* =========================================================
      UI
-  ----------------------------------------------------------*/
+  =========================================================*/
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Create New Case</h1>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 bg-[#1c2333] p-6 rounded-lg border border-gray-700"
-      >
-        {/* IJRNY CODE */}
-        <div>
-          <label className="font-semibold">Ijrny Case Code</label>
-          <input
-            className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-            value={Ijrny}
-            onChange={(e) => setIjrny(e.target.value)}
-            placeholder="Enter IJRNY code"
-          />
-        </div>
+      {/* LEFT PANEL — BLUE IN DARK / WHITE IN LIGHT */}
+      <div className="bg-white dark:bg-[#1c2333] p-4 rounded-lg shadow border border-gray-300 dark:border-gray-700">
 
-        {/* COMPLAINT */}
-        <div>
-          <label className="font-semibold">Chief Complaint</label>
-          <input
-            className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-            value={chiefComplaint}
-            onChange={(e) => setChiefComplaint(e.target.value)}
-          />
-        </div>
+        <h2 className="text-xl font-bold mb-4 dark:text-white">
+          iJrny Incoming Cases
+        </h2>
 
-        {/* LEVEL */}
-        <div>
-          <label className="font-semibold">Level (Triage)</label>
-          <select
-            className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-            value={level}
-            onChange={(e) => setLevel(e.target.value)}
+        {ijrnyCases.length === 0 && (
+          <p className="text-gray-600 dark:text-gray-300">No incoming cases.</p>
+        )}
+
+        {ijrnyCases.map((c) => (
+          <div
+            key={c.id}
+            className="
+              bg-white text-black 
+              dark:bg-[#0f1625] dark:text-white 
+              border border-gray-300 dark:border-gray-700 
+              p-3 rounded mb-3
+            "
           >
-            <option value="">Select Level</option>
-            <option value="1">Level 1 - Critical</option>
-            <option value="2">Level 2 - Emergency</option>
-            <option value="3">Level 3 - Urgent</option>
-            <option value="4">Level 4 - Non-Urgent</option>
-          </select>
-        </div>
+            <p className="font-bold">{c.IjrnyId}</p>
+            <p className="opacity-80">
+              {c.chiefComplaint} — Level {c.level}
+            </p>
+            <p className="opacity-60">Location: {c.locationText}</p>
+            <p className="opacity-60">Patient: {c.patientName}</p>
 
-        {/* LOCATION */}
-        <div>
-          <label className="font-semibold">Location</label>
-          <input
-            className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-            placeholder="24.7136, 46.6753"
-            value={locationText}
-            onChange={(e) => {
-              setLocationText(e.target.value);
-              parseLatLng(e.target.value);
-            }}
-          />
-        </div>
+            <button
+              className="w-full mt-3 bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold"
+              onClick={() => loadIjrnyCase(c)}
+            >
+              Load Into Form
+            </button>
+          </div>
+        ))}
 
-        {/* ASSIGN UNIT */}
-        <div>
-          <label className="font-semibold block">Assign Unit</label>
+        {/* Show Completed */}
+        <button
+          className="mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          onClick={() => setShowCompleted(!showCompleted)}
+        >
+          {showCompleted ? "Hide Completed Cases" : "Show Completed Cases"}
+        </button>
 
-          <div className="flex items-center space-x-4 mt-1 text-white">
+        {showCompleted && (
+          <div className="mt-3">
+            {completedCases.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white dark:bg-[#0f1625] p-3 rounded mb-2 border border-gray-300 dark:border-gray-700"
+              >
+                <p className="font-bold">{c.IjrnyId}</p>
+                <p className="opacity-70">{c.chiefComplaint}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT PANEL — FORM */}
+      <div className="bg-white dark:bg-[#1c2333] p-4 rounded-lg shadow border border-gray-300 dark:border-gray-700">
+        <h2 className="text-xl font-bold mb-4 dark:text-white">New Case Form</h2>
+
+        <div className="flex flex-col gap-3">
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="iJrny Case Code" value={ijrnyCode} readOnly />
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Chief Complaint" value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} />
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Triage Level" value={level} onChange={(e) => setLevel(e.target.value)} />
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Location Text" value={locationText} onChange={(e) => setLocationText(e.target.value)} />
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Latitude" value={lat ?? ""} onChange={(e) => setLat(parseFloat(e.target.value))} />
+
+          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Longitude" value={lng ?? ""} onChange={(e) => setLng(parseFloat(e.target.value))} />
+
+          {/* Unit selection */}
+          <label className="font-semibold dark:text-white mt-2">Assign Unit</label>
+
+          <div className="flex gap-4 dark:text-white">
             <label>
-              <input
-                type="radio"
-                name="unit"
-                value="ambulance"
-                checked={unitType === "ambulance"}
-                onChange={() => setUnitType("ambulance")}
-              />{" "}
-              Ambulance
+              <input type="radio" checked={unitType === "ambulance"} onChange={() => { setUnitType("ambulance"); setSelectedUnit(""); }} /> Ambulance
             </label>
 
             <label>
-              <input
-                type="radio"
-                name="unit"
-                value="clinic"
-                checked={unitType === "clinic"}
-                onChange={() => setUnitType("clinic")}
-              />{" "}
-              Clinic
+              <input type="radio" checked={unitType === "clinic"} onChange={() => { setUnitType("clinic"); setSelectedUnit(""); }} /> Clinic
             </label>
 
             <label>
-              <input
-                type="radio"
-                name="unit"
-                value="roaming"
-                checked={unitType === "roaming"}
-                onChange={() => setUnitType("roaming")}
-              />{" "}
-              Roaming
+              <input type="radio" checked={unitType === "roaming"} onChange={() => { setUnitType("roaming"); setSelectedUnit(""); }} /> Roaming
             </label>
           </div>
-        </div>
 
-        {/* AMBULANCE DROPDOWN */}
-        {unitType === "ambulance" && (
-          <div>
-            <label className="font-semibold">Select Ambulance</label>
+          {/* Ambulance Dropdown */}
+          {unitType === "ambulance" && (
             <select
-              className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-              value={selectedAmbulance}
-              onChange={(e) => setSelectedAmbulance(e.target.value)}
+              className="bg-white dark:bg-[#2a2a2a] p-2 rounded"
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
             >
-              <option value="">Select ambulance...</option>
+              <option value="">Select Ambulance...</option>
               {ambulances.map((a) => (
-                <option key={a.docId} value={a.docId}>
+                <option key={a.id} value={a.id}>
                   {a.code} — {a.status}
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
 
-        {/* CLINIC DROPDOWN */}
-        {unitType === "clinic" && (
-          <div>
-            <label className="font-semibold">Select Clinic</label>
+          {/* Clinic Dropdown */}
+          {unitType === "clinic" && (
             <select
-              className="w-full border p-2 rounded bg-[#0f1625] text-white border-gray-600"
-              value={selectedClinic}
-              onChange={(e) => setSelectedClinic(e.target.value)}
+              className="bg-white dark:bg-[#2a2a2a] p-2 rounded"
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
             >
-              <option value="">Select clinic...</option>
+              <option value="">Select Clinic...</option>
               {clinics.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} — {c.address}
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
 
-        {/* SUBMIT BUTTON */}
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded w-full hover:bg-blue-700"
-        >
-          Submit Case
-        </button>
-      </form>
+          {/* Submit */}
+          <button
+            onClick={submitCase}
+            className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold mt-3"
+          >
+            Submit Case
+          </button>
+
+        </div>
+      </div>
     </div>
   );
 }

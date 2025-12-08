@@ -64,8 +64,17 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   /* -------------------------------------------------------
      AMBULANCE CODE
   -------------------------------------------------------- */
-  const ambulanceObj = ambulances.find((a) => a.id === caseData.ambulanceId);
-  const ambulanceCode = ambulanceObj?.code ?? "None";
+ // correct: read ambulance id from assignedUnit
+const ambulanceId = caseData.assignedUnit?.type === "ambulance"
+  ? caseData.assignedUnit.id
+  : null;
+
+// find matching ambulance
+const ambulanceObj = ambulances.find((a) => a.id === ambulanceId);
+
+// show code OR fallback
+const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
+
 
   /* -------------------------------------------------------
      STATUS UPDATE (normal statuses)
@@ -183,12 +192,14 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
           dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700
         "
       >
-        <p>
-          <strong>Lazem Code:</strong> {caseData.caseCode}
-        </p>
-         <p>
-          <strong>Ijrny Code:</strong> {caseData.Ijrny}
-        </p>
+     <p>
+  <strong>Lazem Code:</strong> {caseData.lazemCode || "—"}
+</p>
+
+<p>
+  <strong>Ijrny Code:</strong> {caseData.ijrny || "—"}
+</p>
+
         <p>
           <strong>Complaint:</strong> {caseData.chiefComplaint}
         </p>

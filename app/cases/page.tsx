@@ -306,12 +306,14 @@ export default function CasesDashboard() {
           >
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer">
-                <h2>
-                  <strong>Lazem Code:</strong> {c.caseCode || "—"}
-                </h2>
-                <h2>
-                  <strong>Ijrny Code:</strong> {c.Ijrny || "—"}
-                </h2>
+                <h2 className="text-xl font-bold dark:text-white">
+  <strong>Lazem Code:</strong> {c.lazemCode || "—"}
+</h2>
+
+<p className="text-gray-600 dark:text-gray-300">
+  <strong>Ijrny Code:</strong> {c.ijrny || "—"}
+</p>
+
 
                 <p>
                   <strong>Complaint:</strong> {c.chiefComplaint}
