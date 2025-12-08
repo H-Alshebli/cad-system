@@ -2,79 +2,99 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
+const API_KEY = process.env.IJRNY_API_KEY;
+
+// -------------------------------------------------------------
+//  🔐 AUTHENTICATION CHECK
+// -------------------------------------------------------------
+function isAuthorized(req: Request) {
+  const key = req.headers.get("authorization");
+  if (!key) return false;
+
+  // Expected format:  Bearer supersecretkey123
+  const token = key.replace("Bearer ", "").trim();
+  return token === API_KEY;
+}
+
+// -------------------------------------------------------------
+//  📌 POST: Create Case from iJrny
+// -------------------------------------------------------------
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-
-    const {
-      caseId,
-      lat,
-      lng,
-      chiefComplaint,
-      level,
-      locationText,
-      patientName
-    } = body;
-
-    // ----------------------------
-    // 1) SECURITY CHECK
-    // ----------------------------
-    const authHeader = req.headers.get("authorization");
-    const apiKey = authHeader?.replace("Bearer ", "");
-
-    if (!apiKey || apiKey !== process.env.IJRNY_API_KEY) {
+    // -------------------------------
+    // 1. Check API key
+    // -------------------------------
+    if (!isAuthorized(req)) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        { error: "Unauthorized: Invalid API key" },
         { status: 401 }
       );
     }
 
-    // ----------------------------
-    // 2) VALIDATION
-    // ----------------------------
-    if (!caseId || !lat || !lng || !chiefComplaint || !level) {
+    // -------------------------------
+    // 2. Parse Request Body
+    // -------------------------------
+    const body = await req.json();
+
+    const {
+      IjrnyId,
+      chiefComplaint,
+      level,
+      lat,
+      lng,
+      locationText,
+      patientName,
+    } = body;
+
+    // -------------------------------
+    // 3. Validate Required Fields
+    // -------------------------------
+    if (
+      !IjrnyId ||
+      !chiefComplaint ||
+      !level ||
+      lat === undefined ||
+      lng === undefined ||
+      !locationText ||
+      !patientName
+    ) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields." },
         { status: 400 }
       );
     }
 
-    // ----------------------------
-    // 3) CREATE CASE IN FIRESTORE
-    // ----------------------------
-    const newCase = {
-      Ijrny: caseId,
-      patientName: patientName || "",
+    // -------------------------------
+    // 4. Save Case to Firestore
+    // -------------------------------
+    const ref = await addDoc(collection(db, "ijrny_cases"), {
+      IjrnyId,
       chiefComplaint,
       level,
-      locationText: locationText || "",
       lat,
       lng,
-      status: "Received",
+      locationText,
+      patientName,
+      status: "pending",
       createdAt: serverTimestamp(),
-      timeline: {
-        Received: new Date().toISOString()
-      }
-    };
+      source: "ijrny",
+    });
 
-    const docRef = await addDoc(collection(db, "cases"), newCase);
-
-    // Create return case ID (optional)
-    const lazCaseId = docRef.id;
-
+    // -------------------------------
+    // 5. Return Response
+    // -------------------------------
     return NextResponse.json(
       {
-        status: "success",
-        message: "Case created successfully",
-        lazCaseId
+        message: "Case received and saved successfully",
+        caseId: ref.id,
+        status: "pending",
       },
-      { status: 200 }
+      { status: 201 }
     );
-
-  } catch (error: any) {
+  } catch (error) {
     console.error("API ERROR:", error);
     return NextResponse.json(
-      { error: "Server Error", details: error.message },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

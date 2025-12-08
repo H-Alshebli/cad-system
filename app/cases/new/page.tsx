@@ -146,52 +146,58 @@ export default function NewCasePage() {
   /* ---------------------------------------------------------
      SUBMIT FORM
 ----------------------------------------------------------*/
-  const submitCase = async () => {
-    if (!chiefComplaint || !level || lat === null || lng === null) {
-      alert("Please fill all required fields.");
-      return;
-    }
+ const submitCase = async () => {
+  if (!chiefComplaint || !level || lat === null || lng === null) {
+    alert("Please fill all required fields.");
+    return;
+  }
 
-    const lazemCode = generateLazemCode();
+  const lazemCode = generateLazemCode();
 
-    let assignedUnit: any = null;
+  let assignedUnit: any = null;
 
-    if (unitType === "ambulance") {
-      assignedUnit = { type: "ambulance", id: selectedUnit };
-    } else if (unitType === "clinic") {
-      assignedUnit = { type: "clinic", id: selectedUnit };
-    } else if (unitType === "roaming") {
-      assignedUnit = { type: "roaming", id: null };
-    }
+  if (unitType === "ambulance") {
+    assignedUnit = { type: "ambulance", id: selectedUnit };
+  } else if (unitType === "clinic") {
+    assignedUnit = { type: "clinic", id: selectedUnit };
+  } else if (unitType === "roaming") {
+    assignedUnit = { type: "roaming", id: null };
+  }
 
-    await addDoc(collection(db, "cases"), {
-      lazemCode,
-      ijrny: ijrnyCode,
-      chiefComplaint,
-      level,
-      locationText,
-      lat,
-      lng,
-      unitType,
-      assignedUnit,
-      status: "Received",
-      createdAt: serverTimestamp(),
-      timeline: {
-        Received: new Date().toISOString(),
-      },
-    });
+  const now = new Date().toISOString();
 
-    alert("Case submitted successfully!");
+  await addDoc(collection(db, "cases"), {
+    lazemCode,
+    ijrny: ijrnyCode,
+    chiefComplaint,
+    level,
+    locationText,
+    lat,
+    lng,
+    unitType,
+    assignedUnit,
 
-    setIjrnyCode("");
-    setChiefComplaint("");
-    setLevel("");
-    setLocationText("");
-    setLat(null);
-    setLng(null);
-    setUnitType("");
-    setSelectedUnit("");
-  };
+    // 🔥 NEW: start case as Assigned instead of only Received
+    status: "Assigned",    
+
+    createdAt: serverTimestamp(),
+    timeline: {
+      Received: now,
+      Assigned: now, // 🔥 NEW: Automatically mark Assigned too
+    },
+  });
+
+  alert("Case submitted successfully!");
+
+  setIjrnyCode("");
+  setChiefComplaint("");
+  setLevel("");
+  setLocationText("");
+  setLat(null);
+  setLng(null);
+  setUnitType("");
+  setSelectedUnit("");
+};
 
   /* =========================================================
      UI
