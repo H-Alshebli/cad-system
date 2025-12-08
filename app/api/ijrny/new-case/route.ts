@@ -7,14 +7,34 @@ const API_KEY = process.env.IJRNY_API_KEY;
 // -------------------------------------------------------------
 //  🔐 AUTHENTICATION CHECK
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+//  🔐 AUTHENTICATION CHECK (With Debug Logs)
+// -------------------------------------------------------------
 function isAuthorized(req: Request) {
+  // Read Authorization header
   const key = req.headers.get("authorization");
-  if (!key) return false;
+  console.log("CLIENT Authorization Header:", key);
 
-  // Expected format:  Bearer supersecretkey123
+  // If no header at all → unauthorized
+  if (!key) {
+    console.log("AUTH RESULT: No Authorization header found.");
+    return false;
+  }
+
+  // Extract token after "Bearer "
   const token = key.replace("Bearer ", "").trim();
-  return token === API_KEY;
+  console.log("Extracted TOKEN:", token);
+
+  // Show the API key loaded from Vercel environment
+  console.log("ENV IJRNY_API_KEY:", API_KEY);
+
+  // Final comparison
+  const isValid = token === API_KEY;
+  console.log("AUTH RESULT: ", isValid ? "VALID" : "INVALID");
+
+  return isValid;
 }
+
 
 // -------------------------------------------------------------
 //  📌 POST: Create Case from iJrny
