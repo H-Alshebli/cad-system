@@ -1,3 +1,5 @@
+export const runtime = "nodejs"; // IMPORTANT: Ensures env variables work in Vercel API routes
+
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -5,45 +7,39 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 const API_KEY = process.env.IJRNY_API_KEY;
 
 // -------------------------------------------------------------
-//  🔐 AUTHENTICATION CHECK
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-//  🔐 AUTHENTICATION CHECK (With Debug Logs)
+// 🔐 AUTHENTICATION CHECK (With Debug Logs)
 // -------------------------------------------------------------
 function isAuthorized(req: Request) {
   // Read Authorization header
   const key = req.headers.get("authorization");
   console.log("CLIENT Authorization Header:", key);
 
-  // If no header at all → unauthorized
+  // If no header → unauthorized
   if (!key) {
     console.log("AUTH RESULT: No Authorization header found.");
     return false;
   }
 
-  // Extract token after "Bearer "
+  // Extract token
   const token = key.replace("Bearer ", "").trim();
   console.log("Extracted TOKEN:", token);
 
-  // Show the API key loaded from Vercel environment
+  // Show the API key from Vercel
   console.log("ENV IJRNY_API_KEY:", API_KEY);
 
-  // Final comparison
+  // Compare
   const isValid = token === API_KEY;
-  console.log("AUTH RESULT: ", isValid ? "VALID" : "INVALID");
+  console.log("AUTH RESULT:", isValid ? "VALID" : "INVALID");
 
   return isValid;
 }
 
-
 // -------------------------------------------------------------
-//  📌 POST: Create Case from iJrny
+// 📌 POST: Create Case from iJrny
 // -------------------------------------------------------------
 export async function POST(req: Request) {
   try {
-    // -------------------------------
     // 1. Check API key
-    // -------------------------------
     if (!isAuthorized(req)) {
       return NextResponse.json(
         { error: "Unauthorized: Invalid API key" },
@@ -51,9 +47,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // -------------------------------
     // 2. Parse Request Body
-    // -------------------------------
     const body = await req.json();
 
     const {
@@ -66,9 +60,7 @@ export async function POST(req: Request) {
       patientName,
     } = body;
 
-    // -------------------------------
     // 3. Validate Required Fields
-    // -------------------------------
     if (
       !IjrnyId ||
       !chiefComplaint ||
@@ -84,9 +76,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // -------------------------------
     // 4. Save Case to Firestore
-    // -------------------------------
     const ref = await addDoc(collection(db, "ijrny_cases"), {
       IjrnyId,
       chiefComplaint,
@@ -100,9 +90,7 @@ export async function POST(req: Request) {
       source: "ijrny",
     });
 
-    // -------------------------------
     // 5. Return Response
-    // -------------------------------
     return NextResponse.json(
       {
         message: "Case received and saved successfully",
