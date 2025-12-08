@@ -99,7 +99,7 @@ export default function Dashboard() {
             "
           >
             <h2 className="text-xl font-bold dark:text-white">
-  <strong>Lazem Code:</strong> {c.lazemCode || "—"} — Level {c.level}
+  <strong>Lazem Code:</strong> {c.lazemCode || "—"} —  {c.level}
 </h2>
 
 <p className="text-gray-600 dark:text-gray-300">
