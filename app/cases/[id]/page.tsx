@@ -23,9 +23,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // For Transporting → destination selection flow
-  const [showDestinationPopup, setShowDestinationPopup] = useState(false); // ask: hospital or clinic
-  const [destinationType, setDestinationType] = useState<DestinationType>(null);
+  const [showDestinationPopup, setShowDestinationPopup] = useState(false);
+  const [destinationType, setDestinationType] =
+    useState<DestinationType>(null);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [showDestinationList, setShowDestinationList] = useState(false);
 
@@ -46,7 +46,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   }, [caseId]);
 
   /* -------------------------------------------------------
-     LOAD AMBULANCES (for code display)
+     LOAD AMBULANCES
   -------------------------------------------------------- */
   useEffect(() => {
     const loadAmbulances = async () => {
@@ -62,26 +62,22 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   if (loading || !caseData) return <p className="p-6">Loading...</p>;
 
   /* -------------------------------------------------------
-     AMBULANCE CODE
+     AMBULANCE CODE DISPLAY
   -------------------------------------------------------- */
- // correct: read ambulance id from assignedUnit
-const ambulanceId = caseData.assignedUnit?.type === "ambulance"
-  ? caseData.assignedUnit.id
-  : null;
+  const ambulanceId =
+    caseData.assignedUnit?.type === "ambulance"
+      ? caseData.assignedUnit.id
+      : null;
 
-// find matching ambulance
-const ambulanceObj = ambulances.find((a) => a.id === ambulanceId);
+  const ambulanceObj = ambulances.find((a) => a.id === ambulanceId);
 
-// show code OR fallback
-const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
-
+  const ambulanceCode =
+    caseData.ambulanceCode || ambulanceObj?.code || "None";
 
   /* -------------------------------------------------------
-     STATUS UPDATE (normal statuses)
-     Transporting opens popup instead
+     STATUS UPDATE
   -------------------------------------------------------- */
   const handleStatusUpdate = async (newStatus: string) => {
-    // Special flow for Transporting
     if (newStatus === "Transporting") {
       setShowDestinationPopup(true);
       return;
@@ -105,7 +101,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
   };
 
   /* -------------------------------------------------------
-     STEP 1: Choose Hospital or Clinic
+     STEP 1: Choose destination type
   -------------------------------------------------------- */
   const chooseDestinationType = async (type: DestinationType) => {
     if (!type) return;
@@ -113,22 +109,19 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
     setDestinationType(type);
     setShowDestinationPopup(false);
 
-    // Load list of destinations of this type
-    const q = query(
+    const qDest = query(
       collection(db, "destinations"),
       where("type", "==", type)
     );
-
-    const snap = await getDocs(q);
+    const snap = await getDocs(qDest);
     const list: any[] = [];
     snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-
     setDestinations(list);
     setShowDestinationList(true);
   };
 
   /* -------------------------------------------------------
-     STEP 2: User picks specific destination
+     STEP 2: Select destination
   -------------------------------------------------------- */
   const handleSelectDestination = async (dest: any) => {
     if (!destinationType) return;
@@ -137,7 +130,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
 
     await updateDoc(doc(db, "cases", caseId), {
       status: "Transporting",
-      transportingToType: destinationType, // "hospital" / "clinic"
+      transportingToType: destinationType,
       destinationId: dest.id,
       destinationName: dest.name,
       destinationAddress: dest.address || "",
@@ -165,7 +158,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
   };
 
   /* -------------------------------------------------------
-     SAVE EDITS
+     SAVE BASIC EDITS
   -------------------------------------------------------- */
   const saveEdits = async () => {
     await updateDoc(doc(db, "cases", caseId), {
@@ -178,28 +171,20 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
   };
 
   /* -------------------------------------------------------
-     RENDER UI
+     UI
   -------------------------------------------------------- */
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
 
       {/* CASE INFO */}
-      <div
-        className="
-          border p-6 rounded-lg shadow mb-6
-          bg-white text-gray-900 border-gray-300
-          dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700
-        "
-      >
-     <p>
-  <strong>Lazem Code:</strong> {caseData.lazemCode || "—"}
-</p>
-
-<p>
-  <strong>Ijrny Code:</strong> {caseData.ijrny || "—"}
-</p>
-
+      <div className="border p-6 rounded-lg shadow mb-6 bg-white text-gray-900 border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
+        <p>
+          <strong>Lazem Code:</strong> {caseData.lazemCode || "—"}
+        </p>
+        <p>
+          <strong>Ijrny Code:</strong> {caseData.ijrny || "—"}
+        </p>
         <p>
           <strong>Complaint:</strong> {caseData.chiefComplaint}
         </p>
@@ -215,7 +200,6 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
         <p>
           <strong>Ambulance:</strong> {ambulanceCode}
         </p>
-
         <p className="mt-2">
           <strong>Destination:</strong>{" "}
           {caseData.destinationName
@@ -224,12 +208,13 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
         </p>
         {caseData.destinationAddress && (
           <p>
-            <strong>Destination Address:</strong> {caseData.destinationAddress}
+            <strong>Destination Address:</strong>{" "}
+            {caseData.destinationAddress}
           </p>
         )}
       </div>
 
-      {/* UPDATE STATUS */}
+      {/* STATUS BUTTONS */}
       <h2 className="text-xl font-semibold mb-2">Update Status</h2>
       <div className="grid grid-cols-3 md:grid-cols-7 gap-2 mb-6">
         {[
@@ -256,22 +241,13 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
       {/* TIMELINE */}
       <CaseTimeline timeline={caseData.timeline || {}} />
 
-      {/* EDIT CASE */}
-      <div
-        className="
-          mt-10 max-w-xl
-          border p-6 rounded-lg shadow
-          bg-white text-gray-900 border-gray-300
-          dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700
-        "
-      >
+      {/* EDIT PANEL */}
+      <div className="mt-10 max-w-xl border p-6 rounded-lg shadow bg-white text-gray-900 border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
         <h2 className="text-xl font-bold mb-4">Edit Case</h2>
 
         <label className="block font-semibold mb-1">Complaint</label>
         <input
-          className="border rounded w-full mb-4 p-2
-                     bg-white text-gray-900 border-gray-300
-                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
           value={caseData.chiefComplaint}
           onChange={(e) =>
             setCaseData({ ...caseData, chiefComplaint: e.target.value })
@@ -280,9 +256,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
 
         <label className="block font-semibold mb-1">Level</label>
         <select
-          className="border rounded w-full mb-4 p-2
-                     bg-white text-gray-900 border-gray-300
-                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
           value={caseData.level}
           onChange={(e) =>
             setCaseData({ ...caseData, level: Number(e.target.value) })
@@ -296,9 +270,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
 
         <label className="block font-semibold mb-1">Paramedic Note</label>
         <textarea
-          className="border rounded w-full h-28 mb-4 p-2
-                     bg-white text-gray-900 border-gray-300
-                     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
+          className="border rounded w-full h-28 mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
           value={caseData.paramedicNote || ""}
           onChange={(e) =>
             setCaseData({ ...caseData, paramedicNote: e.target.value })
@@ -314,57 +286,58 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
       </div>
 
       {/* MAPS */}
-      {(caseData.lat && caseData.lng) || (caseData.destinationLat && caseData.destinationLng) ? (
+      {(caseData.lat && caseData.lng) ||
+      (caseData.destinationLat && caseData.destinationLng) ? (
         <div className="mt-10 space-y-6">
           {caseData.lat && caseData.lng && (
             <div>
               <h2 className="text-xl font-bold mb-2">Patient Location</h2>
-              <Map
-                lat={Number(caseData.lat)}
-                lng={Number(caseData.lng)}
-                name={caseData.patientName}
-              />
+              <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
+                <Map
+                  caseLat={Number(caseData.lat)}
+                  caseLng={Number(caseData.lng)}
+                  caseName={caseData.patientName}
+                  ambulances={ambulances}
+                />
+              </div>
             </div>
           )}
 
           {caseData.destinationLat && caseData.destinationLng && (
             <div>
-              <h2 className="text-xl font-bold mb-2">Hospital\Clinic Location</h2>
-              <Map
-                lat={Number(caseData.destinationLat)}
-                lng={Number(caseData.destinationLng)}
-                name={caseData.destinationName}
-              />
+              <h2 className="text-xl font-bold mb-2">
+                Hospital\Clinic Location
+              </h2>
+              <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
+                <Map
+                  caseLat={Number(caseData.destinationLat)}
+                  caseLng={Number(caseData.destinationLng)}
+                  caseName={caseData.destinationName}
+                  ambulances={ambulances}
+                />
+              </div>
             </div>
           )}
         </div>
       ) : null}
 
-      {/* POPUP 1: Hospital or Clinic */}
+      {/* POPUP 1: Destination type */}
       {showDestinationPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div
-            className="
-              bg-white text-gray-900 p-6 rounded-lg shadow w-80 text-center
-              dark:bg-gray-800 dark:text-gray-100
-            "
-          >
+          <div className="bg-white text-gray-900 p-6 rounded-lg shadow w-80 text-center dark:bg-gray-800 dark:text-gray-100">
             <h2 className="text-xl font-bold mb-4">Transporting To?</h2>
-
             <button
               onClick={() => chooseDestinationType("hospital")}
               className="bg-blue-600 text-white w-full p-2 rounded mb-2"
             >
               Hospital
             </button>
-
             <button
               onClick={() => chooseDestinationType("clinic")}
               className="bg-green-600 text-white w-full p-2 rounded mb-2"
             >
               Clinic
             </button>
-
             <button
               onClick={() => setShowDestinationPopup(false)}
               className="mt-2 text-sm text-gray-600 dark:text-gray-300"
@@ -375,17 +348,13 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
         </div>
       )}
 
-      {/* POPUP 2: Destination List */}
+      {/* POPUP 2: Destination list */}
       {showDestinationList && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div
-            className="
-              bg-white text-gray-900 p-6 rounded-lg shadow w-96
-              dark:bg-gray-800 dark:text-gray-100
-            "
-          >
+          <div className="bg-white text-gray-900 p-6 rounded-lg shadow w-96 dark:bg-gray-800 dark:text-gray-100">
             <h2 className="text-xl font-bold mb-4 text-center">
-              Select {destinationType === "hospital" ? "Hospital" : "Clinic"}
+              Select{" "}
+              {destinationType === "hospital" ? "Hospital" : "Clinic"}
             </h2>
 
             {destinations.length === 0 && (
@@ -411,8 +380,7 @@ const ambulanceCode = caseData.ambulanceCode || ambulanceObj?.code || "None";
 
             <button
               onClick={() => setShowDestinationList(false)}
-              className="mt-4 w-full py-2 rounded border border-gray-300 text-sm
-                         dark:border-gray-600"
+              className="mt-4 w-full py-2 rounded border border-gray-300 text-sm dark:border-gray-600"
             >
               Cancel
             </button>

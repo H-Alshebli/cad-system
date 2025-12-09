@@ -13,9 +13,10 @@ import {
   serverTimestamp,
   getDocs,
 } from "firebase/firestore";
+import Map from "@/app/components/Map";
 
 /* ---------------------------------------------------------
-   TYPE DEFINITIONS
+   TYPES
 ----------------------------------------------------------*/
 interface IjrnyCase {
   id: string;
@@ -30,10 +31,11 @@ interface IjrnyCase {
   createdAt: any;
 }
 
+/* ---------------------------------------------------------
+   PAGE
+----------------------------------------------------------*/
 export default function NewCasePage() {
-  /* ---------------------------------------------------------
-     FORM STATE
-  ----------------------------------------------------------*/
+  /* FORM STATE */
   const [ijrnyCode, setIjrnyCode] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
@@ -46,7 +48,10 @@ export default function NewCasePage() {
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [clinics, setClinics] = useState<any[]>([]);
-  const [selectedUnit, setSelectedUnit] = useState("");
+  const [roaming, setRoaming] = useState<any[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState("");
+
+  const [unitList, setUnitList] = useState<any[]>([]);
 
   const [ijrnyCases, setIjrnyCases] = useState<IjrnyCase[]>([]);
   const [completedCases, setCompletedCases] = useState<IjrnyCase[]>([]);
@@ -54,7 +59,7 @@ export default function NewCasePage() {
 
   /* ---------------------------------------------------------
      GENERATE LAZEM CODE
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function generateLazemCode() {
     const date = new Date();
     const y = date.getFullYear();
@@ -65,15 +70,15 @@ export default function NewCasePage() {
   }
 
   /* ---------------------------------------------------------
-     LOAD iJRNY PENDING CASES
-----------------------------------------------------------*/
+     LOAD iJRNY CASES
+  ----------------------------------------------------------*/
   useEffect(() => {
-    const q = query(
+    const qPending = query(
       collection(db, "ijrny_cases"),
       where("status", "==", "pending")
     );
 
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(qPending, (snap) => {
       const arr: any[] = [];
       snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
       setIjrnyCases(arr as IjrnyCase[]);
@@ -82,16 +87,13 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
-  /* ---------------------------------------------------------
-     LOAD COMPLETED iJRNY CASES
-----------------------------------------------------------*/
   useEffect(() => {
-    const q = query(
+    const qUsed = query(
       collection(db, "ijrny_cases"),
       where("status", "==", "used")
     );
 
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(qUsed, (snap) => {
       const arr: any[] = [];
       snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
       setCompletedCases(arr as IjrnyCase[]);
@@ -101,8 +103,8 @@ export default function NewCasePage() {
   }, []);
 
   /* ---------------------------------------------------------
-     LOAD AMBULANCES
-----------------------------------------------------------*/
+     LOAD AMBULANCES, CLINICS, ROAMING
+  ----------------------------------------------------------*/
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -111,25 +113,30 @@ export default function NewCasePage() {
     return () => unsub();
   }, []);
 
-  /* ---------------------------------------------------------
-     LOAD CLINICS
-----------------------------------------------------------*/
   useEffect(() => {
     const loadClinics = async () => {
-      const q = query(
+      const qClinics = query(
         collection(db, "destinations"),
         where("type", "==", "clinic")
       );
-      const snap = await getDocs(q);
+      const snap = await getDocs(qClinics);
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setClinics(list);
     };
     loadClinics();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "Roaming"), (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setRoaming(list);
+    });
+    return () => unsub();
+  }, []);
+
   /* ---------------------------------------------------------
-     AUTO-FILL FROM iJRNY
-----------------------------------------------------------*/
+     LOAD iJRNY CASE INTO FORM
+  ----------------------------------------------------------*/
   const loadIjrnyCase = async (c: IjrnyCase) => {
     setIjrnyCode(c.IjrnyId);
     setChiefComplaint(c.chiefComplaint || "");
@@ -138,224 +145,333 @@ export default function NewCasePage() {
     setLat(c.lat);
     setLng(c.lng);
 
+    setUnitType("");
+    setSelectedUnitId("");
+    setUnitList([]);
+
     await updateDoc(doc(db, "ijrny_cases", c.id), {
       status: "used",
     });
   };
 
   /* ---------------------------------------------------------
-     SUBMIT FORM
-----------------------------------------------------------*/
- const submitCase = async () => {
-  if (!chiefComplaint || !level || lat === null || lng === null) {
-    alert("Please fill all required fields.");
-    return;
+     DISTANCE FUNCTION
+  ----------------------------------------------------------*/
+  function distance(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371e3; // meters
+    const toRad = (v: number) => (v * Math.PI) / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) ** 2;
+
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  const lazemCode = generateLazemCode();
-  const now = new Date().toISOString();
+  /* ---------------------------------------------------------
+     BUILD NEAREST LIST
+  ----------------------------------------------------------*/
+  useEffect(() => {
+    if (lat === null || lng === null || !unitType) {
+      setUnitList([]);
+      return;
+    }
 
-  let assignedUnit: any = null;
-  let ambulanceCode: string | null = null;
-  let clinicId: string | null = null;
+    let source: any[] = [];
+    if (unitType === "ambulance") source = ambulances;
+    if (unitType === "clinic") source = clinics;
+    if (unitType === "roaming") source = roaming;
 
-  if (unitType === "ambulance") {
-    assignedUnit = { type: "ambulance", id: selectedUnit };
+    const list = source
+      .filter(
+        (u) => typeof u.lat === "number" && typeof u.lng === "number"
+      )
+      .map((u) => ({
+        ...u,
+        dist: distance(lat, lng, u.lat, u.lng),
+      }))
+      .sort((a, b) => a.dist - b.dist)
+      .map((u, idx) => ({ ...u, isNearest: idx === 0 }));
 
-    // 🔥 FIND THE AMBULANCE CODE (AMB-001, AMB-003, etc.)
-    const amb = ambulances.find((a) => a.id === selectedUnit);
-    ambulanceCode = amb?.code || null;
+    setUnitList(list);
+  }, [lat, lng, unitType, ambulances, clinics, roaming]);
+
+  function handleUnitTypeChange(type: "ambulance" | "clinic" | "roaming") {
+    setUnitType(type);
+    setSelectedUnitId("");
   }
 
-  if (unitType === "clinic") {
-    assignedUnit = { type: "clinic", id: selectedUnit };
-    clinicId = selectedUnit;
-  }
+  /* ---------------------------------------------------------
+     SUBMIT CASE
+  ----------------------------------------------------------*/
+  const submitCase = async () => {
+    if (!chiefComplaint || !level || lat === null || lng === null) {
+      alert("Please fill all required fields.");
+      return;
+    }
 
-  if (unitType === "roaming") {
-    assignedUnit = { type: "roaming", id: null };
-  }
+    if (unitType !== "roaming" && !selectedUnitId) {
+      alert("Please select a unit.");
+      return;
+    }
 
-  await addDoc(collection(db, "cases"), {
-    lazemCode,
-    ijrny: ijrnyCode,
-    chiefComplaint,
-    level,
-    locationText,
-    lat,
-    lng,
+    const lazemCode = generateLazemCode();
+    const now = new Date().toISOString();
 
-    unitType,
-    assignedUnit,
+    let assignedUnit: any = null;
+    let ambulanceCode: string | null = null;
+    let clinicId: string | null = null;
 
-    // 🔥 THIS FIELD WAS MISSING — REQUIRED BY DASHBOARD
-    ambulanceCode: ambulanceCode,
+    if (unitType === "ambulance") {
+      assignedUnit = { type: "ambulance", id: selectedUnitId };
+      const amb = ambulances.find((a) => a.id === selectedUnitId);
+      ambulanceCode = amb?.code || null;
+    }
 
-    clinicId: clinicId,
+    if (unitType === "clinic") {
+      assignedUnit = { type: "clinic", id: selectedUnitId };
+      clinicId = selectedUnitId;
+    }
 
-    status: "Assigned",
-    createdAt: serverTimestamp(),
-    timeline: {
-      Received: now,
-      Assigned: now,
-    },
-  });
+    if (unitType === "roaming") {
+      assignedUnit = { type: "roaming", id: null };
+    }
 
-  alert("Case submitted successfully!");
+    await addDoc(collection(db, "cases"), {
+      lazemCode,
+      ijrny: ijrnyCode,
+      chiefComplaint,
+      level,
+      locationText,
+      lat,
+      lng,
+      unitType,
+      assignedUnit,
+      ambulanceCode,
+      clinicId,
+      status: "Assigned",
+      createdAt: serverTimestamp(),
+      timeline: {
+        Received: now,
+        Assigned: now,
+      },
+    });
 
-  // RESET FORM
-  setIjrnyCode("");
-  setChiefComplaint("");
-  setLevel("");
-  setLocationText("");
-  setLat(null);
-  setLng(null);
-  setUnitType("");
-  setSelectedUnit("");
-};
+    alert("Case submitted successfully!");
 
-  /* =========================================================
+    setIjrnyCode("");
+    setChiefComplaint("");
+    setLevel("");
+    setLocationText("");
+    setLat(null);
+    setLng(null);
+    setUnitType("");
+    setSelectedUnitId("");
+    setUnitList([]);
+  };
+
+  /* ---------------------------------------------------------
      UI
-  =========================================================*/
+  ----------------------------------------------------------*/
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+    <div className="p-4 space-y-4">
+      {/* TOP ROW: iJrny + Form */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* LEFT: iJrny */}
+        <div className="bg-[#1c2333] p-4 rounded-lg shadow border border-gray-700">
+          <h2 className="text-xl font-bold mb-4 text-white">
+            iJrny Incoming Cases
+          </h2>
 
-      {/* LEFT PANEL — BLUE IN DARK / WHITE IN LIGHT */}
-      <div className="bg-white dark:bg-[#1c2333] p-4 rounded-lg shadow border border-gray-300 dark:border-gray-700">
+          {ijrnyCases.length === 0 && (
+            <p className="text-gray-300 text-sm">No incoming cases.</p>
+          )}
 
-        <h2 className="text-xl font-bold mb-4 dark:text-white">
-          iJrny Incoming Cases
-        </h2>
-
-        {ijrnyCases.length === 0 && (
-          <p className="text-gray-600 dark:text-gray-300">No incoming cases.</p>
-        )}
-
-        {ijrnyCases.map((c) => (
-          <div
-            key={c.id}
-            className="
-              bg-white text-black 
-              dark:bg-[#0f1625] dark:text-white 
-              border border-gray-300 dark:border-gray-700 
-              p-3 rounded mb-3
-            "
-          >
-            <p className="font-bold">{c.IjrnyId}</p>
-            <p className="opacity-80">
-              {c.chiefComplaint} — Level {c.level}
-            </p>
-            <p className="opacity-60">Location: {c.locationText}</p>
-            <p className="opacity-60">Patient: {c.patientName}</p>
-
-            <button
-              className="w-full mt-3 bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold"
-              onClick={() => loadIjrnyCase(c)}
+          {ijrnyCases.map((c) => (
+            <div
+              key={c.id}
+              className="bg-[#0f1625] text-white border border-gray-700 p-3 rounded mb-3 cursor-pointer hover:border-blue-500"
             >
-              Load Into Form
-            </button>
-          </div>
-        ))}
+              <p className="font-bold">{c.IjrnyId}</p>
+              <p className="opacity-80">
+                {c.chiefComplaint} — Level {c.level}
+              </p>
+              <p className="opacity-60">Location: {c.locationText}</p>
+              <p className="opacity-60">Patient: {c.patientName}</p>
 
-        {/* Show Completed */}
-        <button
-          className="mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-          onClick={() => setShowCompleted(!showCompleted)}
-        >
-          {showCompleted ? "Hide Completed Cases" : "Show Completed Cases"}
-        </button>
-
-        {showCompleted && (
-          <div className="mt-3">
-            {completedCases.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white dark:bg-[#0f1625] p-3 rounded mb-2 border border-gray-300 dark:border-gray-700"
+              <button
+                className="w-full mt-3 bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold"
+                onClick={() => loadIjrnyCase(c)}
               >
-                <p className="font-bold">{c.IjrnyId}</p>
-                <p className="opacity-70">{c.chiefComplaint}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                Load Into Form
+              </button>
+            </div>
+          ))}
 
-      {/* RIGHT PANEL — FORM */}
-      <div className="bg-white dark:bg-[#1c2333] p-4 rounded-lg shadow border border-gray-300 dark:border-gray-700">
-        <h2 className="text-xl font-bold mb-4 dark:text-white">New Case Form</h2>
-
-        <div className="flex flex-col gap-3">
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="iJrny Case Code" value={ijrnyCode} readOnly />
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Chief Complaint" value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} />
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Triage Level" value={level} onChange={(e) => setLevel(e.target.value)} />
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Location Text" value={locationText} onChange={(e) => setLocationText(e.target.value)} />
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Latitude" value={lat ?? ""} onChange={(e) => setLat(parseFloat(e.target.value))} />
-
-          <input className="bg-white dark:bg-[#0F172A] p-2 rounded" placeholder="Longitude" value={lng ?? ""} onChange={(e) => setLng(parseFloat(e.target.value))} />
-
-          {/* Unit selection */}
-          <label className="font-semibold dark:text-white mt-2">Assign Unit</label>
-
-          <div className="flex gap-4 dark:text-white">
-            <label>
-              <input type="radio" checked={unitType === "ambulance"} onChange={() => { setUnitType("ambulance"); setSelectedUnit(""); }} /> Ambulance
-            </label>
-
-            <label>
-              <input type="radio" checked={unitType === "clinic"} onChange={() => { setUnitType("clinic"); setSelectedUnit(""); }} /> Clinic
-            </label>
-
-            <label>
-              <input type="radio" checked={unitType === "roaming"} onChange={() => { setUnitType("roaming"); setSelectedUnit(""); }} /> Roaming
-            </label>
-          </div>
-
-          {/* Ambulance Dropdown */}
-          {unitType === "ambulance" && (
-            <select
-              className="bg-white dark:bg-[#2a2a2a] p-2 rounded"
-              value={selectedUnit}
-              onChange={(e) => setSelectedUnit(e.target.value)}
-            >
-              <option value="">Select Ambulance...</option>
-              {ambulances.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} — {a.status}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Clinic Dropdown */}
-          {unitType === "clinic" && (
-            <select
-              className="bg-white dark:bg-[#2a2a2a] p-2 rounded"
-              value={selectedUnit}
-              onChange={(e) => setSelectedUnit(e.target.value)}
-            >
-              <option value="">Select Clinic...</option>
-              {clinics.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} — {c.address}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Submit */}
           <button
-            onClick={submitCase}
-            className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold mt-3"
+            className="mt-4 text-sm text-blue-400 hover:underline"
+            onClick={() => setShowCompleted(!showCompleted)}
           >
-            Submit Case
+            {showCompleted ? "Hide Completed Cases" : "Show Completed Cases"}
           </button>
 
+          {showCompleted && (
+            <div className="mt-3">
+              {completedCases.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-[#0f1625] text-white p-3 rounded mb-2 border border-gray-700"
+                >
+                  <p className="font-bold">{c.IjrnyId}</p>
+                  <p className="opacity-70">{c.chiefComplaint}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* RIGHT: Form */}
+        <div className="bg-[#1c2333] p-4 rounded-lg shadow border border-gray-700">
+          <h2 className="text-xl font-bold mb-4 text-white">New Case Form</h2>
+
+          <div className="flex flex-col gap-3">
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="iJrny Case Code"
+              value={ijrnyCode}
+              readOnly
+            />
+
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="Chief Complaint"
+              value={chiefComplaint}
+              onChange={(e) => setChiefComplaint(e.target.value)}
+            />
+
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="Triage Level"
+              value={level}
+              onChange={(e) => setLevel(e.target.value)}
+            />
+
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="Location Text"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+            />
+
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="Latitude"
+              value={lat ?? ""}
+              onChange={(e) => setLat(parseFloat(e.target.value))}
+            />
+
+            <input
+              className="bg-[#0F172A] text-white p-2 rounded"
+              placeholder="Longitude"
+              value={lng ?? ""}
+              onChange={(e) => setLng(parseFloat(e.target.value))}
+            />
+
+            {/* Unit type */}
+            <label className="font-semibold text-white mt-2">
+              Assign Unit
+            </label>
+
+            <div className="flex gap-4 text-white">
+              <label>
+                <input
+                  type="radio"
+                  checked={unitType === "ambulance"}
+                  onChange={() => handleUnitTypeChange("ambulance")}
+                />{" "}
+                Ambulance
+              </label>
+
+              <label>
+                <input
+                  type="radio"
+                  checked={unitType === "clinic"}
+                  onChange={() => handleUnitTypeChange("clinic")}
+                />{" "}
+                Clinic
+              </label>
+
+              <label>
+                <input
+                  type="radio"
+                  checked={unitType === "roaming"}
+                  onChange={() => handleUnitTypeChange("roaming")}
+                />{" "}
+                Roaming
+              </label>
+            </div>
+
+            {/* Nearest Units */}
+            {unitType && unitList.length > 0 && (
+              <div className="bg-[#0f1625] p-4 rounded border border-gray-700 mt-2">
+                <h3 className="text-white font-semibold mb-3">
+                  Select {unitType} (sorted by nearest)
+                </h3>
+
+                {unitList.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => setSelectedUnitId(u.id as string)}
+                    className={`p-3 mb-2 rounded cursor-pointer border ${
+                      selectedUnitId === u.id
+                        ? "border-blue-500 bg-[#162036]"
+                        : "border-gray-600"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-white font-semibold">
+                        {u.code || u.name}
+                      </span>
+                      {u.isNearest && (
+                        <span className="text-xs px-2 py-1 bg-blue-600 text-white rounded">
+                          NEAREST
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      {(u.dist / 1000).toFixed(2)} km away
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              onClick={submitCase}
+              className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold mt-4"
+            >
+              Submit Case
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* BOTTOM MAP */}
+      <div className="w-full h-[450px] rounded-lg overflow-hidden border border-gray-700">
+        <Map
+          caseLat={lat ?? undefined}
+          caseLng={lng ?? undefined}
+          caseName={locationText}
+          ambulances={ambulances}
+          clinics={clinics}
+          roaming={roaming}
+        />
       </div>
     </div>
   );
