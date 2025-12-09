@@ -12,7 +12,12 @@ import {
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import CaseTimeline from "@/app/components/CaseTimeline";
-import Map from "@/app/components/Map";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("@/app/components/Map"), {
+  ssr: false,
+});
+
 
 type DestinationType = "hospital" | "clinic" | null;
 
