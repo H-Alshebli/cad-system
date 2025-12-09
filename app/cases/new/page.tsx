@@ -13,7 +13,12 @@ import {
   serverTimestamp,
   getDocs,
 } from "firebase/firestore";
-import Map from "@/app/components/Map";
+import dynamic from "next/dynamic";
+
+// Load Map ONLY in client (fixes Vercel SSR window issue)
+const Map = dynamic(() => import("@/app/components/Map"), {
+  ssr: false,
+});
 
 /* ---------------------------------------------------------
    TYPES
@@ -103,12 +108,11 @@ export default function NewCasePage() {
   }, []);
 
   /* ---------------------------------------------------------
-     LOAD AMBULANCES, CLINICS, ROAMING
+     LOAD AMBULANCES / CLINICS / ROAMING
   ----------------------------------------------------------*/
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setAmbulances(list);
+      setAmbulances(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
   }, []);
@@ -120,16 +124,14 @@ export default function NewCasePage() {
         where("type", "==", "clinic")
       );
       const snap = await getDocs(qClinics);
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setClinics(list);
+      setClinics(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     };
     loadClinics();
   }, []);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "Roaming"), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRoaming(list);
+      setRoaming(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
   }, []);
@@ -149,16 +151,14 @@ export default function NewCasePage() {
     setSelectedUnitId("");
     setUnitList([]);
 
-    await updateDoc(doc(db, "ijrny_cases", c.id), {
-      status: "used",
-    });
+    await updateDoc(doc(db, "ijrny_cases", c.id), { status: "used" });
   };
 
   /* ---------------------------------------------------------
-     DISTANCE FUNCTION
+     DISTANCE CALCULATION
   ----------------------------------------------------------*/
   function distance(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371e3; // meters
+    const R = 6371e3;
     const toRad = (v: number) => (v * Math.PI) / 180;
 
     const dLat = toRad(lat2 - lat1);
@@ -174,7 +174,7 @@ export default function NewCasePage() {
   }
 
   /* ---------------------------------------------------------
-     BUILD NEAREST LIST
+     BUILD NEAREST UNIT LIST
   ----------------------------------------------------------*/
   useEffect(() => {
     if (lat === null || lng === null || !unitType) {
@@ -188,13 +188,8 @@ export default function NewCasePage() {
     if (unitType === "roaming") source = roaming;
 
     const list = source
-      .filter(
-        (u) => typeof u.lat === "number" && typeof u.lng === "number"
-      )
-      .map((u) => ({
-        ...u,
-        dist: distance(lat, lng, u.lat, u.lng),
-      }))
+      .filter((u) => typeof u.lat === "number" && typeof u.lng === "number")
+      .map((u) => ({ ...u, dist: distance(lat, lng, u.lat, u.lng) }))
       .sort((a, b) => a.dist - b.dist)
       .map((u, idx) => ({ ...u, isNearest: idx === 0 }));
 
@@ -229,8 +224,8 @@ export default function NewCasePage() {
 
     if (unitType === "ambulance") {
       assignedUnit = { type: "ambulance", id: selectedUnitId };
-      const amb = ambulances.find((a) => a.id === selectedUnitId);
-      ambulanceCode = amb?.code || null;
+      ambulanceCode =
+        ambulances.find((a) => a.id === selectedUnitId)?.code || null;
     }
 
     if (unitType === "clinic") {
@@ -264,6 +259,7 @@ export default function NewCasePage() {
 
     alert("Case submitted successfully!");
 
+    // Reset form
     setIjrnyCode("");
     setChiefComplaint("");
     setLevel("");
@@ -280,9 +276,9 @@ export default function NewCasePage() {
   ----------------------------------------------------------*/
   return (
     <div className="p-4 space-y-4">
-      {/* TOP ROW: iJrny + Form */}
+      {/* TOP ROW */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* LEFT: iJrny */}
+        {/* LEFT PANEL */}
         <div className="bg-[#1c2333] p-4 rounded-lg shadow border border-gray-700">
           <h2 className="text-xl font-bold mb-4 text-white">
             iJrny Incoming Cases
@@ -335,11 +331,12 @@ export default function NewCasePage() {
           )}
         </div>
 
-        {/* RIGHT: Form */}
+        {/* RIGHT PANEL — FORM */}
         <div className="bg-[#1c2333] p-4 rounded-lg shadow border border-gray-700">
           <h2 className="text-xl font-bold mb-4 text-white">New Case Form</h2>
 
           <div className="flex flex-col gap-3">
+            {/* FORM FIELDS */}
             <input
               className="bg-[#0F172A] text-white p-2 rounded"
               placeholder="iJrny Case Code"
@@ -382,10 +379,8 @@ export default function NewCasePage() {
               onChange={(e) => setLng(parseFloat(e.target.value))}
             />
 
-            {/* Unit type */}
-            <label className="font-semibold text-white mt-2">
-              Assign Unit
-            </label>
+            {/* UNIT TYPE */}
+            <label className="font-semibold text-white mt-2">Assign Unit</label>
 
             <div className="flex gap-4 text-white">
               <label>
@@ -416,7 +411,7 @@ export default function NewCasePage() {
               </label>
             </div>
 
-            {/* Nearest Units */}
+            {/* UNIT LIST */}
             {unitType && unitList.length > 0 && (
               <div className="bg-[#0f1625] p-4 rounded border border-gray-700 mt-2">
                 <h3 className="text-white font-semibold mb-3">
@@ -451,7 +446,7 @@ export default function NewCasePage() {
               </div>
             )}
 
-            {/* Submit */}
+            {/* SUBMIT */}
             <button
               onClick={submitCase}
               className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded text-white font-semibold mt-4"
@@ -462,7 +457,7 @@ export default function NewCasePage() {
         </div>
       </div>
 
-      {/* BOTTOM MAP */}
+      {/* MAP SECTION */}
       <div className="w-full h-[450px] rounded-lg overflow-hidden border border-gray-700">
         <Map
           caseLat={lat ?? undefined}

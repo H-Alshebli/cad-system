@@ -183,39 +183,24 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
 
       {/* CASE INFO */}
-      <div className="border p-6 rounded-lg shadow mb-6 bg-white text-gray-900 border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
-        <p>
-          <strong>Lazem Code:</strong> {caseData.lazemCode || "—"}
-        </p>
-        <p>
-          <strong>Ijrny Code:</strong> {caseData.ijrny || "—"}
-        </p>
-        <p>
-          <strong>Complaint:</strong> {caseData.chiefComplaint}
-        </p>
-        <p>
-          <strong>Level:</strong> {caseData.level}
-        </p>
-        <p>
-          <strong>Status:</strong> {caseData.status}
-        </p>
-        <p>
-          <strong>Location:</strong> {caseData.locationText}
-        </p>
-        <p>
-          <strong>Ambulance:</strong> {ambulanceCode}
-        </p>
+      <div className="border p-6 rounded-lg shadow mb-6 bg-white dark:bg-gray-800">
+        <p><strong>Lazem Code:</strong> {caseData.lazemCode || "—"}</p>
+        <p><strong>Ijrny Code:</strong> {caseData.ijrny || "—"}</p>
+        <p><strong>Complaint:</strong> {caseData.chiefComplaint}</p>
+        <p><strong>Level:</strong> {caseData.level}</p>
+        <p><strong>Status:</strong> {caseData.status}</p>
+        <p><strong>Location:</strong> {caseData.locationText}</p>
+        <p><strong>Ambulance:</strong> {ambulanceCode}</p>
+
         <p className="mt-2">
           <strong>Destination:</strong>{" "}
           {caseData.destinationName
             ? `${caseData.destinationName} (${caseData.transportingToType})`
             : "—"}
         </p>
+
         {caseData.destinationAddress && (
-          <p>
-            <strong>Destination Address:</strong>{" "}
-            {caseData.destinationAddress}
-          </p>
+          <p><strong>Destination Address:</strong> {caseData.destinationAddress}</p>
         )}
       </div>
 
@@ -234,7 +219,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
           <button
             key={s}
             onClick={() => handleStatusUpdate(s)}
-            className={`p-2 rounded text-white text-sm md:text-base ${
+            className={`p-2 rounded text-white ${
               caseData.status === s ? "bg-green-600" : "bg-blue-600"
             }`}
           >
@@ -246,90 +231,43 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* TIMELINE */}
       <CaseTimeline timeline={caseData.timeline || {}} />
 
-      {/* EDIT PANEL */}
-      <div className="mt-10 max-w-xl border p-6 rounded-lg shadow bg-white text-gray-900 border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700">
-        <h2 className="text-xl font-bold mb-4">Edit Case</h2>
-
-        <label className="block font-semibold mb-1">Complaint</label>
-        <input
-          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-          value={caseData.chiefComplaint}
-          onChange={(e) =>
-            setCaseData({ ...caseData, chiefComplaint: e.target.value })
-          }
-        />
-
-        <label className="block font-semibold mb-1">Level</label>
-        <select
-          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-          value={caseData.level}
-          onChange={(e) =>
-            setCaseData({ ...caseData, level: Number(e.target.value) })
-          }
-        >
-          <option value="1">Level 1 - Critical</option>
-          <option value="2">Level 2 - Emergency</option>
-          <option value="3">Level 3 - Urgent</option>
-          <option value="4">Level 4 - Non-Urgent</option>
-        </select>
-
-        <label className="block font-semibold mb-1">Paramedic Note</label>
-        <textarea
-          className="border rounded w-full h-28 mb-4 p-2 bg-white text-gray-900 border-gray-300 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600"
-          value={caseData.paramedicNote || ""}
-          onChange={(e) =>
-            setCaseData({ ...caseData, paramedicNote: e.target.value })
-          }
-        />
-
-        <button
-          onClick={saveEdits}
-          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded w-full"
-        >
-          Save Changes
-        </button>
-      </div>
-
       {/* MAPS */}
-      {(caseData.lat && caseData.lng) ||
-      (caseData.destinationLat && caseData.destinationLng) ? (
-        <div className="mt-10 space-y-6">
-          {caseData.lat && caseData.lng && (
-            <div>
-              <h2 className="text-xl font-bold mb-2">Patient Location</h2>
-              <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
-                <Map
-                  caseLat={Number(caseData.lat)}
-                  caseLng={Number(caseData.lng)}
-                  caseName={caseData.patientName}
-                  ambulances={ambulances}
-                />
-              </div>
+      <div className="mt-10 space-y-6">
+        {caseData.lat && caseData.lng && (
+          <div>
+            <h2 className="text-xl font-bold mb-2">Patient Location</h2>
+            <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
+              <Map
+                caseLat={Number(caseData.lat)}
+                caseLng={Number(caseData.lng)}
+                caseName={caseData.patientName}
+                ambulances={ambulances}
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          {caseData.destinationLat && caseData.destinationLng && (
-            <div>
-              <h2 className="text-xl font-bold mb-2">
-                Hospital\Clinic Location
-              </h2>
-              <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
-                <Map
-                  caseLat={Number(caseData.destinationLat)}
-                  caseLng={Number(caseData.destinationLng)}
-                  caseName={caseData.destinationName}
-                  ambulances={ambulances}
-                />
-              </div>
+        {caseData.destinationLat && caseData.destinationLng && (
+          <div>
+            <h2 className="text-xl font-bold mb-2">
+              Hospital / Clinic Location
+            </h2>
+            <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
+              <Map
+                caseLat={Number(caseData.destinationLat)}
+                caseLng={Number(caseData.destinationLng)}
+                caseName={caseData.destinationName}
+                ambulances={ambulances}
+              />
             </div>
-          )}
-        </div>
-      ) : null}
+          </div>
+        )}
+      </div>
 
       {/* POPUP 1: Destination type */}
       {showDestinationPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div className="bg-white text-gray-900 p-6 rounded-lg shadow w-80 text-center dark:bg-gray-800 dark:text-gray-100">
+          <div className="bg-white p-6 rounded-lg shadow w-80 text-center">
             <h2 className="text-xl font-bold mb-4">Transporting To?</h2>
             <button
               onClick={() => chooseDestinationType("hospital")}
@@ -345,7 +283,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
             </button>
             <button
               onClick={() => setShowDestinationPopup(false)}
-              className="mt-2 text-sm text-gray-600 dark:text-gray-300"
+              className="mt-2 text-sm text-gray-600"
             >
               Cancel
             </button>
@@ -356,19 +294,18 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* POPUP 2: Destination list */}
       {showDestinationList && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div className="bg-white text-gray-900 p-6 rounded-lg shadow w-96 dark:bg-gray-800 dark:text-gray-100">
+          <div className="bg-white p-6 rounded-lg shadow w-96">
             <h2 className="text-xl font-bold mb-4 text-center">
-              Select{" "}
-              {destinationType === "hospital" ? "Hospital" : "Clinic"}
+              Select {destinationType === "hospital" ? "Hospital" : "Clinic"}
             </h2>
 
-            {destinations.length === 0 && (
-              <p className="text-sm mb-4">
-                No {destinationType} destinations found in Firestore.
-              </p>
-            )}
-
             <div className="max-h-64 overflow-y-auto space-y-2">
+              {destinations.length === 0 && (
+                <p className="text-sm mb-4">
+                  No {destinationType} found in Firestore.
+                </p>
+              )}
+
               {destinations.map((d) => (
                 <button
                   key={d.id}
@@ -385,7 +322,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
             <button
               onClick={() => setShowDestinationList(false)}
-              className="mt-4 w-full py-2 rounded border border-gray-300 text-sm dark:border-gray-600"
+              className="mt-4 w-full py-2 rounded border border-gray-300 text-sm"
             >
               Cancel
             </button>
