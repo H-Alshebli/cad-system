@@ -18,7 +18,6 @@ const Map = dynamic(() => import("@/app/components/Map"), {
   ssr: false,
 });
 
-
 type DestinationType = "hospital" | "clinic" | null;
 
 export default function CaseDetailsPage({ params }: { params: { id: string } }) {
@@ -34,9 +33,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   const [destinations, setDestinations] = useState<any[]>([]);
   const [showDestinationList, setShowDestinationList] = useState(false);
 
-  /* -------------------------------------------------------
-     LIVE CASE DATA
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       LIVE CASE DATA
+  ------------------------------------------ */
   useEffect(() => {
     const ref = doc(db, "cases", caseId);
 
@@ -50,9 +49,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     return () => unsub();
   }, [caseId]);
 
-  /* -------------------------------------------------------
-     LOAD AMBULANCES
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       LOAD AMBULANCES
+  ------------------------------------------ */
   useEffect(() => {
     const loadAmbulances = async () => {
       const ambSnap = await getDocs(collection(db, "ambulances"));
@@ -66,9 +65,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
   if (loading || !caseData) return <p className="p-6">Loading...</p>;
 
-  /* -------------------------------------------------------
-     AMBULANCE CODE DISPLAY
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       AMBULANCE CODE
+  ------------------------------------------ */
   const ambulanceId =
     caseData.assignedUnit?.type === "ambulance"
       ? caseData.assignedUnit.id
@@ -79,9 +78,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
   const ambulanceCode =
     caseData.ambulanceCode || ambulanceObj?.code || "None";
 
-  /* -------------------------------------------------------
-     STATUS UPDATE
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       STATUS UPDATE
+  ------------------------------------------ */
   const handleStatusUpdate = async (newStatus: string) => {
     if (newStatus === "Transporting") {
       setShowDestinationPopup(true);
@@ -105,9 +104,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     }));
   };
 
-  /* -------------------------------------------------------
-     STEP 1: Choose destination type
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       DESTINATION TYPE SELECTION
+  ------------------------------------------ */
   const chooseDestinationType = async (type: DestinationType) => {
     if (!type) return;
 
@@ -125,9 +124,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     setShowDestinationList(true);
   };
 
-  /* -------------------------------------------------------
-     STEP 2: Select destination
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       SELECT DESTINATION
+  ------------------------------------------ */
   const handleSelectDestination = async (dest: any) => {
     if (!destinationType) return;
 
@@ -162,9 +161,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     setShowDestinationList(false);
   };
 
-  /* -------------------------------------------------------
-     SAVE BASIC EDITS
-  -------------------------------------------------------- */
+  /* -----------------------------------------
+       SAVE EDIT FORM
+  ------------------------------------------ */
   const saveEdits = async () => {
     await updateDoc(doc(db, "cases", caseId), {
       chiefComplaint: caseData.chiefComplaint,
@@ -175,9 +174,9 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     alert("Case updated!");
   };
 
-  /* -------------------------------------------------------
-     UI
-  -------------------------------------------------------- */
+  /* =========================================
+       UI START
+  ========================================== */
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
@@ -231,6 +230,56 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* TIMELINE */}
       <CaseTimeline timeline={caseData.timeline || {}} />
 
+      {/* -----------------------------------------
+           EDIT FORM (RESTORED)
+      ------------------------------------------ */}
+      <div className="mt-10 max-w-xl border p-6 rounded-lg shadow bg-white text-gray-900 dark:bg-gray-800">
+        <h2 className="text-xl font-bold mb-4">Edit Case</h2>
+
+        {/* Complaint */}
+        <label className="block font-semibold mb-1">Complaint</label>
+        <input
+          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
+          value={caseData.chiefComplaint}
+          onChange={(e) =>
+            setCaseData({ ...caseData, chiefComplaint: e.target.value })
+          }
+        />
+
+        {/* Level */}
+        <label className="block font-semibold mb-1">Level</label>
+        <select
+          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
+          value={caseData.level}
+          onChange={(e) =>
+            setCaseData({ ...caseData, level: Number(e.target.value) })
+          }
+        >
+          <option value="1">Level 1 - Critical</option>
+          <option value="2">Level 2 - Emergency</option>
+          <option value="3">Level 3 - Urgent</option>
+          <option value="4">Level 4 - Non-Urgent</option>
+        </select>
+
+        {/* Paramedic Note */}
+        <label className="block font-semibold mb-1">Paramedic Note</label>
+        <textarea
+          className="border rounded w-full h-28 mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
+          value={caseData.paramedicNote || ""}
+          onChange={(e) =>
+            setCaseData({ ...caseData, paramedicNote: e.target.value })
+          }
+        />
+
+        {/* Save */}
+        <button
+          onClick={saveEdits}
+          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded w-full"
+        >
+          Save Changes
+        </button>
+      </div>
+
       {/* MAPS */}
       <div className="mt-10 space-y-6">
         {caseData.lat && caseData.lng && (
@@ -249,9 +298,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
 
         {caseData.destinationLat && caseData.destinationLng && (
           <div>
-            <h2 className="text-xl font-bold mb-2">
-              Hospital / Clinic Location
-            </h2>
+            <h2 className="text-xl font-bold mb-2">Hospital / Clinic Location</h2>
             <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
               <Map
                 caseLat={Number(caseData.destinationLat)}
@@ -264,7 +311,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         )}
       </div>
 
-      {/* POPUP 1: Destination type */}
+      {/* POPUP 1 */}
       {showDestinationPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg shadow w-80 text-center">
@@ -291,7 +338,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         </div>
       )}
 
-      {/* POPUP 2: Destination list */}
+      {/* POPUP 2 */}
       {showDestinationList && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg shadow w-96">
