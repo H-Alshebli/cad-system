@@ -71,7 +71,17 @@ export default function Map({
   const center = caseLat && caseLng ? [caseLat, caseLng] : [24.997, 46.50];
 
   return (
-    <MapContainer center={center} zoom={15} style={{ width: "100%", height: "100%" }}>
+   <MapContainer
+  center={center}
+  zoom={16}
+  minZoom={15}
+  maxZoom={20}       // allow deeper zoom
+  zoomControl={true}
+  maxBounds={mdlbBounds}   // stop dragging outside map
+  maxBoundsViscosity={1.0}
+  style={{ width: "100%", height: "100%" }}
+>
+
       
       {/* GOOGLE MAP */}
       <TileLayer
@@ -81,10 +91,12 @@ export default function Map({
 
       {/* MDL BEAST OVERLAY */}
       <ImageOverlay
-        url="/mdlb-base.jpg"
-        bounds={mdlbBounds}
-        opacity={0.55}
-      />
+  url="/mdlb-base.jpg"
+  bounds={mdlbBounds}
+  opacity={1}          // FULL COLOR
+  zIndex={500}         // Draw ABOVE google map
+/>
+
 
       {/* PATIENT ICON */}
       {caseLat && caseLng && (
