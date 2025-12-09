@@ -153,18 +153,28 @@ export default function NewCasePage() {
   }
 
   const lazemCode = generateLazemCode();
+  const now = new Date().toISOString();
 
   let assignedUnit: any = null;
+  let ambulanceCode: string | null = null;
+  let clinicId: string | null = null;
 
   if (unitType === "ambulance") {
     assignedUnit = { type: "ambulance", id: selectedUnit };
-  } else if (unitType === "clinic") {
-    assignedUnit = { type: "clinic", id: selectedUnit };
-  } else if (unitType === "roaming") {
-    assignedUnit = { type: "roaming", id: null };
+
+    // 🔥 FIND THE AMBULANCE CODE (AMB-001, AMB-003, etc.)
+    const amb = ambulances.find((a) => a.id === selectedUnit);
+    ambulanceCode = amb?.code || null;
   }
 
-  const now = new Date().toISOString();
+  if (unitType === "clinic") {
+    assignedUnit = { type: "clinic", id: selectedUnit };
+    clinicId = selectedUnit;
+  }
+
+  if (unitType === "roaming") {
+    assignedUnit = { type: "roaming", id: null };
+  }
 
   await addDoc(collection(db, "cases"), {
     lazemCode,
@@ -174,21 +184,26 @@ export default function NewCasePage() {
     locationText,
     lat,
     lng,
+
     unitType,
     assignedUnit,
 
-    // 🔥 NEW: start case as Assigned instead of only Received
-    status: "Assigned",    
+    // 🔥 THIS FIELD WAS MISSING — REQUIRED BY DASHBOARD
+    ambulanceCode: ambulanceCode,
 
+    clinicId: clinicId,
+
+    status: "Assigned",
     createdAt: serverTimestamp(),
     timeline: {
       Received: now,
-      Assigned: now, // 🔥 NEW: Automatically mark Assigned too
+      Assigned: now,
     },
   });
 
   alert("Case submitted successfully!");
 
+  // RESET FORM
   setIjrnyCode("");
   setChiefComplaint("");
   setLevel("");
