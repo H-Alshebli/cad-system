@@ -23,31 +23,36 @@ let globalAudio: HTMLAudioElement | null = null;
 ----------------------------------------------------------*/
 interface CaseData {
   id: string;
-  caseCode?: string;
-  Ijrny?: string;
+  lazemCode?: string;
+  ijrny?: string;
   chiefComplaint?: string;
   level?: string;
   status?: string;
   locationText?: string;
   ambulanceCode?: string;
-  roaming?: string; // ✅ NEW: roaming unit field
+  roaming?: string;
   [key: string]: any;
 }
 
 export default function CasesDashboard() {
+  /* ---------------------------------------------------------
+     STATE
+  ----------------------------------------------------------*/
   const [cases, setCases] = useState<CaseData[]>([]);
+  const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [roamingUnits, setRoamingUnits] = useState<any[]>([]);
+
   const [role, setRole] = useState<
     "admin" | "management" | "dispatch" | "ambulance" | "roaming" | null
-  >(null); // ✅ NEW: "roaming" role added
+  >(null);
 
-  // We will reuse this for BOTH ambulance & roaming units
-  const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
+  const [unitFilter, setUnitFilter] = useState<string | null>(null);
 
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
 
+  const [lastLatestCaseId, setLastLatestCaseId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
   /* ---------------------------------------------------------
@@ -99,7 +104,25 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     AUTO LOGIN (only for system roles for now)
+     LOAD AMBULANCES + ROAMING UNITS
+  ----------------------------------------------------------*/
+  useEffect(() => {
+    const unsubA = onSnapshot(collection(db, "ambulances"), (snap) => {
+      setAmbulances(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubR = onSnapshot(collection(db, "Roaming"), (snap) => {
+      setRoamingUnits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => {
+      unsubA();
+      unsubR();
+    };
+  }, []);
+
+  /* ---------------------------------------------------------
+     AUTO LOGIN (system roles only)
   ----------------------------------------------------------*/
   useEffect(() => {
     const saved = localStorage.getItem("accessCode");
@@ -108,88 +131,71 @@ export default function CasesDashboard() {
     if (saved === "727978") setRole("admin");
     else if (saved === "mng000") setRole("management");
     else if (saved === "dcp000") setRole("dispatch");
-    // (We let ambulance & roaming re-enter code on refresh for now)
+    else return; // ambulances & roaming must login each time
 
-    if (
-      saved === "727978" ||
-      saved === "mng000" ||
-      saved === "dcp000"
-    ) {
-      setShowLoginPopup(false);
-      primeAudio();
-    }
+    setShowLoginPopup(false);
+    primeAudio();
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LISTENER
+     FIRESTORE LISTENER FOR CASES
   ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const list: CaseData[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...((d.data() || {}) as any),
-      }));
-
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as CaseData[];
       setCases(list);
 
-      /* DISPATCH → Alarm for EVERY new case */
-      if (role === "dispatch") {
-        const newest = list[0];
-        if (newest && newest.id !== lastLatestCaseId) {
+      const newest = list[0];
+
+      if (!newest) return;
+
+      // Dispatch alarm
+      if (role === "dispatch" && newest.id !== lastLatestCaseId) {
+        startAlarm();
+        setLastLatestCaseId(newest.id);
+      }
+
+      // Ambulance alarm
+      if (role === "ambulance" && unitFilter) {
+        const myCase = list.find((c) => c.ambulanceCode === unitFilter);
+        if (
+          myCase &&
+          myCase.id !== lastLatestCaseId &&
+          (myCase.status === "Assigned" || myCase.status === "Received")
+        ) {
           startAlarm();
-          setLastLatestCaseId(newest.id);
+          setLastLatestCaseId(myCase.id);
         }
       }
 
-      /* AMBULANCE → Alarm for assigned/received cases for that ambulance */
-      if (role === "ambulance" && ambulanceFilter) {
-        const myCases = list.filter(
-          (c) => c.ambulanceCode === ambulanceFilter
-        );
-        if (myCases.length === 0) return;
-
-        const newest = myCases[0];
+      // Roaming alarm
+      if (role === "roaming" && unitFilter) {
+        const myCase = list.find((c) => c.roaming === unitFilter);
         if (
-          newest &&
-          newest.id !== lastLatestCaseId &&
-          (newest.status === "Received" || newest.status === "Assigned")
+          myCase &&
+          myCase.id !== lastLatestCaseId &&
+          (myCase.status === "Assigned" || myCase.status === "Received")
         ) {
           startAlarm();
-          setLastLatestCaseId(newest.id);
-        }
-      }
-
-      /* ROAMING → Alarm for assigned/received cases for that roaming unit */
-      if (role === "roaming" && ambulanceFilter) {
-        const myCases = list.filter((c) => c.roaming === ambulanceFilter);
-        if (myCases.length === 0) return;
-
-        const newest = myCases[0];
-        if (
-          newest &&
-          newest.id !== lastLatestCaseId &&
-          (newest.status === "Received" || newest.status === "Assigned")
-        ) {
-          startAlarm();
-          setLastLatestCaseId(newest.id);
+          setLastLatestCaseId(myCase.id);
         }
       }
     });
 
     return () => unsub();
-  }, [role, ambulanceFilter, lastLatestCaseId]);
+  }, [role, unitFilter, lastLatestCaseId]);
 
   /* ---------------------------------------------------------
-     LOGIN SUBMIT
+     LOGIN HANDLER
   ----------------------------------------------------------*/
   function handleLoginSubmit() {
     const input = document.getElementById("accessCode") as HTMLInputElement;
     const code = input.value.trim();
     setErrorMessage("");
 
-    // 1) System roles (fixed codes)
+    // System roles
     if (code === "727978") {
       setRole("admin");
     } else if (code === "mng000") {
@@ -197,32 +203,36 @@ export default function CasesDashboard() {
     } else if (code === "dcp000") {
       setRole("dispatch");
     } else {
-      // 2) Ambulance login using ambulanceCode from Firestore
-      const ambulanceMatch = cases.find(
-        (c) =>
-          c.ambulanceCode &&
-          c.ambulanceCode.trim().toLowerCase() === code.toLowerCase()
+      // Ambulance login
+      const amb = ambulances.find(
+        (a) => a.code.trim().toLowerCase() === code.toLowerCase()
       );
 
-      if (ambulanceMatch) {
+      if (amb) {
         setRole("ambulance");
-        setAmbulanceFilter(ambulanceMatch.ambulanceCode || code);
-      } else {
-        // 3) Roaming login using roaming field from Firestore
-        const roamingMatch = cases.find(
-          (c) =>
-            c.roaming &&
-            c.roaming.trim().toLowerCase() === code.toLowerCase()
-        );
-
-        if (roamingMatch) {
-          setRole("roaming");
-          setAmbulanceFilter(roamingMatch.roaming || code);
-        } else {
-          setErrorMessage("❌ Incorrect code");
-          return;
-        }
+        setUnitFilter(amb.code);
+        localStorage.setItem("accessCode", code);
+        setShowLoginPopup(false);
+        primeAudio();
+        return;
       }
+
+      // Roaming login
+      const roam = roamingUnits.find(
+        (r) => r.code.trim().toLowerCase() === code.toLowerCase()
+      );
+
+      if (roam) {
+        setRole("roaming");
+        setUnitFilter(roam.code);
+        localStorage.setItem("accessCode", code);
+        setShowLoginPopup(false);
+        primeAudio();
+        return;
+      }
+
+      setErrorMessage("❌ Incorrect code");
+      return;
     }
 
     localStorage.setItem("accessCode", code);
@@ -236,32 +246,32 @@ export default function CasesDashboard() {
   function handleLogout() {
     localStorage.removeItem("accessCode");
     setRole(null);
-    setAmbulanceFilter(null);
+    setUnitFilter(null);
     setLastLatestCaseId(null);
     stopAlarm();
     setShowLoginPopup(true);
   }
 
   /* ---------------------------------------------------------
-     DELETE CASE (Admin only)
+     DELETE CASE
   ----------------------------------------------------------*/
   async function deleteCase(id: string) {
-    if (!confirm("Are you sure you want to delete this case?")) return;
+    if (!confirm("Are you sure?")) return;
     await deleteDoc(doc(db, "cases", id));
     alert("Case deleted.");
   }
 
   /* ---------------------------------------------------------
-     CASE FILTERING
-----------------------------------------------------------*/
-  let visibleCases: CaseData[] = cases;
+     FILTER CASES
+  ----------------------------------------------------------*/
+  let visibleCases = cases;
 
-  if (role === "ambulance" && ambulanceFilter) {
-    visibleCases = cases.filter(
-      (c) => c.ambulanceCode === ambulanceFilter
-    );
-  } else if (role === "roaming" && ambulanceFilter) {
-    visibleCases = cases.filter((c) => c.roaming === ambulanceFilter);
+  if (role === "ambulance" && unitFilter) {
+    visibleCases = cases.filter((c) => c.ambulanceCode === unitFilter);
+  }
+
+  if (role === "roaming" && unitFilter) {
+    visibleCases = cases.filter((c) => c.roaming === unitFilter);
   }
 
   if (!showCompleted) {
@@ -270,13 +280,14 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      UI
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
+
       {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-80 text-center">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg w-80 text-center">
             <h2 className="text-xl font-bold mb-4 dark:text-white">
               Enter Access Code
             </h2>
@@ -285,16 +296,14 @@ export default function CasesDashboard() {
               id="accessCode"
               type="text"
               placeholder="Enter role or unit code…"
-              className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white"
+              className="w-full p-2 rounded dark:bg-gray-700 dark:text-white"
             />
 
-            {errorMessage && (
-              <p className="text-red-500 text-sm">{errorMessage}</p>
-            )}
+            {errorMessage && <p className="text-red-500 mt-2">{errorMessage}</p>}
 
             <button
               onClick={handleLoginSubmit}
-              className="bg-blue-600 text-white w-full py-2 rounded mt-2"
+              className="bg-blue-600 text-white w-full py-2 rounded mt-3"
             >
               Login
             </button>
@@ -304,14 +313,14 @@ export default function CasesDashboard() {
 
       {/* ALARM POPUP */}
       {showAlarmPopup && (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[60]">
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-[60]">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg w-80 text-center animate-pulse">
             <h2 className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">
               🚨 New Case Alert!
             </h2>
 
             <button
-              className="bg-red-600 text-white px-4 py-2 rounded w-full"
+              className="bg-red-600 text-white w-full py-2 rounded"
               onClick={stopAlarm}
             >
               STOP ALARM
@@ -336,7 +345,7 @@ export default function CasesDashboard() {
         )}
       </div>
 
-      {/* SHOW/HIDE COMPLETED BUTTON */}
+      {/* SHOW COMPLETED */}
       <button
         onClick={() => setShowCompleted(!showCompleted)}
         className="bg-gray-700 text-white px-4 py-2 rounded mb-4"
@@ -349,50 +358,27 @@ export default function CasesDashboard() {
         {visibleCases.map((c) => (
           <div
             key={c.id}
-            className="
-              border rounded shadow-sm p-4
-              bg-white text-gray-900
-              hover:bg-gray-100
-              dark:bg-gray-800 dark:text-white dark:border-gray-700
-              dark:hover:bg-gray-700
-            "
+            className="border rounded p-4 bg-white dark:bg-gray-800 dark:text-white"
           >
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer">
-                <h2 className="text-xl font-bold dark:text-white">
-                  <strong>Lazem Code:</strong> {c.lazemCode || "—"}
+                <h2 className="text-xl font-bold">
+                  Lazem Code: {c.lazemCode || "—"}
                 </h2>
-
-                <p className="text-gray-600 dark:text-gray-300">
-                  <strong>Ijrny Code:</strong> {c.ijrny || "—"}
-                </p>
-
-                <p>
-                  <strong>Complaint:</strong> {c.chiefComplaint}
-                </p>
-                <p>
-                  <strong>Level:</strong> {c.level}
-                </p>
-                <p>
-                  <strong>Status:</strong> {c.status}
-                </p>
-                <p>
-                  <strong>Ambulance:</strong> {c.ambulanceCode || "None"}
-                </p>
-                <p>
-                  <strong>Roaming:</strong> {c.roaming || "None"}
-                </p>
-                <p>
-                  <strong>Location:</strong> {c.locationText}
-                </p>
+                <p>Ijrny Code: {c.ijrny || "—"}</p>
+                <p>Complaint: {c.chiefComplaint}</p>
+                <p>Level: {c.level}</p>
+                <p>Status: {c.status}</p>
+                <p>Ambulance: {c.ambulanceCode || "None"}</p>
+                <p>Roaming: {c.roaming || "None"}</p>
+                <p>Location: {c.locationText}</p>
               </div>
             </Link>
 
-            {/* ADMIN DELETE */}
             {role === "admin" && (
               <button
                 onClick={() => deleteCase(c.id)}
-                className="mt-2 text-red-500 underline dark:text-red-400"
+                className="mt-2 text-red-500 underline"
               >
                 Delete Case
               </button>
