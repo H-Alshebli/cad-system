@@ -43,6 +43,7 @@ export default function Navbar() {
           <Link className={linkClass("/cases/new")} href="/cases/new">New Case</Link>
           <Link className={linkClass("/clinic")} href="/clinic">Clinic</Link>
           <Link className={linkClass("/ambulances")} href="/ambulances/">Ambulances</Link>
+           <Link className={linkClass("/roaming")} href="/roaming/">Roaming</Link>
         </div>
 
         <button
