@@ -350,7 +350,7 @@ export default function NewCasePage() {
               className="bg-[#0F172A] text-white p-2 rounded"
               placeholder="iJrny Case Code"
               value={ijrnyCode}
-              readOnly
+              onChange={(e) => setIjrnyCode(e.target.value)}
             />
 
             <input
