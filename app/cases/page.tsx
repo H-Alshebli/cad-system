@@ -30,16 +30,19 @@ interface CaseData {
   status?: string;
   locationText?: string;
   ambulanceCode?: string;
+  roaming?: string; // ✅ NEW: roaming unit field
   [key: string]: any;
 }
 
 export default function CasesDashboard() {
   const [cases, setCases] = useState<CaseData[]>([]);
   const [role, setRole] = useState<
-    "admin" | "management" | "dispatch" | "ambulance" | null
-  >(null);
+    "admin" | "management" | "dispatch" | "ambulance" | "roaming" | null
+  >(null); // ✅ NEW: "roaming" role added
 
+  // We will reuse this for BOTH ambulance & roaming units
   const [ambulanceFilter, setAmbulanceFilter] = useState<string | null>(null);
+
   const [showLoginPopup, setShowLoginPopup] = useState(true);
   const [showAlarmPopup, setShowAlarmPopup] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -49,7 +52,7 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      PRIME AUDIO
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function primeAudio() {
     const a = new Audio("/sounds/alert.mp3");
     a.play()
@@ -62,7 +65,7 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      START ALARM
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function startAlarm() {
     if (!globalAudio) {
       globalAudio = new Audio("/sounds/alert.mp3");
@@ -82,7 +85,7 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      STOP ALARM
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function stopAlarm() {
     if (alarmInterval) clearInterval(alarmInterval);
     alarmInterval = null;
@@ -96,35 +99,37 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     AUTO LOGIN
-----------------------------------------------------------*/
+     AUTO LOGIN (only for system roles for now)
+  ----------------------------------------------------------*/
   useEffect(() => {
     const saved = localStorage.getItem("accessCode");
-
     if (!saved) return;
 
     if (saved === "727978") setRole("admin");
     else if (saved === "mng000") setRole("management");
     else if (saved === "dcp000") setRole("dispatch");
-    else if (saved.startsWith("AMB-")) {
-      setRole("ambulance");
-      setAmbulanceFilter(saved);
-    }
+    // (We let ambulance & roaming re-enter code on refresh for now)
 
-    setShowLoginPopup(false);
-    primeAudio();
+    if (
+      saved === "727978" ||
+      saved === "mng000" ||
+      saved === "dcp000"
+    ) {
+      setShowLoginPopup(false);
+      primeAudio();
+    }
   }, []);
 
   /* ---------------------------------------------------------
-     FIRESTORE LISTENER (with fixed spread operator)
-----------------------------------------------------------*/
+     FIRESTORE LISTENER
+  ----------------------------------------------------------*/
   useEffect(() => {
     const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
 
     const unsub = onSnapshot(q, (snapshot) => {
       const list: CaseData[] = snapshot.docs.map((d) => ({
         id: d.id,
-        ...((d.data() || {}) as any), // 🔥 FIXED HERE
+        ...((d.data() || {}) as any),
       }));
 
       setCases(list);
@@ -138,9 +143,27 @@ export default function CasesDashboard() {
         }
       }
 
-      /* AMBULANCE → Alarm for assigned cases */
+      /* AMBULANCE → Alarm for assigned/received cases for that ambulance */
       if (role === "ambulance" && ambulanceFilter) {
-        const myCases = list.filter((c) => c.ambulanceCode === ambulanceFilter);
+        const myCases = list.filter(
+          (c) => c.ambulanceCode === ambulanceFilter
+        );
+        if (myCases.length === 0) return;
+
+        const newest = myCases[0];
+        if (
+          newest &&
+          newest.id !== lastLatestCaseId &&
+          (newest.status === "Received" || newest.status === "Assigned")
+        ) {
+          startAlarm();
+          setLastLatestCaseId(newest.id);
+        }
+      }
+
+      /* ROAMING → Alarm for assigned/received cases for that roaming unit */
+      if (role === "roaming" && ambulanceFilter) {
+        const myCases = list.filter((c) => c.roaming === ambulanceFilter);
         if (myCases.length === 0) return;
 
         const newest = myCases[0];
@@ -160,20 +183,46 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      LOGIN SUBMIT
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function handleLoginSubmit() {
     const input = document.getElementById("accessCode") as HTMLInputElement;
     const code = input.value.trim();
+    setErrorMessage("");
 
-    if (code === "727978") setRole("admin");
-    else if (code === "mng000") setRole("management");
-    else if (code === "dcp000") setRole("dispatch");
-    else if (code.startsWith("AMB-")) {
-      setRole("ambulance");
-      setAmbulanceFilter(code);
+    // 1) System roles (fixed codes)
+    if (code === "727978") {
+      setRole("admin");
+    } else if (code === "mng000") {
+      setRole("management");
+    } else if (code === "dcp000") {
+      setRole("dispatch");
     } else {
-      setErrorMessage("❌ Incorrect code");
-      return;
+      // 2) Ambulance login using ambulanceCode from Firestore
+      const ambulanceMatch = cases.find(
+        (c) =>
+          c.ambulanceCode &&
+          c.ambulanceCode.trim().toLowerCase() === code.toLowerCase()
+      );
+
+      if (ambulanceMatch) {
+        setRole("ambulance");
+        setAmbulanceFilter(ambulanceMatch.ambulanceCode || code);
+      } else {
+        // 3) Roaming login using roaming field from Firestore
+        const roamingMatch = cases.find(
+          (c) =>
+            c.roaming &&
+            c.roaming.trim().toLowerCase() === code.toLowerCase()
+        );
+
+        if (roamingMatch) {
+          setRole("roaming");
+          setAmbulanceFilter(roamingMatch.roaming || code);
+        } else {
+          setErrorMessage("❌ Incorrect code");
+          return;
+        }
+      }
     }
 
     localStorage.setItem("accessCode", code);
@@ -183,7 +232,7 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      LOGOUT
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   function handleLogout() {
     localStorage.removeItem("accessCode");
     setRole(null);
@@ -195,7 +244,7 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      DELETE CASE (Admin only)
-----------------------------------------------------------*/
+  ----------------------------------------------------------*/
   async function deleteCase(id: string) {
     if (!confirm("Are you sure you want to delete this case?")) return;
     await deleteDoc(doc(db, "cases", id));
@@ -203,23 +252,27 @@ export default function CasesDashboard() {
   }
 
   /* ---------------------------------------------------------
-     CASE FILTERING (Hide closed)
+     CASE FILTERING
 ----------------------------------------------------------*/
-  let visibleCases =
-    role === "ambulance"
-      ? cases.filter((c) => c.ambulanceCode === ambulanceFilter)
-      : cases;
+  let visibleCases: CaseData[] = cases;
+
+  if (role === "ambulance" && ambulanceFilter) {
+    visibleCases = cases.filter(
+      (c) => c.ambulanceCode === ambulanceFilter
+    );
+  } else if (role === "roaming" && ambulanceFilter) {
+    visibleCases = cases.filter((c) => c.roaming === ambulanceFilter);
+  }
 
   if (!showCompleted) {
     visibleCases = visibleCases.filter((c) => c.status !== "Closed");
   }
 
   /* ---------------------------------------------------------
-     UI (unchanged)
+     UI
 ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
-
       {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -231,7 +284,7 @@ export default function CasesDashboard() {
             <input
               id="accessCode"
               type="text"
-              placeholder="Enter role code…"
+              placeholder="Enter role or unit code…"
               className="border p-2 rounded w-full mb-3 dark:bg-gray-700 dark:text-white"
             />
 
@@ -307,13 +360,12 @@ export default function CasesDashboard() {
             <Link href={`/cases/${c.id}`}>
               <div className="cursor-pointer">
                 <h2 className="text-xl font-bold dark:text-white">
-  <strong>Lazem Code:</strong> {c.lazemCode || "—"}
-</h2>
+                  <strong>Lazem Code:</strong> {c.lazemCode || "—"}
+                </h2>
 
-<p className="text-gray-600 dark:text-gray-300">
-  <strong>Ijrny Code:</strong> {c.ijrny || "—"}
-</p>
-
+                <p className="text-gray-600 dark:text-gray-300">
+                  <strong>Ijrny Code:</strong> {c.ijrny || "—"}
+                </p>
 
                 <p>
                   <strong>Complaint:</strong> {c.chiefComplaint}
@@ -326,6 +378,9 @@ export default function CasesDashboard() {
                 </p>
                 <p>
                   <strong>Ambulance:</strong> {c.ambulanceCode || "None"}
+                </p>
+                <p>
+                  <strong>Roaming:</strong> {c.roaming || "None"}
                 </p>
                 <p>
                   <strong>Location:</strong> {c.locationText}

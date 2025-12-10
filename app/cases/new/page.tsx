@@ -210,7 +210,12 @@ export default function NewCasePage() {
       return;
     }
 
-    if (unitType !== "roaming" && !selectedUnitId) {
+    if (!unitType) {
+      alert("Please select unit type.");
+      return;
+    }
+
+    if (!selectedUnitId) {
       alert("Please select a unit.");
       return;
     }
@@ -221,6 +226,7 @@ export default function NewCasePage() {
     let assignedUnit: any = null;
     let ambulanceCode: string | null = null;
     let clinicId: string | null = null;
+    let roamingCode: string | null = null; // ✅ NEW
 
     if (unitType === "ambulance") {
       assignedUnit = { type: "ambulance", id: selectedUnitId };
@@ -234,7 +240,10 @@ export default function NewCasePage() {
     }
 
     if (unitType === "roaming") {
-      assignedUnit = { type: "roaming", id: null };
+      assignedUnit = { type: "roaming", id: selectedUnitId };
+      // Roaming document has "code": "BIG ROMEO TANGO 02"
+      roamingCode =
+        roaming.find((r) => r.id === selectedUnitId)?.code || null;
     }
 
     await addDoc(collection(db, "cases"), {
@@ -249,6 +258,7 @@ export default function NewCasePage() {
       assignedUnit,
       ambulanceCode,
       clinicId,
+      roaming: roamingCode, // ✅ IMPORTANT
       status: "Assigned",
       createdAt: serverTimestamp(),
       timeline: {
@@ -336,7 +346,6 @@ export default function NewCasePage() {
           <h2 className="text-xl font-bold mb-4 text-white">New Case Form</h2>
 
           <div className="flex flex-col gap-3">
-            {/* FORM FIELDS */}
             <input
               className="bg-[#0F172A] text-white p-2 rounded"
               placeholder="iJrny Case Code"
@@ -380,7 +389,9 @@ export default function NewCasePage() {
             />
 
             {/* UNIT TYPE */}
-            <label className="font-semibold text-white mt-2">Assign Unit</label>
+            <label className="font-semibold text-white mt-2">
+              Assign Unit
+            </label>
 
             <div className="flex gap-4 text-white">
               <label>
