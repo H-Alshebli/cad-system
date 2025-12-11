@@ -33,6 +33,7 @@ export default function Dashboard() {
   const OnSceneCases = cases.filter((c) => c.status == "OnScene").length;
   const activeCases = cases.filter((c) => c.status !== "Closed").length;
   const closedCases = cases.filter((c) => c.status === "Closed").length;
+  const unreceivedCases = cases.filter((c) => c.status === "Assigned" || c.status === "Received").length;
   const transportingCases = cases.filter((c) => c.status === "Transporting").length;
   const totalAmbulances = ambulances.length;
 
@@ -53,10 +54,7 @@ export default function Dashboard() {
           <h3 className="text-lg font-bold dark:text-gray-200">Total Cases</h3>
           <p className="text-4xl font-extrabold">{totalCases}</p>
 
-          <p className="mt-2 text-sm dark:text-gray-300">
-            Active: <span className="font-bold">{activeCases}</span> — treated:{" "}
-            <span className="font-bold">{closedCases}</span>
-          </p>
+          
         </div>
 
         {/* ACTIVE CASES */}
@@ -64,9 +62,30 @@ export default function Dashboard() {
           p-4 border rounded shadow 
           bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
         ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">Active</h3>
+          <p className="text-2xl font-bold text-blue-600">{activeCases}</p>
+          
+        </div>
+        
+        {/* ACTIVE CASES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">Unreceived from team</h3>
+          <p className="text-2xl font-bold text-blue-600">{unreceivedCases}</p>
+          
+        </div>
+         {/* ACTIVE CASES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
           <h3 className="text-sm text-gray-600 dark:text-gray-300">OnScene</h3>
           <p className="text-2xl font-bold text-blue-600">{OnSceneCases}</p>
+          
         </div>
+        
 
         {/* TRANSPORTING */}
         <div className="
@@ -77,6 +96,15 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-orange-600">{transportingCases}</p>
         </div>
 
+        {/* ACTIVE CASES */}
+        <div className="
+          p-4 border rounded shadow 
+          bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700
+        ">
+          <h3 className="text-sm text-gray-600 dark:text-gray-300">Treated</h3>
+          <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
+          
+        </div>
         {/* TOTAL AMBULANCES */}
         <div className="
           p-4 border rounded shadow 
@@ -86,6 +114,8 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-purple-600">{totalAmbulances}</p>
         </div>
       </div>
+      
+      
 
       {/* ================== CASE LIST WITH TIMELINES ================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

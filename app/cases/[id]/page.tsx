@@ -190,6 +190,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         <p><strong>Status:</strong> {caseData.status}</p>
         <p><strong>Location:</strong> {caseData.locationText}</p>
         <p><strong>Ambulance:</strong> {ambulanceCode}</p>
+        
 
         <p className="mt-2">
           <strong>Destination:</strong>{" "}
@@ -314,7 +315,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       {/* POPUP 1 */}
       {showDestinationPopup && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow w-80 text-center">
+          <div className="bg-[#1c2333] text-white p-6 rounded-lg shadow w-80 text-center">
             <h2 className="text-xl font-bold mb-4">Transporting To?</h2>
             <button
               onClick={() => chooseDestinationType("hospital")}

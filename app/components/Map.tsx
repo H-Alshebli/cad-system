@@ -71,18 +71,17 @@ export default function Map({
   const center = caseLat && caseLng ? [caseLat, caseLng] : [24.997, 46.50];
 
   return (
-   <MapContainer
-  center={center}
-  zoom={16}
-  minZoom={15}
-  maxZoom={20}       // allow deeper zoom
-  zoomControl={true}
-  maxBounds={mdlbBounds}   // stop dragging outside map
-  maxBoundsViscosity={1.0}
-  style={{ width: "100%", height: "100%" }}
->
-
-      
+    <MapContainer
+      key={center.toString()}     // ✅ SAFE FIX — prevents "already initialized" error
+      center={center}
+      zoom={16}
+      minZoom={15}
+      maxZoom={20}
+      zoomControl={true}
+      maxBounds={mdlbBounds}
+      maxBoundsViscosity={1.0}
+      style={{ width: "100%", height: "100%" }}
+    >
       {/* GOOGLE MAP */}
       <TileLayer
         url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
@@ -91,12 +90,11 @@ export default function Map({
 
       {/* MDL BEAST OVERLAY */}
       <ImageOverlay
-  url="/mdlb-base.jpg"
-  bounds={mdlbBounds}
-  opacity={1}          // FULL COLOR
-  zIndex={500}         // Draw ABOVE google map
-/>
-
+        url="/mdlb-base.jpg"
+        bounds={mdlbBounds}
+        opacity={1}
+        zIndex={500}
+      />
 
       {/* PATIENT ICON */}
       {caseLat && caseLng && (

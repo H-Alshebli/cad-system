@@ -45,8 +45,10 @@ export default function NewCasePage() {
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [level, setLevel] = useState("");
   const [locationText, setLocationText] = useState("");
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+
+const [lat, setLat] = useState<number | null>(null);
+const [lng, setLng] = useState<number | null>(null);
+
 
   const [unitType, setUnitType] =
     useState<"ambulance" | "clinic" | "roaming" | "">("");
@@ -374,19 +376,33 @@ export default function NewCasePage() {
               onChange={(e) => setLocationText(e.target.value)}
             />
 
-            <input
-              className="bg-[#0F172A] text-white p-2 rounded"
-              placeholder="Latitude"
-              value={lat ?? ""}
-              onChange={(e) => setLat(parseFloat(e.target.value))}
-            />
+           <input
+  className="bg-[#0F172A] text-white p-2 rounded"
+  placeholder="Latitude"
+  value={lat ?? ""}
+  onChange={(e) => {
+    const v = e.target.value;
+    setLat(v === "" ? null : Number(v));
+  }}
+  type="text"
+  inputMode="decimal"
+  pattern="[0-9]+([.][0-9]+)?"
+/>
 
-            <input
-              className="bg-[#0F172A] text-white p-2 rounded"
-              placeholder="Longitude"
-              value={lng ?? ""}
-              onChange={(e) => setLng(parseFloat(e.target.value))}
-            />
+<input
+  className="bg-[#0F172A] text-white p-2 rounded"
+  placeholder="Longitude"
+  value={lng ?? ""}
+  onChange={(e) => {
+    const v = e.target.value;
+    setLng(v === "" ? null : Number(v));
+  }}
+  type="text"
+  inputMode="decimal"
+  pattern="[0-9]+([.][0-9]+)?"
+/>
+
+
 
             {/* UNIT TYPE */}
             <label className="font-semibold text-white mt-2">
