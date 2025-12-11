@@ -144,7 +144,8 @@ export default function Map({
             position={[r.lat, r.lng]}
             icon={roamingIcon}
           >
-            <Popup>🚶 Roaming Team</Popup>
+             
+            <Popup>🚶 Roaming Team<br />Code: {r.code}</Popup>
           </Marker>
         ) : null
       )}
