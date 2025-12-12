@@ -164,7 +164,7 @@ export default function LocationPickerPage() {
             : "bg-blue-600 hover:bg-blue-700"
         }`}
       >
-        {started ? "Location Sharing Active" : "Start Location Sharing"}
+        {started ? "Location  Active" : "get Location "}
       </button>
 
       {/* STATUS */}
