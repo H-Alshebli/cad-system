@@ -124,7 +124,7 @@ export default function LocationPickerPage() {
   return (
     <div className="p-6 min-h-screen bg-gray-900 text-white flex flex-col gap-4 max-w-md">
       <h1 className="text-2xl font-bold">
-        📡 Live Location Tracking
+        Location 
       </h1>
 
       {/* UNIT TYPE */}
@@ -173,7 +173,7 @@ export default function LocationPickerPage() {
           <p><strong>Latitude:</strong> {location.lat}</p>
           <p><strong>Longitude:</strong> {location.lng}</p>
           <p className="text-green-400 mt-2">
-            Live tracking is running…
+            get location…
           </p>
         </div>
       )}
