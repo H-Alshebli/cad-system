@@ -33,11 +33,11 @@ export default function LocationPickerPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState("");
 
-  const [tracking, setTracking] = useState(false);
   const watchIdRef = useRef<number | null>(null);
 
   const [location, setLocation] = useState<LatLng | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
 
   /* ------------------------------------
      LOAD UNITS
@@ -59,7 +59,7 @@ export default function LocationPickerPage() {
   }, [unitType]);
 
   /* ------------------------------------
-     START LIVE TRACKING
+     START TRACKING (ONCE)
   ------------------------------------ */
   const startTracking = () => {
     if (!unitType || !selectedUnitId) {
@@ -72,8 +72,10 @@ export default function LocationPickerPage() {
       return;
     }
 
+    if (started) return; // ⛔ prevent double start
+
     setError(null);
-    setTracking(true);
+    setStarted(true);
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (position) => {
@@ -84,6 +86,7 @@ export default function LocationPickerPage() {
 
         setLocation(coords);
 
+        // 🔥 KEEP UPDATING FIRESTORE (NO STOP)
         await setDoc(
           doc(db, unitType, selectedUnitId),
           {
@@ -94,9 +97,10 @@ export default function LocationPickerPage() {
           { merge: true }
         );
       },
-      () => {
-        setError("Location access denied");
-        stopTracking();
+      (err) => {
+        console.error("GPS error:", err);
+        setError("Location permission is required");
+        // ❗ DO NOT STOP TRACKING
       },
       {
         enableHighAccuracy: true,
@@ -107,27 +111,20 @@ export default function LocationPickerPage() {
   };
 
   /* ------------------------------------
-     STOP LIVE TRACKING
-  ------------------------------------ */
-  const stopTracking = () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setTracking(false);
-  };
-
-  /* ------------------------------------
-     CLEANUP ON PAGE LEAVE
+     CLEANUP ONLY WHEN PAGE CLOSES
   ------------------------------------ */
   useEffect(() => {
-    return () => stopTracking();
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
   }, []);
 
   return (
     <div className="p-6 min-h-screen bg-gray-900 text-white flex flex-col gap-4 max-w-md">
       <h1 className="text-2xl font-bold">
-        📡 Update your location
+        📡 Live Location Tracking
       </h1>
 
       {/* UNIT TYPE */}
@@ -157,22 +154,18 @@ export default function LocationPickerPage() {
         </select>
       )}
 
-      {/* BUTTONS */}
-      {!tracking ? (
-        <button
-          onClick={startTracking}
-          className="bg-blue-600 px-6 py-3 rounded font-semibold hover:bg-green-700"
-        >
-          Get mylocation
-        </button>
-      ) : (
-        <button
-          onClick={stopTracking}
-          className="bg-green-600 px-6 py-3 rounded font-semibold hover:bg-green-700"
-        >
-           Thanks
-        </button>
-      )}
+      {/* ONE BUTTON ONLY */}
+      <button
+        onClick={startTracking}
+        disabled={started}
+        className={`px-6 py-3 rounded font-semibold ${
+          started
+            ? "bg-green-600 cursor-not-allowed"
+            : "bg-blue-600 hover:bg-blue-700"
+        }`}
+      >
+        {started ? "Location Sharing Active" : "Start Location Sharing"}
+      </button>
 
       {/* STATUS */}
       {location && (
@@ -180,7 +173,7 @@ export default function LocationPickerPage() {
           <p><strong>Latitude:</strong> {location.lat}</p>
           <p><strong>Longitude:</strong> {location.lng}</p>
           <p className="text-green-400 mt-2">
-            Update your location
+            Live tracking is running…
           </p>
         </div>
       )}
