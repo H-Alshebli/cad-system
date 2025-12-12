@@ -121,12 +121,12 @@ export default function RoamingPage() {
           <option value="offline">Offline</option>
         </select>
 
-        <button
+       {/* <button
           onClick={addRoaming}
           className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
         >
           Add Roaming Unit
-        </button>
+        </button>*/}
       </div>
 
       {/* LIST OF ROAMING UNITS */}
