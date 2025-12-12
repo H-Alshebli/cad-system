@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   collection,
   getDocs,
@@ -33,13 +33,14 @@ export default function LocationPickerPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState("");
 
+  const [tracking, setTracking] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+
   const [location, setLocation] = useState<LatLng | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   /* ------------------------------------
-     LOAD UNITS BASED ON TYPE
+     LOAD UNITS
   ------------------------------------ */
   useEffect(() => {
     if (!unitType) return;
@@ -58,11 +59,11 @@ export default function LocationPickerPage() {
   }, [unitType]);
 
   /* ------------------------------------
-     GET GPS + UPDATE SELECTED UNIT
+     START LIVE TRACKING
   ------------------------------------ */
-  const getAndUpdateLocation = async () => {
+  const startTracking = () => {
     if (!unitType || !selectedUnitId) {
-      setError("Please select unit type and unit");
+      setError("Select unit type and unit first");
       return;
     }
 
@@ -71,11 +72,10 @@ export default function LocationPickerPage() {
       return;
     }
 
-    setLoading(true);
     setError(null);
-    setSuccess(null);
+    setTracking(true);
 
-    navigator.geolocation.getCurrentPosition(
+    watchIdRef.current = navigator.geolocation.watchPosition(
       async (position) => {
         const coords = {
           lat: position.coords.latitude,
@@ -84,7 +84,6 @@ export default function LocationPickerPage() {
 
         setLocation(coords);
 
-        // 🔥 UPDATE FIRESTORE
         await setDoc(
           doc(db, unitType, selectedUnitId),
           {
@@ -94,45 +93,60 @@ export default function LocationPickerPage() {
           },
           { merge: true }
         );
-
-        setSuccess("Location updated successfully ✅");
-        setLoading(false);
       },
       () => {
         setError("Location access denied");
-        setLoading(false);
+        stopTracking();
       },
       {
         enableHighAccuracy: true,
+        maximumAge: 5000,
         timeout: 10000,
-        maximumAge: 0,
       }
     );
   };
 
+  /* ------------------------------------
+     STOP LIVE TRACKING
+  ------------------------------------ */
+  const stopTracking = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setTracking(false);
+  };
+
+  /* ------------------------------------
+     CLEANUP ON PAGE LEAVE
+  ------------------------------------ */
+  useEffect(() => {
+    return () => stopTracking();
+  }, []);
+
   return (
     <div className="p-6 min-h-screen bg-gray-900 text-white flex flex-col gap-4 max-w-md">
       <h1 className="text-2xl font-bold">
-        📍 Update Unit Location
+        📡 Live Location Tracker
       </h1>
 
-      {/* UNIT TYPE SELECT */}
+      {/* UNIT TYPE */}
       <select
         value={unitType}
         onChange={(e) => setUnitType(e.target.value as UnitType)}
-        className="p-3 rounded bg-[#1c2333] text-white border border-gray-700"
+        className="p-3 rounded bg-[#1c2333] border border-gray-700"
       >
         <option value="">Select Unit Type</option>
         <option value="Roaming">Roaming</option>
         <option value="ambulances">Ambulance</option>
       </select>
 
-      {/* UNIT SELECT */}
+      {/* UNIT */}
       {unitType && (
         <select
           value={selectedUnitId}
           onChange={(e) => setSelectedUnitId(e.target.value)}
-          className="p-3 rounded bg-[#1c2333] text-white border border-gray-700"
+          className="p-3 rounded bg-[#1c2333] border border-gray-700"
         >
           <option value="">Select Unit</option>
           {units.map((u) => (
@@ -143,26 +157,35 @@ export default function LocationPickerPage() {
         </select>
       )}
 
-      {/* BUTTON */}
-      <button
-        onClick={getAndUpdateLocation}
-        disabled={loading}
-        className="bg-blue-600 px-6 py-3 rounded font-semibold hover:bg-blue-700 disabled:opacity-50"
-      >
-        {loading ? "Updating location..." : "Get My Location"}
-      </button>
+      {/* BUTTONS */}
+      {!tracking ? (
+        <button
+          onClick={startTracking}
+          className="bg-green-600 px-6 py-3 rounded font-semibold hover:bg-green-700"
+        >
+          ▶ Start Live Tracking
+        </button>
+      ) : (
+        <button
+          onClick={stopTracking}
+          className="bg-red-600 px-6 py-3 rounded font-semibold hover:bg-red-700"
+        >
+          ⏹ Stop Tracking
+        </button>
+      )}
 
-      {/* MESSAGES */}
-      {error && <p className="text-red-400">{error}</p>}
-      {success && <p className="text-green-400">{success}</p>}
-
-      {/* RESULT */}
+      {/* STATUS */}
       {location && (
         <div className="bg-[#1c2333] p-4 rounded">
           <p><strong>Latitude:</strong> {location.lat}</p>
           <p><strong>Longitude:</strong> {location.lng}</p>
+          <p className="text-green-400 mt-2">
+            Live tracking active
+          </p>
         </div>
       )}
+
+      {error && <p className="text-red-400">{error}</p>}
     </div>
   );
 }
