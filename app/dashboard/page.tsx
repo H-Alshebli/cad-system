@@ -75,6 +75,28 @@ export default function Dashboard() {
   const transportingCases = filteredCases.filter(
     (c) => c.status === "Transporting"
   ).length;
+   const closedHospitalCases = filteredCases.filter(
+  (c) =>
+    c.status === "Closed" &&
+    c.transportingToType === "hospital"
+).length;
+ const transportingHospitalCases = filteredCases.filter(
+  (c) =>
+    c.status === "Transporting" || c.status === "Hospital" &&
+    c.transportingToType === "hospital"
+).length;
+const transportingClinicCases = filteredCases.filter(
+  (c) =>
+    c.status === "Transporting" &&
+    c.transportingToType === "clinic"
+).length;
+const closedclinicCases = filteredCases.filter(
+  (c) =>
+    c.status === "Closed" &&
+    c.transportingToType === "clinic"
+).length;
+
+
   const totalAmbulances = ambulances.length;
 
   return (
@@ -111,11 +133,17 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-orange-600">
             {transportingCases}
           </p>
+           <p className="text-gray-400">
+              Hospital: {transportingHospitalCases} - Clinic: {transportingClinicCases}
+            </p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-sm text-gray-400">Treated</h3>
           <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
+          <p className="text-gray-400">
+              Hospital: {closedHospitalCases} - Clinic: {closedclinicCases}
+            </p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
