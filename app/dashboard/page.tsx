@@ -63,6 +63,9 @@ export default function Dashboard() {
   const OnSceneCases = filteredCases.filter(
     (c) => c.status === "OnScene"
   ).length;
+  const EnRouteCases = filteredCases.filter(
+    (c) => c.status === "EnRoute"
+  ).length;
   const activeCases = filteredCases.filter(
     (c) => c.status !== "Closed"
   ).length;
@@ -119,6 +122,10 @@ const closedclinicCases = filteredCases.filter(
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-sm text-gray-400">Unreceived from team</h3>
           <p className="text-2xl font-bold text-blue-600">{unreceivedCases}</p>
+        </div>
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">EnRoute</h3>
+          <p className="text-2xl font-bold text-blue-600">{EnRouteCases}</p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
