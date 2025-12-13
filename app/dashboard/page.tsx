@@ -9,8 +9,8 @@ import CaseTimeline from "@/app/components/CaseTimeline";
    🔒 ADMIN FIXED FILTER (غير التاريخ والوقت هنا فقط)
 ===================================================== */
 // 🇸🇦 Saudi Arabia Time (UTC+3)
-const FILTER_FROM = new Date(2025, 11, 12, 17, 0, 0); // 12 Dec 5:00 PM
-const FILTER_TO   = new Date(2025, 11, 13, 17, 0, 0); // 13 Dec 5:00 PM
+const FILTER_FROM = new Date(2025, 11, 13, 17, 0, 0); // 12 Dec 5:00 PM
+const FILTER_TO   = new Date(2025, 11, 14, 17, 0, 0); // 13 Dec 5:00 PM
 
 
 
