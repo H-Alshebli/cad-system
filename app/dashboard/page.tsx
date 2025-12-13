@@ -73,7 +73,7 @@ export default function Dashboard() {
     (c) => c.status === "Assigned" || c.status === "Received"
   ).length;
   const transportingCases = filteredCases.filter(
-    (c) => c.status === "Transporting"
+    (c) => ["Transporting", "Hospital"].includes(c.status) 
   ).length;
    const closedHospitalCases = filteredCases.filter(
   (c) =>
@@ -87,7 +87,7 @@ export default function Dashboard() {
 ).length;
 const transportingClinicCases = filteredCases.filter(
   (c) =>
-    c.status === "Transporting" &&
+    ["Transporting", "Hospital"].includes(c.status)&&
     c.transportingToType === "clinic"
 ).length;
 const closedclinicCases = filteredCases.filter(
