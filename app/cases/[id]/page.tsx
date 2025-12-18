@@ -1,5 +1,5 @@
 "use client";
-
+ 
 import {
   doc,
   updateDoc,
@@ -13,41 +13,59 @@ import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import dynamic from "next/dynamic";
-
+import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
+import { useRouter } from "next/navigation";
+import CaseChat from "@/app/components/CaseChat";
 const Map = dynamic(() => import("@/app/components/Map"), {
   ssr: false,
 });
-
+ 
 type DestinationType = "hospital" | "clinic" | null;
-
+ 
 export default function CaseDetailsPage({ params }: { params: { id: string } }) {
   const caseId = params.id;
-
+  const router = useRouter();
+ 
   const [caseData, setCaseData] = useState<any>(null);
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
+ 
+  const [epcr, setEpcr] = useState<any>(null);
+  const [epcrLoading, setEpcrLoading] = useState(true);
+ 
   const [showDestinationPopup, setShowDestinationPopup] = useState(false);
   const [destinationType, setDestinationType] =
     useState<DestinationType>(null);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [showDestinationList, setShowDestinationList] = useState(false);
-
+ 
   /* -----------------------------------------
        LIVE CASE DATA
   ------------------------------------------ */
   useEffect(() => {
     const ref = doc(db, "cases", caseId);
-
+ 
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         setCaseData({ id: snap.id, ...snap.data() });
       }
       setLoading(false);
     });
-
+ 
     return () => unsub();
   }, [caseId]);
+ 
+  /* -----------------------------------------
+       LOAD ePCR
+  ------------------------------------------ */
+  useEffect(() => {
+  if (caseData?.epcrId) {
+    setEpcr({ id: caseData.epcrId });
+  } else {
+    setEpcr(null);
+  }
+  setEpcrLoading(false);
+}, [caseData]);
 
   /* -----------------------------------------
        LOAD AMBULANCES
@@ -59,12 +77,12 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       ambSnap.forEach((d) => list.push({ id: d.id, ...d.data() }));
       setAmbulances(list);
     };
-
+ 
     loadAmbulances();
   }, []);
-
+ 
   if (loading || !caseData) return <p className="p-6">Loading...</p>;
-
+ 
   /* -----------------------------------------
        AMBULANCE CODE
   ------------------------------------------ */
@@ -72,12 +90,33 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     caseData.assignedUnit?.type === "ambulance"
       ? caseData.assignedUnit.id
       : null;
-
+ 
   const ambulanceObj = ambulances.find((a) => a.id === ambulanceId);
-
   const ambulanceCode =
     caseData.ambulanceCode || ambulanceObj?.code || "None";
+ 
+  /* -----------------------------------------
+       CREATE ePCR
+  ------------------------------------------ */
+  const handleCreateEpcr = async () => {
+    try {
+      const epcrId = await createEpcrFromCase(caseData, "demo-user");
+ 
+      await updateDoc(doc(db, "cases", caseId), {
+        epcrId, 
+      });
+      // داخل handleStatusUpdate مباشرة بعد updateDoc
 
+
+ 
+      router.push(`/epcr/${epcrId}`);
+   } catch (err: any) {
+  console.error("CREATE ePCR ERROR:", err);
+  alert(err?.message || "Failed to create ePCR");
+}
+
+  };
+ 
   /* -----------------------------------------
        STATUS UPDATE
   ------------------------------------------ */
@@ -86,14 +125,14 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       setShowDestinationPopup(true);
       return;
     }
-
+ 
     const timestamp = new Date().toISOString();
-
+ 
     await updateDoc(doc(db, "cases", caseId), {
       status: newStatus,
       [`timeline.${newStatus}`]: timestamp,
     });
-
+ 
     setCaseData((prev: any) => ({
       ...prev,
       status: newStatus,
@@ -103,16 +142,16 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       },
     }));
   };
-
+ 
   /* -----------------------------------------
-       DESTINATION TYPE SELECTION
+       DESTINATION TYPE
   ------------------------------------------ */
   const chooseDestinationType = async (type: DestinationType) => {
     if (!type) return;
-
+ 
     setDestinationType(type);
     setShowDestinationPopup(false);
-
+ 
     const qDest = query(
       collection(db, "destinations"),
       where("type", "==", type)
@@ -123,15 +162,15 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     setDestinations(list);
     setShowDestinationList(true);
   };
-
+ 
   /* -----------------------------------------
        SELECT DESTINATION
   ------------------------------------------ */
   const handleSelectDestination = async (dest: any) => {
     if (!destinationType) return;
-
+ 
     const timestamp = new Date().toISOString();
-
+ 
     await updateDoc(doc(db, "cases", caseId), {
       status: "Transporting",
       transportingToType: destinationType,
@@ -142,7 +181,7 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       destinationLng: dest.lng,
       "timeline.Transporting": timestamp,
     });
-
+ 
     setCaseData((prev: any) => ({
       ...prev,
       status: "Transporting",
@@ -157,12 +196,12 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
         Transporting: timestamp,
       },
     }));
-
+ 
     setShowDestinationList(false);
   };
-
+ 
   /* -----------------------------------------
-       SAVE EDIT FORM
+       SAVE EDITS
   ------------------------------------------ */
   const saveEdits = async () => {
     await updateDoc(doc(db, "cases", caseId), {
@@ -170,52 +209,58 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
       level: Number(caseData.level),
       paramedicNote: caseData.paramedicNote || "",
     });
-
+ 
     alert("Case updated!");
   };
-
+ 
   /* =========================================
-       UI START
+       UI
   ========================================== */
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Case Details</h1>
-
+ 
       {/* CASE INFO */}
       <div className="border p-6 rounded-lg shadow mb-6 bg-white dark:bg-gray-800">
         <p><strong>Lazem Code:</strong> {caseData.lazemCode || "—"}</p>
-        <p><strong>Ijrny Code:</strong> {caseData.ijrny || "—"}</p>
         <p><strong>Complaint:</strong> {caseData.chiefComplaint}</p>
         <p><strong>Level:</strong> {caseData.level}</p>
         <p><strong>Status:</strong> {caseData.status}</p>
         <p><strong>Location:</strong> {caseData.locationText}</p>
         <p><strong>Ambulance:</strong> {ambulanceCode}</p>
-        
-
+ 
         <p className="mt-2">
           <strong>Destination:</strong>{" "}
           {caseData.destinationName
             ? `${caseData.destinationName} (${caseData.transportingToType})`
             : "—"}
         </p>
-
-        {caseData.destinationAddress && (
-          <p><strong>Destination Address:</strong> {caseData.destinationAddress}</p>
-        )}
+ 
+        {/* ePCR BUTTON */}
+        <div className="mt-4">
+          {!epcrLoading && !epcr && (
+            <button
+              onClick={handleCreateEpcr}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+            >
+              🩺 Create ePCR
+            </button>
+          )}
+ 
+          {!epcrLoading && epcr && (
+            <button
+              onClick={() => router.push(`/epcr/${epcr.id}`)}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+            >
+              🩺 View ePCR
+            </button>
+          )}
+        </div>
       </div>
-
+ 
       {/* STATUS BUTTONS */}
-      <h2 className="text-xl font-semibold mb-2">Update Status</h2>
       <div className="grid grid-cols-3 md:grid-cols-7 gap-2 mb-6">
-        {[
-          "Received",
-          "Assigned",
-          "EnRoute",
-          "OnScene",
-          "Transporting",
-          "Hospital",
-          "Closed",
-        ].map((s) => (
+        {["Received","Assigned","EnRoute","OnScene","Transporting","Hospital","Closed"].map((s) => (
           <button
             key={s}
             onClick={() => handleStatusUpdate(s)}
@@ -227,154 +272,173 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
           </button>
         ))}
       </div>
-
+ 
       {/* TIMELINE */}
       <CaseTimeline timeline={caseData.timeline || {}} />
+      <h3 className="text-sm text-gray-400">
+  Case ID: {caseData.id}
+</h3>
+ <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+  {/* EDIT FORM */}
+  <div className="border p-6 rounded-lg shadow bg-white dark:bg-gray-800">
+    <h2 className="text-xl font-bold mb-4">Edit Case</h2>
 
-      {/* -----------------------------------------
-           EDIT FORM (RESTORED)
-      ------------------------------------------ */}
-      <div className="mt-10 max-w-xl border p-6 rounded-lg shadow bg-white text-gray-900 dark:bg-gray-800">
-        <h2 className="text-xl font-bold mb-4">Edit Case</h2>
+    <label className="block font-semibold mb-1">Complaint</label>
+    <input
+      className="border rounded w-full mb-4 p-2 bg-white text-black dark:bg-gray-900 dark:text-white dark:border-gray-600"
+      value={caseData.chiefComplaint}
+      onChange={(e) =>
+        setCaseData({ ...caseData, chiefComplaint: e.target.value })
+      }
+    />
 
-        {/* Complaint */}
-        <label className="block font-semibold mb-1">Complaint</label>
-        <input
-          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
-          value={caseData.chiefComplaint}
-          onChange={(e) =>
-            setCaseData({ ...caseData, chiefComplaint: e.target.value })
-          }
-        />
+    <label className="block font-semibold mb-1">Level</label>
+    <select
+      className="border rounded w-full mb-4 p-2 bg-white text-black dark:bg-gray-900 dark:text-white dark:border-gray-600"
+      value={caseData.level}
+      onChange={(e) =>
+        setCaseData({ ...caseData, level: Number(e.target.value) })
+      }
+    >
+      <option value="1">Level 1 - Critical</option>
+      <option value="2">Level 2 - Emergency</option>
+      <option value="3">Level 3 - Urgent</option>
+      <option value="4">Level 4 - Non-Urgent</option>
+    </select>
 
-        {/* Level */}
-        <label className="block font-semibold mb-1">Level</label>
-        <select
-          className="border rounded w-full mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
-          value={caseData.level}
-          onChange={(e) =>
-            setCaseData({ ...caseData, level: Number(e.target.value) })
-          }
-        >
-          <option value="1">Level 1 - Critical</option>
-          <option value="2">Level 2 - Emergency</option>
-          <option value="3">Level 3 - Urgent</option>
-          <option value="4">Level 4 - Non-Urgent</option>
-        </select>
+    <label className="block font-semibold mb-1">Paramedic Note</label>
+    <textarea
+      className="border rounded w-full h-28 mb-4 p-2 bg-white text-black dark:bg-gray-900 dark:text-white dark:border-gray-600"
+      value={caseData.paramedicNote || ""}
+      onChange={(e) =>
+        setCaseData({ ...caseData, paramedicNote: e.target.value })
+      }
+    />
 
-        {/* Paramedic Note */}
-        <label className="block font-semibold mb-1">Paramedic Note</label>
-        <textarea
-          className="border rounded w-full h-28 mb-4 p-2 bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100"
-          value={caseData.paramedicNote || ""}
-          onChange={(e) =>
-            setCaseData({ ...caseData, paramedicNote: e.target.value })
-          }
-        />
+    <button
+      onClick={saveEdits}
+      className="bg-blue-600 text-white p-3 rounded w-full"
+    >
+      Save Changes
+    </button>
+  </div>
 
-        {/* Save */}
-        <button
-          onClick={saveEdits}
-          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded w-full"
-        >
-          Save Changes
-        </button>
-      </div>
+  {/* ✅ CASE CHAT */}
+  <CaseChat
+    caseId={caseId}
+    role="dispatcher"
+    senderName="Dispatcher"
+  />
+</div>
+
+
 
       {/* MAPS */}
       <div className="mt-10 space-y-6">
         {caseData.lat && caseData.lng && (
           <div>
             <h2 className="text-xl font-bold mb-2">Patient Location</h2>
-            <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
-              <Map
-                caseLat={Number(caseData.lat)}
-                caseLng={Number(caseData.lng)}
-                caseName={caseData.patientName}
-                ambulances={ambulances}
-              />
+            <div className="w-full h-[350px] rounded-lg overflow-hidden border">
+             <Map
+  key={`patient-${caseData.id}`}
+  caseLat={Number(caseData.lat)}
+  caseLng={Number(caseData.lng)}
+  caseName={caseData.patientName}
+  ambulances={ambulances}
+/>
+
             </div>
           </div>
         )}
-
+ 
         {caseData.destinationLat && caseData.destinationLng && (
           <div>
             <h2 className="text-xl font-bold mb-2">Hospital / Clinic Location</h2>
-            <div className="w-full h-[350px] rounded-lg overflow-hidden border border-gray-700">
+            <div className="w-full h-[350px] rounded-lg overflow-hidden border">
               <Map
-                caseLat={Number(caseData.destinationLat)}
-                caseLng={Number(caseData.destinationLng)}
-                caseName={caseData.destinationName}
-                ambulances={ambulances}
-              />
+  key={`destination-${caseData.destinationId}`}
+  caseLat={Number(caseData.destinationLat)}
+  caseLng={Number(caseData.destinationLng)}
+  caseName={caseData.destinationName}
+  ambulances={ambulances}
+/>
+
             </div>
           </div>
         )}
       </div>
-
-      {/* POPUP 1 */}
+ 
+      {/* DESTINATION POPUPS */}
       {showDestinationPopup && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div className="bg-[#1c2333] text-white p-6 rounded-lg shadow w-80 text-center">
-            <h2 className="text-xl font-bold mb-4">Transporting To?</h2>
-            <button
-              onClick={() => chooseDestinationType("hospital")}
-              className="bg-blue-600 text-white w-full p-2 rounded mb-2"
-            >
-              Hospital
-            </button>
-            <button
-              onClick={() => chooseDestinationType("clinic")}
-              className="bg-green-600 text-white w-full p-2 rounded mb-2"
-            >
-              Clinic
-            </button>
-            <button
-              onClick={() => setShowDestinationPopup(false)}
-              className="mt-2 text-sm text-gray-600"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+  <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+    <div className="bg-[#1c2333] text-white p-6 rounded-lg w-80 text-center rounded-xl">
+      <h2 className="text-xl font-bold mb-4">Transporting To?</h2>
 
-      {/* POPUP 2 */}
+      <button
+        onClick={() => chooseDestinationType("hospital")}
+        className="bg-blue-600 w-full p-2 rounded mb-2"
+      >
+        Hospital
+      </button>
+
+      <button
+        onClick={() => chooseDestinationType("clinic")}
+        className="bg-green-600 w-full p-2 rounded mb-4"
+      >
+        Clinic
+      </button>
+
+      {/* ✅ CANCEL */}
+      <button
+        onClick={() => {
+          setShowDestinationPopup(false);
+          setDestinationType(null);
+        }}
+        className="w-full p-2 rounded border border-gray-500
+                   text-gray-300 hover:bg-gray-700"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
+ 
       {showDestinationList && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow w-96">
-            <h2 className="text-xl font-bold mb-4 text-center">
-              Select {destinationType === "hospital" ? "Hospital" : "Clinic"}
-            </h2>
+  <div className="bg-[#1c2333] text-white p-6 rounded-lg w-96">
+  <h2 className="text-xl font-bold mb-4 text-center">
+    Select Destination
+  </h2>
 
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {destinations.length === 0 && (
-                <p className="text-sm mb-4">
-                  No {destinationType} found in Firestore.
-                </p>
-              )}
+  <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+    {destinations.map((d) => (
+      <button
+        key={d.id}
+        onClick={() => handleSelectDestination(d)}
+        className="w-full text-left p-3 rounded bg-blue-600 hover:bg-blue-700"
+      >
+        <div className="font-semibold">{d.name}</div>
+        {d.address && (
+          <div className="text-xs opacity-80">{d.address}</div>
+        )}
+      </button>
+    ))}
+  </div>
 
-              {destinations.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => handleSelectDestination(d)}
-                  className="w-full text-left p-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-                >
-                  <div className="font-semibold">{d.name}</div>
-                  {d.address && (
-                    <div className="text-xs opacity-80">{d.address}</div>
-                  )}
-                </button>
-              ))}
-            </div>
+  {/* ✅ CANCEL */}
+  <button
+    onClick={() => {
+      setShowDestinationList(false);
+      setDestinationType(null);
+    }}
+    className="w-full p-2 rounded border border-gray-500
+               text-gray-300 hover:bg-gray-700"
+  >
+    Cancel
+  </button>
+</div>
 
-            <button
-              onClick={() => setShowDestinationList(false)}
-              className="mt-4 w-full py-2 rounded border border-gray-300 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
     </div>

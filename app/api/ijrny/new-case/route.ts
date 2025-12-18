@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
+import { db } from "@/packages/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const API_KEY = process.env.IJRNY_API_KEY;

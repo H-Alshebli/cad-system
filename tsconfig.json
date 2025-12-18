@@ -1,45 +1,79 @@
 {
   "compilerOptions": {
-    "target": "es2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
+    /* -----------------------------
+       BASE SETTINGS
+    ------------------------------ */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+
+      "@lazem/firebase": ["packages/firebase"],
+      "@lazem/auth": ["packages/auth"],
+      "@lazem/ui": ["packages/ui"],
+      "@lazem/maps": ["packages/maps"],
+      "@lazem/utils": ["packages/utils"]
+    },
+
+    /* -----------------------------
+       TARGET & MODULE
+    ------------------------------ */
+    "target": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+
+    /* -----------------------------
+       LIBRARIES
+    ------------------------------ */
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+
+    /* -----------------------------
+       JSX / REACT
+    ------------------------------ */
     "jsx": "preserve",
+
+    /* -----------------------------
+       TYPE CHECKING
+    ------------------------------ */
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* -----------------------------
+       JS / JSON SUPPORT
+    ------------------------------ */
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+
+    /* -----------------------------
+       PERFORMANCE
+    ------------------------------ */
     "incremental": true,
+
+    /* -----------------------------
+       NEXT.JS PLUGIN
+    ------------------------------ */
     "plugins": [
       {
         "name": "next"
       }
-    ],
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    ]
   },
+
+  /* -----------------------------
+     FILES TO INCLUDE
+  ------------------------------ */
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
     "**/*.mts",
-    "app/cases/new/page.js",
-    "app/next.config.js",
-    "app/next.config.js"
+    ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+
+  /* -----------------------------
+     FILES TO EXCLUDE
+  ------------------------------ */
+  "exclude": ["node_modules"]
 }

@@ -5,8 +5,6 @@ import { db } from "@/lib/firebase";
 import {
   collection,
   onSnapshot,
-  query,
-  orderBy,
   deleteDoc,
   doc,
 } from "firebase/firestore";
@@ -31,6 +29,10 @@ interface CaseData {
   locationText?: string;
   ambulanceCode?: string;
   roaming?: string;
+  timeline?: {
+    Received?: string;
+    [key: string]: any;
+  };
   [key: string]: any;
 }
 
@@ -139,16 +141,23 @@ export default function CasesDashboard() {
 
   /* ---------------------------------------------------------
      FIRESTORE LISTENER FOR CASES
+     ✅ NO createdAt
+     ✅ Sort by timeline.Received
   ----------------------------------------------------------*/
   useEffect(() => {
-    const q = query(collection(db, "cases"), orderBy("createdAt", "desc"));
-
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(collection(db, "cases"), (snapshot) => {
       const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as CaseData[];
+
+      // ✅ Sort by timeline.Received DESC (latest first)
+      list.sort((a, b) => {
+        const ta = a.timeline?.Received ? new Date(a.timeline.Received).getTime() : 0;
+        const tb = b.timeline?.Received ? new Date(b.timeline.Received).getTime() : 0;
+        return tb - ta;
+      });
+
       setCases(list);
 
       const newest = list[0];
-
       if (!newest) return;
 
       // Dispatch alarm
@@ -283,7 +292,6 @@ export default function CasesDashboard() {
   ----------------------------------------------------------*/
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
-
       {/* LOGIN POPUP */}
       {showLoginPopup && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -375,14 +383,19 @@ export default function CasesDashboard() {
               </div>
             </Link>
 
-            {role === "admin" && (
-              <button
-                onClick={() => deleteCase(c.id)}
-                className="mt-2 text-red-500 underline"
-              >
-                Delete Case
-              </button>
-            )}
+           {role === "admin" && (
+  <button
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteCase(c.id);
+    }}
+    className="mt-2 text-red-500 underline"
+  >
+    Delete Case
+  </button>
+)}
+
           </div>
         ))}
       </div>

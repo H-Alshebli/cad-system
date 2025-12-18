@@ -1,13 +1,33 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, ImageOverlay } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  ImageOverlay,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useMemo } from "react";
+
+/* ---------------------------------------------------------
+   FIX DEFAULT LEAFLET ICON ISSUE (NEXT.JS)
+--------------------------------------------------------- */
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 
 /* ---------------------------------------------------------
    CUSTOM ICONS
----------------------------------------------------------*/
-
+--------------------------------------------------------- */
 const patientIcon = L.icon({
   iconUrl: "/icons/patient.png",
   iconSize: [40, 40],
@@ -38,28 +58,36 @@ const roamingIcon = L.icon({
 
 /* ---------------------------------------------------------
    MDL BEAST IMAGE BOUNDS
----------------------------------------------------------*/
-const mdlbBounds: any = [
+--------------------------------------------------------- */
+const mdlbBounds: [[number, number], [number, number]] = [
   [24.98399989984823, 46.47091013377153], // SW
   [25.01131580244805, 46.53256747037176], // NE
 ];
 
 /* ---------------------------------------------------------
-   PROPS
----------------------------------------------------------*/
+   TYPES
+--------------------------------------------------------- */
+interface Unit {
+  id: string;
+  code?: string;
+  name?: string;
+  lat?: number;
+  lng?: number;
+}
+
 interface MapProps {
   caseLat?: number | null;
   caseLng?: number | null;
   caseName?: string;
 
-  ambulances?: any[];
-  clinics?: any[];
-  roaming?: any[];
+  ambulances?: Unit[];
+  clinics?: Unit[];
+  roaming?: Unit[];
 }
 
 /* ---------------------------------------------------------
    MAP COMPONENT
----------------------------------------------------------*/
+--------------------------------------------------------- */
 export default function Map({
   caseLat,
   caseLng,
@@ -68,27 +96,34 @@ export default function Map({
   clinics = [],
   roaming = [],
 }: MapProps) {
-  const center = caseLat && caseLng ? [caseLat, caseLng] : [24.997, 46.50];
+  /* 🔒 Stable center (prevents unnecessary re-init) */
+  const center = useMemo<[number, number]>(() => {
+    return caseLat && caseLng ? [caseLat, caseLng] : [24.997, 46.5];
+  }, [caseLat, caseLng]);
+
+  /* 🔑 Key forces safe Leaflet re-initialization */
+  const mapKey = useMemo(
+    () => `map-${caseLat ?? "x"}-${caseLng ?? "y"}`,
+    [caseLat, caseLng]
+  );
 
   return (
     <MapContainer
-      key={center.toString()}     // ✅ SAFE FIX — prevents "already initialized" error
-      center={center}
-      zoom={16}
-      minZoom={15}
-      maxZoom={20}
-      zoomControl={true}
-      maxBounds={mdlbBounds}
-      maxBoundsViscosity={1.0}
-      style={{ width: "100%", height: "100%" }}
-    >
-      {/* GOOGLE MAP */}
+  key={mapKey}
+  center={center}
+  zoom={16}
+  zoomControl
+  scrollWheelZoom
+  style={{ width: "100%", height: "100%" }}
+>
+
+      {/* GOOGLE MAP TILES */}
       <TileLayer
         url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
         subdomains={["mt0", "mt1", "mt2", "mt3"]}
       />
 
-      {/* MDL BEAST OVERLAY */}
+      {/* MDL BEAST IMAGE OVERLAY */}
       <ImageOverlay
         url="/mdlb-base.jpg"
         bounds={mdlbBounds}
@@ -96,58 +131,82 @@ export default function Map({
         zIndex={500}
       />
 
-      {/* PATIENT ICON */}
+      {/* PATIENT MARKER */}
       {caseLat && caseLng && (
         <Marker
           position={[caseLat, caseLng]}
           icon={patientIcon}
           eventHandlers={{
             click: () =>
-              window.open(`https://www.google.com/maps?q=${caseLat},${caseLng}`, "_blank"),
+              window.open(
+                `https://www.google.com/maps?q=${caseLat},${caseLng}`,
+                "_blank"
+              ),
           }}
         >
-          <Popup>🧍 Patient<br />{caseName}</Popup>
+          <Popup>
+            🧍 <strong>Patient</strong>
+            <br />
+            {caseName}
+          </Popup>
         </Marker>
       )}
 
       {/* AMBULANCES */}
-      {ambulances.map((a: any) =>
-        typeof a.lat === "number" && typeof a.lng === "number" ? (
-          <Marker
-            key={a.id}
-            position={[a.lat, a.lng]}
-            icon={ambulanceIcon}
-          >
-            <Popup>🚑 Ambulance<br />Code: {a.code}</Popup>
-          </Marker>
-        ) : null
+      {ambulances.map(
+        (a) =>
+          typeof a.lat === "number" &&
+          typeof a.lng === "number" && (
+            <Marker
+              key={`amb-${a.id}`}
+              position={[a.lat, a.lng]}
+              icon={ambulanceIcon}
+            >
+              <Popup>
+                🚑 <strong>Ambulance</strong>
+                <br />
+                Code: {a.code || a.id}
+              </Popup>
+            </Marker>
+          )
       )}
 
       {/* CLINICS */}
-      {clinics.map((c: any) =>
-        typeof c.lat === "number" && typeof c.lng === "number" ? (
-          <Marker
-            key={c.id}
-            position={[c.lat, c.lng]}
-            icon={clinicIcon}
-          >
-            <Popup>🏥 Clinic<br />{c.name}</Popup>
-          </Marker>
-        ) : null
+      {clinics.map(
+        (c) =>
+          typeof c.lat === "number" &&
+          typeof c.lng === "number" && (
+            <Marker
+              key={`clinic-${c.id}`}
+              position={[c.lat, c.lng]}
+              icon={clinicIcon}
+            >
+              <Popup>
+                🏥 <strong>Clinic</strong>
+                <br />
+                {c.name || c.id}
+              </Popup>
+            </Marker>
+          )
       )}
 
-      {/* ROAMING TEAM */}
-      {roaming.map((r: any) =>
-        typeof r.lat === "number" && typeof r.lng === "number" ? (
-          <Marker
-            key={r.id}
-            position={[r.lat, r.lng]}
-            icon={roamingIcon}
-          >
-             
-            <Popup>🚶 Roaming Team<br />Code: {r.code}</Popup>
-          </Marker>
-        ) : null
+      {/* ROAMING TEAMS */}
+      {roaming.map(
+        (r) =>
+          typeof r.lat === "number" &&
+          typeof r.lng === "number" && (
+            <Marker
+              key={`roaming-${r.id}`}
+              position={[r.lat, r.lng]}
+              icon={roamingIcon}
+            >
+              <Popup>
+                🚶 <strong>Roaming Team</strong>
+                <br />
+                Code: {r.code || r.id}
+              </Popup>
+            </Marker>
+          )
       )}
     </MapContainer>
   );
