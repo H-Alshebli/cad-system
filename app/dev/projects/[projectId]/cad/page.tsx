@@ -43,9 +43,10 @@ export default function ProjectCadPage({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* ---------------- HEADER ---------------- */}
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Project CAD</h2>
+
         <Link
           href={`/dev/projects/${params.projectId}/cases/new`}
           className="px-3 py-2 bg-green-600 text-white rounded text-sm"
@@ -54,20 +55,22 @@ export default function ProjectCadPage({
         </Link>
       </div>
 
-      {/* Cases */}
+      {/* ---------------- EMPTY STATE ---------------- */}
       {cases.length === 0 && (
         <div className="text-muted-foreground">
           No cases for this project yet.
         </div>
       )}
 
+      {/* ---------------- CASES LIST ---------------- */}
       <div className="grid gap-4">
         {cases.map((c) => (
-          <div
+          <Link
             key={c.id}
-            className="p-4 bg-card border rounded space-y-3"
+            href={`/dev/projects/${params.projectId}/cad/${c.id}`}
+            className="block p-4 bg-card border rounded space-y-3 hover:bg-muted transition"
           >
-            {/* Header */}
+            {/* Case Header */}
             <div className="flex justify-between items-center">
               <div className="font-semibold">
                 {c.lazemCode || c.id}
@@ -79,16 +82,15 @@ export default function ProjectCadPage({
 
             {/* Status Buttons */}
             <StatusButtons
-  caseId={c.id}
-  currentStatus={c.status}
-/>
-
+              caseId={c.id}
+              currentStatus={c.status}
+            />
 
             {/* Timeline */}
             {c.timeline && (
               <CaseTimeline timeline={c.timeline} />
             )}
-          </div>
+          </Link>
         ))}
       </div>
     </div>
