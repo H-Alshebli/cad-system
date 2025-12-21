@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
-import Navbar from "./components/Navbar";
+import Sidebar from "./components/Sidebar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,16 +42,24 @@ export default function RootLayout({
 
       <body
         className={`
-          ${inter.variable} 
-          ${mono.variable} 
-          bg-gray-100 text-gray-900 
-          dark:bg-gray-900 dark:text-gray-100
+          ${inter.variable}
+          ${mono.variable}
+          bg-gray-100 text-gray-900
+          dark:bg-[#050814] dark:text-gray-100
         `}
       >
-        <Navbar />
+        {/* App Layout */}
+        <div className="flex min-h-screen">
+          
+          {/* Sidebar */}
+          <Sidebar />
 
-        {/* Page Content */}
-        <main className="p-4">{children}</main>
+          {/* Main Content */}
+          <main className="flex-1 ml-64 p-4 overflow-auto">
+  {children}
+</main>
+
+        </div>
       </body>
     </html>
   );

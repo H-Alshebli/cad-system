@@ -81,15 +81,67 @@ export default function ProjectCadPage({
             </div>
 
             {/* Status Buttons */}
-            <StatusButtons
-              caseId={c.id}
-              currentStatus={c.status}
-            />
+        
 
             {/* Timeline */}
-            {c.timeline && (
-              <CaseTimeline timeline={c.timeline} />
-            )}
+            <div className="border border-gray-700 rounded-lg p-4 bg-[#0f172a] hover:border-blue-500 transition">
+  {/* HEADER */}
+  <div className="flex justify-between items-center mb-3">
+    <div className="font-semibold text-white">
+      {c.lazemCode || c.id}
+    </div>
+
+    <span
+      className={`text-xs px-3 py-1 rounded-full font-medium
+        ${
+          c.status === "Assigned"
+            ? "bg-blue-600/20 text-blue-400"
+            : c.status === "Received"
+            ? "bg-green-600/20 text-green-400"
+            : "bg-gray-600/20 text-gray-300"
+        }`}
+    >
+      {c.status}
+    </span>
+  </div>
+
+  {/* BODY */}
+  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+    {/* Complaint */}
+    <div>
+      <div className="text-gray-400">Chief Complaint</div>
+      <div className="text-white font-medium">
+        {c.chiefComplaint || "-"}
+      </div>
+    </div>
+
+    {/* Triage */}
+    <div>
+      <div className="text-gray-400">Triage</div>
+      <div className="text-white font-medium">
+        {c.level || "-"}
+      </div>
+    </div>
+
+    {/* Location */}
+    <div className="col-span-2">
+      <div className="text-gray-400">Location</div>
+      <div className="text-white">
+        {c.locationText || "-"}
+      </div>
+    </div>
+
+    {/* Assigned Unit */}
+    <div className="col-span-2">
+      <div className="text-gray-400">Assigned Unit</div>
+      <div className="text-white">
+        {c.ambulanceCode || c.roaming || c.clinicId || "-"}
+      </div>
+    </div>
+  </div>
+</div>
+
+            
           </Link>
         ))}
       </div>

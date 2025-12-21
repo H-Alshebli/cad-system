@@ -1,13 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { signOut } from "firebase/auth";
+
+import { auth } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import { can } from "@/lib/can";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const { user, loading } = useCurrentUser();
+  const permissions = usePermissions(user?.roleId);
+
   const [dark, setDark] = useState(false);
 
+  
+useEffect(() => {
+  const unsub = onAuthStateChanged(auth, (user) => {
+    console.log("🔥 Firebase Auth user:", user);
+  });
+  return () => unsub();
+}, []);
+
+  /* =============================
+     THEME
+  ============================= */
   useEffect(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "dark") {
@@ -28,61 +51,165 @@ export default function Sidebar() {
     }
   }
 
+  /* =============================
+     LOGOUT
+  ============================= */
+  async function logout() {
+    await signOut(auth);
+    router.push("/login");
+  }
+
+  /* =============================
+     HELPERS
+  ============================= */
   const linkClass = (path: string) =>
-    pathname === path
+    pathname.startsWith(path)
       ? "bg-blue-600 text-white font-semibold"
       : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800";
 
+  /* =============================
+     GUARDS (DO NOT HIDE SIDEBAR)
+  ============================= */
+  if (loading) {
+    return (
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white p-4">
+        Loading sidebar...
+      </aside>
+    );
+  }
+
+  if (!user) {
+    return (
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-red-900 text-white p-4">
+        Not logged in
+      </aside>
+    );
+  }
+
+  /* =============================
+     ROLE LOGIC
+  ============================= */
+  const isAdmin = user.roleId === "admin";
+
+  /* =============================
+     UI
+  ============================= */
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white dark:bg-gray-900 border-r dark:border-gray-700 flex flex-col">
       
-      {/* Logo / Title */}
+      {/* Header */}
       <div className="p-4 text-lg font-bold border-b dark:border-gray-700">
         CAD System
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {user.name || user.email}
+        </div>
+        <div className="text-[10px] text-gray-400">
+          Role: {user.roleId || "none"}
+        </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 text-sm">
-        <Link className={`block rounded px-3 py-2 ${linkClass("/dev/projects/")}`} href="/dev/projects/">
-          Projects
-        </Link>
-        <Link className={`block rounded px-3 py-2 ${linkClass("/dashboard")}`} href="/dashboard">
-          Dashboard
-        </Link>
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/cases")}`} href="/cases">
-          Cases
-        </Link>
+        {(isAdmin || can(permissions, "projects", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/dev/projects")}`}
+            href="/dev/projects"
+          >
+            Projects
+          </Link>
+        )}
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/cases/new")}`} href="/cases/new">
-          New Case
-        </Link>
+        {(isAdmin || can(permissions, "dashboards", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/dashboard")}`}
+            href="/dashboard"
+          >
+            Dashboard
+          </Link>
+        )}
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/clinic")}`} href="/clinic">
-          Clinic
-        </Link>
+        {(isAdmin || can(permissions, "cases", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/cases")}`}
+            href="/cases"
+          >
+            Cases
+          </Link>
+        )}
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/ambulances")}`} href="/ambulances">
-          Ambulances
-        </Link>
+        {(isAdmin || can(permissions, "cases", "create")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/cases/new")}`}
+            href="/cases/new"
+          >
+            New Case
+          </Link>
+        )}
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/roaming")}`} href="/roaming">
-          Roaming
-        </Link>
+        {(isAdmin || can(permissions, "clinics", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/clinic")}`}
+            href="/clinic"
+          >
+            Clinics
+          </Link>
+        )}
 
-        <Link className={`block rounded px-3 py-2 ${linkClass("/location-picker")}`} href="/location-picker">
-          Location Picker
-        </Link>
+        {(isAdmin || can(permissions, "ambulances", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/ambulances")}`}
+            href="/ambulances"
+          >
+            Ambulances
+          </Link>
+        )}
+
+        {(isAdmin || can(permissions, "roaming", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/roaming")}`}
+            href="/roaming"
+          >
+            Roaming
+          </Link>
+        )}
+
+        {(isAdmin || can(permissions, "reports", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/reports")}`}
+            href="/reports"
+          >
+            Reports
+          </Link>
+        )}
+
+        {(isAdmin || can(permissions, "users", "view")) && (
+          <Link
+            className={`block rounded px-3 py-2 ${linkClass("/admin/users")}`}
+            href="/admin/users"
+          >
+            Users
+          </Link>
+        )}
       </nav>
 
-      {/* Theme Toggle */}
-      <div className="p-4 border-t dark:border-gray-700">
+      {/* Footer */}
+      <div className="p-4 border-t dark:border-gray-700 space-y-2">
+
         <button
           onClick={toggleTheme}
           className="w-full px-3 py-2 rounded border bg-gray-100 dark:bg-gray-800 dark:border-gray-600 text-black dark:text-white"
         >
           {dark ? "☀️ Light Mode" : "🌙 Dark Mode"}
         </button>
+
+        <button
+          onClick={logout}
+          className="w-full px-3 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+        >
+          Logout
+        </button>
+
       </div>
     </aside>
   );

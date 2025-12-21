@@ -5,30 +5,86 @@ import {
   query,
   where,
   getDocs,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
- 
-/* ===============================
-   CREATE ePCR
-================================ */
-export async function createEpcrFromCase(caseData: any, userId: string) {
-  const docRef = await addDoc(collection(db, "epcr"), {
-    caseId: caseData.id,
-    lazemCaseCode: caseData.lazemCode,
-    ambulanceId: caseData.ambulanceId || null,
- 
-    status: "draft",
- 
+/* =====================================================
+   GET ePCR BY CASE ID
+   - Used to prevent duplicate ePCRs
+   - Returns first matching ePCR (1:1 relationship)
+===================================================== */
+export async function getEpcrByCaseId(caseId: string) {
+  if (!caseId) return null;
+
+  const q = query(
+    collection(db, "epcr"),
+    where("caseId", "==", caseId)
+  );
+
+  const snap = await getDocs(q);
+
+  if (snap.empty) return null;
+
+  const docSnap = snap.docs[0];
+  return {
+    id: docSnap.id,
+    ...docSnap.data(),
+  };
+}
+
+/* =====================================================
+   CREATE ePCR FROM CASE  (FIX OPTION 1)
+   - Ensures ONE ePCR per case
+   - Stores epcrId inside CASE document
+   - Returns epcrId
+===================================================== */
+export async function createEpcrFromCase(
+  caseData: any,
+  userId: string
+) {
+  if (!caseData?.id) {
+    throw new Error("caseData is missing");
+  }
+
+  const caseId = caseData.id;
+
+  /* ---------------------------------
+     1) Check if ePCR already exists
+  ---------------------------------- */
+  const existingEpcr = await getEpcrByCaseId(caseId);
+
+  if (existingEpcr?.id) {
+    // 🔁 Make sure case has epcrId (for old cases)
+    await updateDoc(doc(db, "cases", caseId), {
+      epcrId: existingEpcr.id,
+    });
+
+    return existingEpcr.id;
+  }
+
+  /* ---------------------------------
+     2) Create new ePCR
+  ---------------------------------- */
+  const epcrRef = await addDoc(collection(db, "epcr"), {
+    // 🔗 relation
+    caseId,
+    projectId: caseData.projectId ?? null,
+
+    // 📋 snapshot from CASE
+    chiefComplaint: caseData.chiefComplaint ?? "",
+    triageLevel: caseData.level ?? "",
+    locationText: caseData.locationText ?? "",
+    lat: caseData.lat ?? null,
+    lng: caseData.lng ?? null,
+
     patient: {
-      name: null,
+      name: caseData.patientName ?? "",
       age: null,
       gender: null,
     },
- 
-    chiefComplaint: caseData.chiefComplaint || null,
-    triageLevel: caseData.level || null,
- 
+
     vitals: {
       bp: null,
       hr: null,
@@ -36,33 +92,22 @@ export async function createEpcrFromCase(caseData: any, userId: string) {
       spo2: null,
       temp: null,
     },
- 
-    assessment: null,
-    treatment: null,
-    outcome: null,
- 
+
+    status: "draft",
+
     createdAt: serverTimestamp(),
     createdBy: userId,
-    updatedAt: null,
+    updatedAt: serverTimestamp(),
     completedAt: null,
   });
- 
-  return docRef.id;
+
+  /* ---------------------------------
+     3) Store epcrId inside CASE
+  ---------------------------------- */
+  await updateDoc(doc(db, "cases", caseId), {
+    epcrId: epcrRef.id,
+    epcrCreatedAt: serverTimestamp(),
+  });
+
+  return epcrRef.id;
 }
- 
-/* ===============================
-   GET ePCR BY CASE ID
-================================ */
-export async function getEpcrByCaseId(caseId: string) {
-  const q = query(
-    collection(db, "epcr"),
-    where("caseId", "==", caseId)
-  );
- 
-  const snap = await getDocs(q);
- 
-  if (snap.empty) return null;
- 
-  const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
-}  
