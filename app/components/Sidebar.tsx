@@ -1,5 +1,5 @@
 "use client";
-
+import { assignLegacyCasesToMDL } from "@/lib/adminActions";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -205,6 +205,12 @@ useEffect(() => {
         >
           {dark ? "☀️ Light Mode" : "🌙 Dark Mode"}
         </button>
+{/* <button
+  onClick={assignLegacyCasesToMDL}
+  className="bg-orange-600 text-white px-4 py-2 rounded"
+>
+  Assign legacy cases to MDL Soundstorm 25
+</button> */}
 
         <button
           onClick={logout}
