@@ -101,15 +101,26 @@ useEffect(() => {
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white dark:bg-gray-900 border-r dark:border-gray-700 flex flex-col">
       
       {/* Header */}
-      <div className="p-4 text-lg font-bold border-b dark:border-gray-700">
-        Lazem HCAD 
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {user.name || user.email}
-        </div>
-        <div className="text-[10px] text-gray-400">
-          Role: {user.roleId || "none"}
-        </div>
-      </div>
+<div className="p-4 border-b dark:border-gray-700 flex flex-col items-center text-center gap-2">
+  <img
+    src="/icons/icon-512.png"
+    alt="Lazem Logo"
+    className="w-16 h-16 object-contain"
+  />
+
+  <div className="text-lg font-bold text-gray-900 dark:text-white">
+    Lazem HCAD
+  </div>
+
+  <div className="text-xs text-gray-500 dark:text-gray-400">
+    {user.name || user.email}
+  </div>
+
+  <div className="text-[10px] text-gray-400">
+    Role: {user.roleId || "none"}
+  </div>
+</div>
+
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 text-sm">
