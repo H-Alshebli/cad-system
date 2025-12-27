@@ -116,8 +116,8 @@ useEffect(() => {
 
         {(isAdmin || can(permissions, "projects", "view")) && (
           <Link
-            className={`block rounded px-3 py-2 ${linkClass("/dev/projects")}`}
-            href="/dev/projects"
+            className={`block rounded px-3 py-2 ${linkClass("/projects")}`}
+            href="/projects"
           >
             Projects
           </Link>
