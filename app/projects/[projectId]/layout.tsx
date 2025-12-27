@@ -29,7 +29,7 @@ export default function ProjectLayout({
   if (!project) return <div className="p-6">Loading project...</div>;
 
   const tabs = [
-    { label: "Overview", href: `/projects/${params.projectId}` },
+    { label: "Dashboard", href: `/projects/${params.projectId}` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
   ];

@@ -43,7 +43,7 @@ export default function ProjectDetailsPage({
 
  return (
   <CasesOverview
-    title="MDL Soundstorm 25 — Overview"
+    title=""
     cases={cases}
   />
 );

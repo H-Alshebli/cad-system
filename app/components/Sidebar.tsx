@@ -102,7 +102,7 @@ useEffect(() => {
       
       {/* Header */}
       <div className="p-4 text-lg font-bold border-b dark:border-gray-700">
-        CAD System
+        Lazem HCAD 
         <div className="text-xs text-gray-500 dark:text-gray-400">
           {user.name || user.email}
         </div>
