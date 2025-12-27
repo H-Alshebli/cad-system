@@ -10,6 +10,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { can } from "@/lib/can";
 import { onAuthStateChanged } from "firebase/auth";
+console.log("ENV:", process.env.NEXT_PUBLIC_ENV);
 
 export default function Sidebar() {
   const pathname = usePathname();
