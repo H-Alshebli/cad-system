@@ -1,67 +1,66 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { useCurrentUser } from "@/lib/useCurrentUser";
+import { collection, onSnapshot } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
+  console.log("CURRENT USER (Sidebar):", user);
+
 
   const [cases, setCases] = useState<any[]>([]);
   const [ambulances, setAmbulances] = useState<any[]>([]);
 
   /* =====================================================
-     🔐 FIRESTORE LISTENERS (ROLE GUARDED)
+     🔥 FIRESTORE LISTENERS (GUARDED)
   ===================================================== */
   useEffect(() => {
+    // ⛔ انتظر auth + role
     if (loading) return;
-    if (!user) return;
-    if (!["admin", "dispatcher"].includes(user.role)) {
-      console.warn("⛔ User has no permission to load dashboard data");
-      return;
-    }
+    if (!user || user.role === "none") return;
 
-    console.log("✅ Dashboard listeners started for role:", user.role);
+    console.log("Starting dashboard listeners for role:", user.role);
 
     const unsubCases = onSnapshot(
       collection(db, "cases"),
       (snap) => {
-        const list = snap.docs.map((d) => ({
+        const list: any[] = snap.docs.map((d) => ({
           id: d.id,
           ...d.data(),
         }));
 
-        // Sort by Received time (latest first)
-        // list.sort((a, b) => {
-        //   const ta = a.timeline?.Received
-        //     ? new Date(a.timeline.Received).getTime()
-        //     : 0;
-        //   const tb = b.timeline?.Received
-        //     ? new Date(b.timeline.Received).getTime()
-        //     : 0;
-        //   return tb - ta;
-        // });
+        // sort by timeline.Received (latest first)
+        list.sort((a, b) => {
+          const ta = a.timeline?.Received
+            ? new Date(a.timeline.Received).getTime()
+            : 0;
+          const tb = b.timeline?.Received
+            ? new Date(b.timeline.Received).getTime()
+            : 0;
+          return tb - ta;
+        });
 
         setCases(list);
       },
       (error) => {
-        console.error("❌ Cases listener error:", error);
+        console.error("Cases listener error:", error);
       }
     );
 
     const unsubAmb = onSnapshot(
       collection(db, "ambulances"),
       (snap) => {
-        const list = snap.docs.map((d) => ({
+        const list: any[] = snap.docs.map((d) => ({
           id: d.id,
           ...d.data(),
         }));
         setAmbulances(list);
       },
       (error) => {
-        console.error("❌ Ambulances listener error:", error);
+        console.error("Ambulances listener error:", error);
       }
     );
 
@@ -72,113 +71,151 @@ export default function Dashboard() {
   }, [user, loading]);
 
   /* =====================================================
-     ⛔ BLOCK UI UNTIL USER READY
+     🔍 CASES (NO DATE FILTER)
   ===================================================== */
-  if (loading || !user) {
-    return (
-      <div className="p-6 min-h-screen bg-gray-900 text-white">
-        Loading dashboard…
-      </div>
-    );
-  }
-
-  if (!["admin", "dispatcher"].includes(user.role)) {
-    return (
-      <div className="p-6 min-h-screen bg-gray-900 text-red-400">
-        You do not have permission to access this dashboard.
-      </div>
-    );
-  }
+  const filteredCases = cases;
 
   /* =====================================================
      📊 STATS
   ===================================================== */
-  const totalCases = cases.length;
+  const totalCases = filteredCases.length;
 
-  const activeCases = cases.filter((c) => c.status !== "Closed").length;
-  const closedCases = cases.filter((c) => c.status === "Closed").length;
+  const OnSceneCases = filteredCases.filter(
+    (c) => c.status === "OnScene"
+  ).length;
 
-  const onSceneCases = cases.filter((c) => c.status === "OnScene").length;
-  const enRouteCases = cases.filter((c) => c.status === "EnRoute").length;
+  const EnRouteCases = filteredCases.filter(
+    (c) => c.status === "EnRoute"
+  ).length;
 
-  const unreceivedCases = cases.filter(
+  const activeCases = filteredCases.filter(
+    (c) => c.status !== "Closed"
+  ).length;
+
+  const closedCases = filteredCases.filter(
+    (c) => c.status === "Closed"
+  ).length;
+
+  const unreceivedCases = filteredCases.filter(
     (c) => c.status === "Assigned" || c.status === "Received"
   ).length;
 
-  const transportingCases = cases.filter((c) =>
-    ["Transporting", "Hospital"].includes(c.status)
+  const transportingCases = filteredCases.filter(
+    (c) => ["Transporting", "Hospital"].includes(c.status)
   ).length;
 
-  const transportingHospitalCases = cases.filter(
+  const closedHospitalCases = filteredCases.filter(
+    (c) =>
+      c.status === "Closed" &&
+      c.transportingToType === "hospital"
+  ).length;
+
+  const transportingHospitalCases = filteredCases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "hospital"
   ).length;
 
-  const transportingClinicCases = cases.filter(
+  const transportingClinicCases = filteredCases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "clinic"
   ).length;
 
-  const closedHospitalCases = cases.filter(
+  const closedclinicCases = filteredCases.filter(
     (c) =>
-      c.status === "Closed" && c.transportingToType === "hospital"
-  ).length;
-
-  const closedClinicCases = cases.filter(
-    (c) =>
-      c.status === "Closed" && c.transportingToType === "clinic"
+      c.status === "Closed" &&
+      c.transportingToType === "clinic"
   ).length;
 
   const totalAmbulances = ambulances.length;
 
   /* =====================================================
-     🖥 UI
+     ⛔ BLOCK UI UNTIL READY
+  ===================================================== */
+  if (loading || !user || user.role === "none") {
+    return (
+      <div className="p-6 dark:bg-gray-900 min-h-screen text-white">
+        Loading dashboard…
+      </div>
+    );
+  }
+
+  /* =====================================================
+     UI
   ===================================================== */
   return (
-    <div className="p-6 min-h-screen bg-gray-100 dark:bg-gray-900">
-      <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">
+    <div className="p-6 dark:bg-gray-900 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6 dark:text-white">
         Dispatch Dashboard
       </h1>
 
-      {/* ===== SUMMARY CARDS ===== */}
+      {/* ================== TOP SUMMARY CARDS ================== */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
-        <Card title="Total Cases" value={totalCases} />
-        <Card title="Active" value={activeCases} color="text-blue-600" />
-        <Card title="Unreceived from team" value={unreceivedCases} />
-        <Card title="EnRoute" value={enRouteCases} />
-        <Card title="OnScene" value={onSceneCases} />
-        <Card
-          title="Transporting"
-          value={transportingCases}
-          color="text-orange-600"
-          sub={`Hospital: ${transportingHospitalCases} - Clinic: ${transportingClinicCases}`}
-        />
-        <Card
-          title="Treated"
-          value={closedCases}
-          sub={`Hospital: ${closedHospitalCases} - Clinic: ${closedClinicCases}`}
-        />
-        <Card
-          title="Ambulances"
-          value={totalAmbulances}
-          color="text-purple-600"
-        />
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-lg font-bold">Total Cases</h3>
+          <p className="text-4xl font-extrabold">{totalCases}</p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Active</h3>
+          <p className="text-2xl font-bold text-blue-600">{activeCases}</p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Unreceived from team</h3>
+          <p className="text-2xl font-bold text-blue-600">{unreceivedCases}</p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">EnRoute</h3>
+          <p className="text-2xl font-bold text-blue-600">{EnRouteCases}</p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">OnScene</h3>
+          <p className="text-2xl font-bold text-blue-600">{OnSceneCases}</p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Transporting</h3>
+          <p className="text-2xl font-bold text-orange-600">
+            {transportingCases}
+          </p>
+          <p className="text-gray-400">
+            Hospital: {transportingHospitalCases} - Clinic: {transportingClinicCases}
+          </p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Treated</h3>
+          <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
+          <p className="text-gray-400">
+            Hospital: {closedHospitalCases} - Clinic: {closedclinicCases}
+          </p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Ambulances</h3>
+          <p className="text-2xl font-bold text-purple-600">
+            {totalAmbulances}
+          </p>
+        </div>
       </div>
 
-      {/* ===== CASE LIST ===== */}
+      {/* ================== CASE LIST ================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {cases.map((c) => (
+        {filteredCases.map((c) => (
           <div
             key={c.id}
-            className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:border-gray-700"
+            className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-bold">
               Lazem Code: {c.lazemCode || "—"} — {c.level}
             </h2>
 
-            <p className="text-gray-500">
+            <p className="text-gray-400">
               Ijrny Code: {c.ijrny || "—"}
             </p>
 
@@ -186,29 +223,6 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   🧱 REUSABLE CARD
-===================================================== */
-function Card({
-  title,
-  value,
-  color = "text-gray-900",
-  sub,
-}: {
-  title: string;
-  value: number;
-  color?: string;
-  sub?: string;
-}) {
-  return (
-    <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:border-gray-700">
-      <h3 className="text-sm text-gray-400">{title}</h3>
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      {sub && <p className="text-gray-400 text-sm">{sub}</p>}
     </div>
   );
 }
