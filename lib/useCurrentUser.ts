@@ -1,4 +1,3 @@
-// lib/useCurrentUser.ts
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,12 +17,28 @@ export function useCurrentUser() {
         return;
       }
 
-      const snap = await getDoc(doc(db, "users", fbUser.uid));
+      try {
+        const ref = doc(db, "users", fbUser.uid);
+        const snap = await getDoc(ref);
 
-      setUser({
-        uid: fbUser.uid,
-        ...snap.data(),
-      });
+        if (!snap.exists()) {
+          console.error("❌ User document does NOT exist");
+          setUser({
+            uid: fbUser.uid,
+            email: fbUser.email,
+            role: "none",
+            active: false,
+          });
+        } else {
+          setUser({
+            uid: fbUser.uid,
+            ...snap.data(),
+          });
+        }
+      } catch (e) {
+        console.error("🔥 Failed to load user document", e);
+        setUser(null);
+      }
 
       setLoading(false);
     });

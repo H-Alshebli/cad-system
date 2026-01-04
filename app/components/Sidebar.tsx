@@ -17,7 +17,13 @@ export default function Sidebar() {
   const router = useRouter();
 
   const { user, loading } = useCurrentUser();
-  const permissions = usePermissions(user?.roleId);
+  console.log("CURRENT USER (Sidebar):", user);
+
+const role = user?.role ?? "none";
+const permissions = usePermissions(role);
+const isAdmin = role === "admin";
+
+
 
   const [dark, setDark] = useState(false);
   useEffect(() => {
@@ -92,7 +98,7 @@ useEffect(() => {
   /* =============================
      ROLE LOGIC
   ============================= */
-  const isAdmin = user.roleId === "admin";
+  
 
   /* =============================
      UI
@@ -117,7 +123,7 @@ useEffect(() => {
   </div>
 
   <div className="text-[10px] text-gray-400">
-    Role: {user.roleId || "none"}
+    Role: {user.role || "none"}
   </div>
 </div>
 

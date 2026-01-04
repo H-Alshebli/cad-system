@@ -1,35 +1,64 @@
-// lib/usePermissions.ts
 "use client";
 
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export function usePermissions(roleId?: string) {
-  const [permissions, setPermissions] = useState<any>({});
+/**
+ * usePermissions
+ * ---------------
+ * Loads permissions for a given role from Firestore:
+ * roles/{role} → { permissions: { [key: string]: boolean } }
+ *
+ * @param role - user role (e.g. "admin", "dispatcher")
+ */
+export function usePermissions(role?: string) {
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 👇 حوّل roleId إلى متغير محلي مؤكد
-    if (typeof roleId !== "string") {
+    // 🔒 no role → no permissions
+    if (typeof role !== "string" || role.trim() === "") {
       setPermissions({});
+      setLoading(false);
       return;
     }
 
-    const roleIdSafe: string = roleId;
+    let cancelled = false;
 
     const loadPermissions = async () => {
-      const ref = doc(db, "roles", roleIdSafe); // ✅ TypeScript راضي
-      const snap = await getDoc(ref);
+      try {
+        const ref = doc(db, "roles", role);
+        const snap = await getDoc(ref);
 
-      if (snap.exists()) {
-        setPermissions(snap.data().permissions || {});
-      } else {
-        setPermissions({});
+        if (!cancelled) {
+          if (snap.exists()) {
+            setPermissions(
+              (snap.data()?.permissions as Record<string, boolean>) || {}
+            );
+          } else {
+            // role document not found
+            setPermissions({});
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load permissions:", err);
+        if (!cancelled) {
+          setPermissions({});
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadPermissions();
-  }, [roleId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   return permissions;
 }

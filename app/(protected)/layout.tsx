@@ -3,36 +3,45 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import Sidebar from "@/app/components/Sidebar";
 
 export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const { user, loading } = useCurrentUser();
+  const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+
+    if (!user) {
       router.replace("/login");
+      return;
+    }
+
+    if (user.active === false) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!user.role || user.role === "none") {
+      router.replace("/login");
+      return;
     }
   }, [user, loading, router]);
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         Loading...
       </div>
     );
   }
 
-  if (!user) return null;
+  if (!user || user.role === "none") {
+    return null; // ⬅️ مهم جدًا
+  }
 
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 ml-64 p-4">{children}</main>
-    </div>
-  );
+  return <>{children}</>;
 }
