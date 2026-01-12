@@ -5,14 +5,14 @@ import {
   TileLayer,
   Marker,
   Popup,
-  ImageOverlay,
+  useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useMemo } from "react";
+import { useEffect } from "react";
 
 /* ---------------------------------------------------------
-   FIX DEFAULT LEAFLET ICON ISSUE (NEXT.JS)
+   FIX DEFAULT ICON ISSUE
 --------------------------------------------------------- */
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 
@@ -26,43 +26,28 @@ L.Icon.Default.mergeOptions({
 });
 
 /* ---------------------------------------------------------
-   CUSTOM ICONS
+   ICONS
 --------------------------------------------------------- */
 const patientIcon = L.icon({
   iconUrl: "/icons/patient.png",
   iconSize: [40, 40],
   iconAnchor: [20, 40],
-  popupAnchor: [0, -40],
-});
-
-const ambulanceIcon = L.icon({
-  iconUrl: "/icons/ambulance.png",
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
-  popupAnchor: [0, -35],
-});
-
-const clinicIcon = L.icon({
-  iconUrl: "/icons/clinic.png",
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
-  popupAnchor: [0, -35],
-});
-
-const roamingIcon = L.icon({
-  iconUrl: "/icons/roaming.png",
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
-  popupAnchor: [0, -35],
 });
 
 /* ---------------------------------------------------------
-   MDL BEAST IMAGE BOUNDS
+   HELPERS
 --------------------------------------------------------- */
-const mdlbBounds: [[number, number], [number, number]] = [
-  [24.98399989984823, 46.47091013377153], // SW
-  [25.01131580244805, 46.53256747037176], // NE
-];
+function ChangeView({ lat, lng }: { lat?: number; lng?: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (lat && lng) {
+      map.setView([lat, lng], 16, { animate: true });
+    }
+  }, [lat, lng, map]);
+
+  return null;
+}
 
 /* ---------------------------------------------------------
    TYPES
@@ -76,8 +61,8 @@ interface Unit {
 }
 
 interface MapProps {
-  caseLat?: number | null;
-  caseLng?: number | null;
+  caseLat?: number;
+  caseLng?: number;
   caseName?: string;
 
   ambulances?: Unit[];
@@ -96,115 +81,62 @@ export default function Map({
   clinics = [],
   roaming = [],
 }: MapProps) {
-  /* 🔒 Stable center (prevents unnecessary re-init) */
-  const center = useMemo<[number, number]>(() => {
-    return caseLat && caseLng ? [caseLat, caseLng] : [24.997, 46.5];
-  }, [caseLat, caseLng]);
-
-  /* 🔑 Key forces safe Leaflet re-initialization */
-  const mapKey = useMemo(
-    () => `map-${caseLat ?? "x"}-${caseLng ?? "y"}`,
-    [caseLat, caseLng]
-  );
-
   return (
     <MapContainer
-  key={mapKey}
-  center={center}
-  zoom={16}
-  zoomControl
-  scrollWheelZoom
-  style={{ width: "100%", height: "100%" }}
->
-
-      {/* GOOGLE MAP TILES */}
+      center={[24.997, 46.5]} // default center
+      zoom={14}
+      scrollWheelZoom
+      style={{ width: "100%", height: "100%" }}
+    >
+      {/* Google Maps tiles */}
       <TileLayer
         url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
         subdomains={["mt0", "mt1", "mt2", "mt3"]}
       />
 
-      {/* MDL BEAST IMAGE OVERLAY */}
-      <ImageOverlay
-        url="/mdlb-base.jpg"
-        bounds={mdlbBounds}
-        opacity={1}
-        zIndex={500}
-      />
+      {/* Move map when coords change */}
+      <ChangeView lat={caseLat} lng={caseLng} />
 
-      {/* PATIENT MARKER */}
+      {/* Patient marker */}
       {caseLat && caseLng && (
-        <Marker
-          position={[caseLat, caseLng]}
-          icon={patientIcon}
-          eventHandlers={{
-            click: () =>
-              window.open(
-                `https://www.google.com/maps?q=${caseLat},${caseLng}`,
-                "_blank"
-              ),
-          }}
-        >
+        <Marker position={[caseLat, caseLng]} icon={patientIcon}>
           <Popup>
-            🧍 <strong>Patient</strong>
+            <strong>Patient</strong>
             <br />
             {caseName}
           </Popup>
         </Marker>
       )}
 
-      {/* AMBULANCES */}
+      {/* Ambulances */}
       {ambulances.map(
         (a) =>
-          typeof a.lat === "number" &&
-          typeof a.lng === "number" && (
-            <Marker
-              key={`amb-${a.id}`}
-              position={[a.lat, a.lng]}
-              icon={ambulanceIcon}
-            >
-              <Popup>
-                🚑 <strong>Ambulance</strong>
-                <br />
-                Code: {a.code || a.id}
-              </Popup>
+          a.lat &&
+          a.lng && (
+            <Marker key={a.id} position={[a.lat, a.lng]}>
+              <Popup>🚑 {a.code || a.id}</Popup>
             </Marker>
           )
       )}
 
-      {/* CLINICS */}
+      {/* Clinics */}
       {clinics.map(
         (c) =>
-          typeof c.lat === "number" &&
-          typeof c.lng === "number" && (
-            <Marker
-              key={`clinic-${c.id}`}
-              position={[c.lat, c.lng]}
-              icon={clinicIcon}
-            >
-              <Popup>
-                🏥 <strong>Clinic</strong>
-                <br />
-                {c.name || c.id}
-              </Popup>
+          c.lat &&
+          c.lng && (
+            <Marker key={c.id} position={[c.lat, c.lng]}>
+              <Popup>🏥 {c.name || c.id}</Popup>
             </Marker>
           )
       )}
 
-      {/* ROAMING TEAMS */}
+      {/* Roaming */}
       {roaming.map(
         (r) =>
-          typeof r.lat === "number" &&
-          typeof r.lng === "number" && (
-            <Marker
-              key={`roaming-${r.id}`}
-              position={[r.lat, r.lng]}
-              icon={roamingIcon}
-            >
-              <Popup>
-                🚶 <strong>Roaming Team</strong>
-                <br />
-                Code: {r.code || r.id}
-              </Popup>
+          r.lat &&
+          r.lng && (
+            <Marker key={r.id} position={[r.lat, r.lng]}>
+              <Popup>🚶 {r.code || r.id}</Popup>
             </Marker>
           )
       )}

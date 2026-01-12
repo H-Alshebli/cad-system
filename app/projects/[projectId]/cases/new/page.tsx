@@ -11,22 +11,47 @@ import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
-// Client-only map
+/* ---------------------------
+   Client-only map
+----------------------------*/
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
+
+/* ---------------------------
+   UI Helpers
+----------------------------*/
+const FieldLabel = ({ text }: { text: string }) => (
+  <label className="text-sm text-gray-300 font-medium mb-1 block">
+    {text}
+  </label>
+);
+
+const inputClass =
+  "w-full h-11 px-3 rounded bg-[#0f1625] text-white border border-gray-700 focus:outline-none focus:border-blue-500";
+
+/* ---------------------------
+   Google Maps Parser
+----------------------------*/
 function extractLatLngFromGoogleMaps(url: string) {
-  // Examples:
-  // https://www.google.com/maps?q=24.774265,46.738586
-  // https://maps.google.com/?q=24.774265,46.738586
+  const patterns = [
+    /q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/,
+    /@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/,
+  ];
 
-  const match = url.match(/q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
-  if (!match) return null;
-
-  return {
-    lat: Number(match[1]),
-    lng: Number(match[2]),
-  };
+  for (const p of patterns) {
+    const match = url.match(p);
+    if (match) {
+      return {
+        lat: Number(match[1]),
+        lng: Number(match[2]),
+      };
+    }
+  }
+  return null;
 }
 
+/* =========================================================
+   PAGE
+========================================================= */
 export default function NewProjectCasePage({
   params,
 }: {
@@ -37,13 +62,18 @@ export default function NewProjectCasePage({
   /* ---------------------------
      FORM STATE
   ----------------------------*/
+  const [callerName, setCallerName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [triageLevel, setTriageLevel] = useState("");
   const [patientName, setPatientName] = useState("");
-  const [mapLink, setMapLink] = useState("");
+
   const [locationText, setLocationText] = useState("");
+  const [mapLink, setMapLink] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  const [isFromMapLink, setIsFromMapLink] = useState(false);
 
   const googleMapLink =
     lat !== null && lng !== null
@@ -82,27 +112,13 @@ export default function NewProjectCasePage({
      SUBMIT
   ----------------------------*/
   const createCase = async () => {
-    if (
-      !chiefComplaint ||
-      !triageLevel ||
-      !patientName ||
-      !locationText ||
-      lat === null ||
-      lng === null
-    ) {
-      alert("Please fill all required fields");
-      return;
-    }
-
-    if (!unitType || !selectedUnitId) {
-      alert("Please assign a unit");
-      return;
-    }
-
     const now = new Date().toISOString();
 
     await addDoc(collection(db, "cases"), {
       projectId: params.projectId,
+
+      callerName,
+      contactNumber,
 
       chiefComplaint,
       level: triageLevel,
@@ -113,12 +129,16 @@ export default function NewProjectCasePage({
         lat,
         lng,
         googleMapLink,
+        source: isFromMapLink ? "google_link" : "manual",
       },
 
-      assignedUnit: {
-        type: unitType,
-        id: selectedUnitId,
-      },
+      assignedUnit:
+        unitType && selectedUnitId
+          ? {
+              type: unitType,
+              id: selectedUnitId,
+            }
+          : null,
 
       status: "Received",
       createdAt: serverTimestamp(),
@@ -127,7 +147,7 @@ export default function NewProjectCasePage({
       },
     });
 
-    router.push(`/projects/${params.projectId}/cad`);
+    router.push(`/dev/projects/${params.projectId}/cad`);
   };
 
   /* ---------------------------
@@ -140,73 +160,129 @@ export default function NewProjectCasePage({
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ---------------- FORM ---------------- */}
-        <div className="bg-[#1c2333] border border-gray-700 rounded-lg p-4 space-y-4">
-          <input
-            className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-            placeholder="Chief Complaint"
-            value={chiefComplaint}
-            onChange={(e) => setChiefComplaint(e.target.value)}
-          />
+        {/* ================= FORM ================= */}
+        <div className="bg-[#1c2333] border border-gray-700 rounded-lg p-4 space-y-5">
 
-          <input
-            className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-            placeholder="Triage Level"
-            value={triageLevel}
-            onChange={(e) => setTriageLevel(e.target.value)}
-          />
+          {/* Caller */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel text="Caller Name" />
+              <input
+                className={inputClass}
+                value={callerName}
+                onChange={(e) => setCallerName(e.target.value)}
+              />
+            </div>
 
-          <input
-            className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-            placeholder="Patient Name"
-            value={patientName}
-            onChange={(e) => setPatientName(e.target.value)}
-          />
+            <div>
+              <FieldLabel text="Contact Number" />
+              <input
+                className={inputClass}
+                value={contactNumber}
+                onChange={(e) => setContactNumber(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Case */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel text="Chief Complaint" />
+              <input
+                className={inputClass}
+                value={chiefComplaint}
+                onChange={(e) => setChiefComplaint(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <FieldLabel text="Triage Level" />
+              <input
+                className={inputClass}
+                value={triageLevel}
+                onChange={(e) => setTriageLevel(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel text="Patient Name" />
+            <input
+              className={inputClass}
+              value={patientName}
+              onChange={(e) => setPatientName(e.target.value)}
+            />
+          </div>
 
           {/* Location */}
-          <div className="border border-gray-700 rounded p-3 space-y-2">
-            <h3 className="font-semibold text-white">Location</h3>
+          <div className="border border-gray-700 rounded p-4 space-y-3">
+            <h3 className="text-white text-sm font-semibold">
+              Location Information
+            </h3>
 
+            <FieldLabel text="Location Description" />
             <input
-              className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-              placeholder="Location description"
+              className={inputClass}
               value={locationText}
               onChange={(e) => setLocationText(e.target.value)}
             />
 
+            <FieldLabel text="Google Maps Link (Auto-Pin)" />
             <input
-              className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-              placeholder="Latitude"
-              value={lat ?? ""}
-              onChange={(e) =>
-                setLat(e.target.value ? Number(e.target.value) : null)
-              }
+              className={inputClass}
+              placeholder="Paste Google Maps link here"
+              value={mapLink}
+              onChange={(e) => {
+                const value = e.target.value;
+                setMapLink(value);
+
+                if (!value) {
+                  setIsFromMapLink(false);
+                  return;
+                }
+
+                const coords = extractLatLngFromGoogleMaps(value);
+                if (coords) {
+                  setLat(coords.lat);
+                  setLng(coords.lng);
+                  setIsFromMapLink(true);
+                }
+              }}
             />
-            <input
-  className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-  placeholder="Paste Google Maps link here"
-  value={mapLink}
-  onChange={(e) => {
-    const value = e.target.value;
-    setMapLink(value);
 
-    const coords = extractLatLngFromGoogleMaps(value);
-    if (coords) {
-      setLat(coords.lat);
-      setLng(coords.lng);
-    }
-  }}
-/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <FieldLabel text="Latitude" />
+                <input
+                  disabled={isFromMapLink}
+                  className={`${inputClass} ${
+                    isFromMapLink
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                  value={lat ?? ""}
+                  onChange={(e) =>
+                    setLat(e.target.value ? Number(e.target.value) : null)
+                  }
+                />
+              </div>
 
-
-            <input
-              className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
-              placeholder="Longitude"
-              value={lng ?? ""}
-              onChange={(e) =>
-                setLng(e.target.value ? Number(e.target.value) : null)
-              }
-            />
+              <div>
+                <FieldLabel text="Longitude" />
+                <input
+                  disabled={isFromMapLink}
+                  className={`${inputClass} ${
+                    isFromMapLink
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                  value={lng ?? ""}
+                  onChange={(e) =>
+                    setLng(e.target.value ? Number(e.target.value) : null)
+                  }
+                />
+              </div>
+            </div>
 
             {googleMapLink && (
               <a
@@ -220,19 +296,21 @@ export default function NewProjectCasePage({
           </div>
 
           {/* Assign Unit */}
-          <div className="border border-gray-700 rounded p-3 space-y-2">
-            <h3 className="font-semibold text-white">Assign Unit</h3>
+          <div className="border border-gray-700 rounded p-4 space-y-3">
+            <h3 className="text-white text-sm font-semibold">
+              Assign Unit
+            </h3>
 
-            <div className="flex gap-4 text-white">
+            <div className="flex gap-6 text-white text-sm">
               {["ambulance", "clinic", "roaming"].map((t) => (
-                <label key={t}>
+                <label key={t} className="flex items-center gap-2">
                   <input
                     type="radio"
                     checked={unitType === t}
                     onChange={() =>
                       setUnitType(t as "ambulance" | "clinic" | "roaming")
                     }
-                  />{" "}
+                  />
                   {t}
                 </label>
               ))}
@@ -240,7 +318,7 @@ export default function NewProjectCasePage({
 
             {unitType && units.length > 0 && (
               <select
-                className="w-full p-2 rounded bg-[#0f1625] text-white border border-gray-700"
+                className={inputClass}
                 value={selectedUnitId}
                 onChange={(e) => setSelectedUnitId(e.target.value)}
               >
@@ -256,13 +334,13 @@ export default function NewProjectCasePage({
 
           <button
             onClick={createCase}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold"
+            className="w-full h-11 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold"
           >
             Create Case
           </button>
         </div>
 
-        {/* ---------------- MAP ---------------- */}
+        {/* ================= MAP ================= */}
         <div className="h-[520px] border border-gray-700 rounded-lg overflow-hidden">
           <Map
             caseLat={lat ?? undefined}
