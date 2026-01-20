@@ -1,15 +1,34 @@
 "use client";
 
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Can from "../components/Can";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function ProjectsPage() {
+  const { user, loading } = useCurrentUser();
   const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "projects"), (snap) => {
+    if (!user) return;
+
+    let q;
+
+    // ✅ ADMIN → see everything
+    if (user.role === "admin") {
+      q = collection(db, "projects");
+    } 
+    // ✅ NON-ADMIN → see only assigned projects
+    else {
+      q = query(
+        collection(db, "projects"),
+        where(`assignedUsers.${user.uid}`, "==", true)
+      );
+    }
+
+    const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
@@ -18,19 +37,34 @@ export default function ProjectsPage() {
     });
 
     return () => unsub();
-  }, []);
+  }, [user]);
+
+  if (loading) {
+    return <div className="p-6 text-gray-400">Loading projects...</div>;
+  }
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Projects</h1>
-        <Link
-          href="/projects/new"
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          + New Project
-        </Link>
+
+        {/* ✅ CREATE ONLY IF PERMISSION */}
+        <Can permission="projects.create">
+          <Link
+            href="/projects/new"
+            className="px-4 py-2 bg-blue-600 text-white rounded"
+          >
+            + New Project
+          </Link>
+        </Can>
       </div>
+
+      {/* ✅ EMPTY STATE */}
+      {projects.length === 0 && (
+        <div className="text-gray-400 text-sm">
+          No projects assigned to you.
+        </div>
+      )}
 
       <div className="grid gap-4">
         {projects.map((p) => (

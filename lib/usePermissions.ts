@@ -4,20 +4,18 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-/**
- * usePermissions
- * ---------------
- * Loads permissions for a given role from Firestore:
- * roles/{role} → { permissions: { [key: string]: boolean } }
- *
- * @param role - user role (e.g. "admin", "dispatcher")
- */
+export type PermissionsMap = {
+  [module: string]: {
+    [action: string]: boolean;
+  };
+};
+
 export function usePermissions(role?: string) {
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const [permissions, setPermissions] = useState<PermissionsMap>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 🔒 no role → no permissions
+    // 🔒 مهم جدًا: TypeScript Narrowing
     if (typeof role !== "string" || role.trim() === "") {
       setPermissions({});
       setLoading(false);
@@ -26,39 +24,34 @@ export function usePermissions(role?: string) {
 
     let cancelled = false;
 
-    const loadPermissions = async () => {
+    async function loadPermissions(currentRole: string) {
       try {
-        const ref = doc(db, "roles", role);
+        const ref = doc(db, "roles", currentRole); // ✅ الآن آمن
         const snap = await getDoc(ref);
 
         if (!cancelled) {
           if (snap.exists()) {
             setPermissions(
-              (snap.data()?.permissions as Record<string, boolean>) || {}
+              (snap.data()?.permissions as PermissionsMap) || {}
             );
           } else {
-            // role document not found
             setPermissions({});
           }
         }
       } catch (err) {
-        console.error("Failed to load permissions:", err);
-        if (!cancelled) {
-          setPermissions({});
-        }
+        console.error("❌ Failed to load permissions:", err);
+        if (!cancelled) setPermissions({});
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
-    };
+    }
 
-    loadPermissions();
+    loadPermissions(role); // ✅ role هنا مضمون string
 
     return () => {
       cancelled = true;
     };
   }, [role]);
 
-  return permissions;
+  return { permissions, loading };
 }

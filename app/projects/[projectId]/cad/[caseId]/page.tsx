@@ -1,17 +1,26 @@
 "use client";
 
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  collection,
+  query,
+  where,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import StatusButtons from "@/app/components/StatusButtons";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
 
-/* -----------------------------
+/* =============================
    TYPES
------------------------------- */
+============================= */
 type PatientInfo = {
   idNumber?: string;
   name?: string;
@@ -21,18 +30,39 @@ type PatientInfo = {
   notes?: string;
 };
 
+type CaseInfo = {
+  complaint?: string;
+  level?: string;
+  paramedicNote?: string;
+};
+
+type CaseChatMessage = {
+  id: string;
+  caseId: string;
+  senderRole: "dispatcher" | "medical";
+  senderName: string;
+  message: string;
+  createdAt?: any;
+};
+
 type CaseType = {
   id: string;
   status: string;
   lazemCode?: string;
-  projectId?: string | null;
   timeline?: Record<string, any>;
   patient?: PatientInfo;
+  caseInfo?: CaseInfo;
+
+  // legacy
+  patientName?: string;
+  contactNumber?: string;
+  chiefComplaint?: string;
+  level?: string;
 };
 
-/* -----------------------------
+/* =============================
    PAGE
------------------------------- */
+============================= */
 export default function CaseDetailsPage({
   params,
 }: {
@@ -40,100 +70,153 @@ export default function CaseDetailsPage({
 }) {
   const { caseId } = params;
   const router = useRouter();
-
   const userId = "system-dev";
 
   const [caseData, setCaseData] = useState<CaseType | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [epcr, setEpcr] = useState<any | null>(null);
-  const [epcrLoading, setEpcrLoading] = useState(false);
 
   /* -----------------------------
-     PATIENT EDIT STATE
+     PATIENT STATE
   ------------------------------ */
   const [editPatient, setEditPatient] = useState(false);
   const [patientDraft, setPatientDraft] = useState<PatientInfo>({});
 
-  /* --------------------------------
+  /* -----------------------------
+     CASE INFO STATE
+  ------------------------------ */
+  const [editCaseInfo, setEditCaseInfo] = useState(false);
+  const [caseInfoDraft, setCaseInfoDraft] = useState<CaseInfo>({
+    complaint: "",
+    level: "",
+    paramedicNote: "",
+  });
+
+  /* -----------------------------
+     CHAT STATE
+  ------------------------------ */
+  const [messages, setMessages] = useState<CaseChatMessage[]>([]);
+  const [chatText, setChatText] = useState("");
+
+  /* -----------------------------
      LOAD CASE (Realtime)
-  --------------------------------- */
+  ------------------------------ */
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "cases", caseId), (snap) => {
-      if (snap.exists()) {
-        const data = { id: snap.id, ...(snap.data() as any) };
-const patient = data.patient || {};
+      if (!snap.exists()) return;
 
-setCaseData({
-  ...data,
-  patient: {
-    ...patient,
-    name: patient.name || data.patientName || "",
-    phone: patient.phone || data.contactNumber || "",
-  },
-});
+      const data = { id: snap.id, ...(snap.data() as any) };
+      const patient = data.patient || {};
+      const caseInfo = data.caseInfo || {};
 
-setPatientDraft({
-  ...patient,
-  name: patient.name || data.patientName || "",
-  phone: patient.phone || data.contactNumber || "",
-});
+      setCaseData({
+        ...data,
+        patient: {
+          ...patient,
+          name: patient.name || data.patientName || "",
+          phone: patient.phone || data.contactNumber || "",
+        },
+        caseInfo: {
+          complaint: caseInfo.complaint || data.chiefComplaint || "",
+          level: caseInfo.level || data.level || "",
+          paramedicNote: caseInfo.paramedicNote || "",
+        },
+      });
 
+      setPatientDraft({
+        ...patient,
+        name: patient.name || data.patientName || "",
+        phone: patient.phone || data.contactNumber || "",
+      });
 
-      }
+      setCaseInfoDraft({
+        complaint: caseInfo.complaint || data.chiefComplaint || "",
+        level: caseInfo.level || data.level || "",
+        paramedicNote: caseInfo.paramedicNote || "",
+      });
+
       setLoading(false);
     });
 
     return () => unsub();
   }, [caseId]);
 
-  /* --------------------------------
-     CHECK ePCR
-  --------------------------------- */
+  /* -----------------------------
+     LOAD CHAT
+  ------------------------------ */
   useEffect(() => {
-    const checkEpcr = async () => {
-      const existing = await getEpcrByCaseId(caseId);
-      setEpcr(existing);
-    };
-    checkEpcr();
+    const q = query(
+      collection(db, "caseChats"),
+      where("caseId", "==", caseId)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      setMessages(
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }))
+      );
+    });
+
+    return () => unsub();
+  }, [caseId]);
+
+  /* -----------------------------
+     CHECK ePCR
+  ------------------------------ */
+  useEffect(() => {
+    getEpcrByCaseId(caseId).then(setEpcr);
   }, [caseId]);
 
   if (loading) return <div className="p-6">Loading case...</div>;
   if (!caseData) return <div className="p-6">Case not found</div>;
 
-  /* --------------------------------
-     ePCR HANDLER
-  --------------------------------- */
+  /* -----------------------------
+     ACTIONS
+  ------------------------------ */
   const handleEpcr = async () => {
-    setEpcrLoading(true);
-
     if (epcr) {
       router.push(`/epcr/${epcr.id}`);
       return;
     }
-
     const epcrId = await createEpcrFromCase(caseData, userId);
-    setEpcr({ id: epcrId });
     router.push(`/epcr/${epcrId}`);
   };
 
-  /* --------------------------------
-     SAVE PATIENT INFO
-  --------------------------------- */
   const savePatientInfo = async () => {
-    await updateDoc(doc(db, "cases", caseId), {
-      patient: patientDraft,
-    });
+    await updateDoc(doc(db, "cases", caseId), { patient: patientDraft });
     setEditPatient(false);
   };
 
+  const saveCaseInfo = async () => {
+    await updateDoc(doc(db, "cases", caseId), { caseInfo: caseInfoDraft });
+    setEditCaseInfo(false);
+  };
+
+  const sendMessage = async () => {
+    if (!chatText.trim()) return;
+
+    await addDoc(collection(db, "caseChats"), {
+      caseId,
+      senderRole: "dispatcher",
+      senderName: "Dispatcher",
+      message: chatText.trim(),
+      createdAt: serverTimestamp(),
+    });
+
+    setChatText("");
+  };
+
+  /* =============================
+     RENDER
+  ============================== */
   return (
     <div className="p-6 space-y-6">
 
-      {/* =============================
-          HEADER
-      ============================== */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex justify-between items-center">
+      {/* HEADER */}
+      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">
             Case #{caseData.lazemCode || caseData.id}
@@ -142,243 +225,202 @@ setPatientDraft({
             Status: <span className="text-green-400">{caseData.status}</span>
           </p>
         </div>
-
         <button
           onClick={handleEpcr}
-          disabled={epcrLoading}
-          className={`px-4 py-2 rounded text-sm text-white ${
-            epcr ? "bg-indigo-600" : "bg-purple-600"
-          }`}
+          className="px-4 py-2 rounded bg-purple-600 text-white"
         >
-          {epcrLoading
-            ? "Opening ePCR..."
-            : epcr
-            ? "View ePCR"
-            : "Create ePCR"}
+          {epcr ? "View ePCR" : "Create ePCR"}
         </button>
       </div>
 
-      {/* =============================
-          STATUS + TIMELINE
-      ============================== */}
+      {/* STATUS + TIMELINE */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-200">
-          Update Status
-        </h3>
+        <StatusButtons caseId={caseData.id} currentStatus={caseData.status} />
+        {caseData.timeline && <CaseTimeline timeline={caseData.timeline} />}
+      </div>
 
-        <StatusButtons
-          caseId={caseData.id}
-          currentStatus={caseData.status}
-        />
+      {/* PATIENT INFO */}
+      <Section
+        title="Patient Information"
+        edit={editPatient}
+        onEdit={() => setEditPatient(true)}
+        onSave={savePatientInfo}
+        onCancel={() => {
+          setPatientDraft(caseData.patient || {});
+          setEditPatient(false);
+        }}
+      >
+        <Grid>
+          <Field label="Patient ID" value={patientDraft.idNumber} edit={editPatient}
+            onChange={(v) => setPatientDraft({ ...patientDraft, idNumber: v })} />
+          <Field label="Name" value={patientDraft.name} edit={editPatient}
+            onChange={(v) => setPatientDraft({ ...patientDraft, name: v })} />
+          <Field label="Age" type="number" value={patientDraft.age} edit={editPatient}
+            onChange={(v) =>
+              setPatientDraft({ ...patientDraft, age: v ? Number(v) : null })
+            } />
+          <Field label="Phone" value={patientDraft.phone} edit={editPatient}
+            onChange={(v) => setPatientDraft({ ...patientDraft, phone: v })} />
+          <TextArea label="Notes" value={patientDraft.notes} edit={editPatient}
+            onChange={(v) => setPatientDraft({ ...patientDraft, notes: v })} />
+        </Grid>
+      </Section>
 
-        {caseData.timeline && (
-          <div className="pt-4 border-t border-slate-700">
-            <h3 className="text-sm font-semibold mb-2 text-gray-200">
-              Timeline
-            </h3>
+      {/* CASE INFO */}
+      <Section
+        title="Case Information"
+        edit={editCaseInfo}
+        onEdit={() => setEditCaseInfo(true)}
+        onSave={saveCaseInfo}
+        onCancel={() => setEditCaseInfo(false)}
+      >
+        <Grid>
+          <Field label="Chief Complaint" value={caseInfoDraft.complaint} edit={editCaseInfo} colSpan
+            onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, complaint: v })} />
+          <Field label="Triage Level" value={caseInfoDraft.level} edit={editCaseInfo}
+            onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, level: v })} />
+          <TextArea label="Paramedic Notes" value={caseInfoDraft.paramedicNote} edit={editCaseInfo}
+            onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, paramedicNote: v })} />
+        </Grid>
+      </Section>
 
-            <CaseTimeline
-              timeline={Object.fromEntries(
-                Object.entries(caseData.timeline).map(
-                  ([status, time]) => [status, time]
-                )
-              )}
-            />
+      {/* CASE CHAT */}
+      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-200">Case Chat</h3>
+
+        <div className="h-64 overflow-y-auto space-y-2 pr-2">
+          {messages.length === 0 && (
+            <p className="text-sm text-gray-400 text-center mt-10">
+              No messages yet
+            </p>
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className="bg-slate-800 p-3 rounded text-white">
+              <div className="text-xs text-gray-400 mb-1">
+                {m.senderName}
+              </div>
+              <div className="text-sm">{m.message}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={chatText}
+            onChange={(e) => setChatText(e.target.value)}
+            className="flex-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
+            placeholder="Type message..."
+          />
+          <button
+            onClick={sendMessage}
+            className="px-4 rounded bg-blue-600 text-white"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =============================
+   UI HELPERS (TYPED)
+============================= */
+type SectionProps = {
+  title: string;
+  edit: boolean;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  children: React.ReactNode;
+};
+
+function Section({
+  title,
+  edit,
+  onEdit,
+  onSave,
+  onCancel,
+  children,
+}: SectionProps) {
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
+      <div className="flex justify-between">
+        <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
+        {!edit ? (
+          <button onClick={onEdit} className="text-xs text-blue-400">Edit</button>
+        ) : (
+          <div className="flex gap-3 text-xs">
+            <button onClick={onSave} className="text-green-400">Save</button>
+            <button onClick={onCancel} className="text-gray-400">Cancel</button>
           </div>
         )}
       </div>
+      {children}
+    </div>
+  );
+}
 
-      {/* =============================
-          PATIENT INFORMATION
-      ============================== */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-semibold text-gray-200">
-            Patient Information
-          </h3>
+function Grid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-4 text-sm">{children}</div>;
+}
 
-          {!editPatient ? (
-            <button
-              onClick={() => setEditPatient(true)}
-              className="text-xs text-blue-400 hover:underline"
-            >
-              Edit
-            </button>
-          ) : (
-            <div className="flex gap-3">
-              <button
-                onClick={savePatientInfo}
-                className="text-xs text-green-400 hover:underline"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setPatientDraft(caseData.patient || {});
-                  setEditPatient(false);
-                }}
-                className="text-xs text-gray-400 hover:underline"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
+type FieldProps = {
+  label: string;
+  value?: string | number | null;
+  edit: boolean;
+  type?: "text" | "number";
+  colSpan?: boolean;
+  onChange: (value: string) => void;
+};
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          {/* ID */}
-          <div>
-            <label className="text-gray-400">Patient ID</label>
-            {editPatient ? (
-              <input
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                value={patientDraft.idNumber || ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    idNumber: e.target.value,
-                  })
-                }
-              />
-            ) : (
-              <p className="text-white">
-                {caseData.patient?.idNumber || "—"}
-              </p>
-            )}
-          </div>
+function Field({
+  label,
+  value,
+  edit,
+  type = "text",
+  colSpan,
+  onChange,
+}: FieldProps) {
+  return (
+    <div className={colSpan ? "col-span-2" : ""}>
+      <label className="text-gray-400">{label}</label>
+      {edit ? (
+        <input
+          type={type}
+          className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <p className="text-white">{value || "—"}</p>
+      )}
+    </div>
+  );
+}
 
-          {/* Name */}
-          <div>
-            <label className="text-gray-400">Name</label>
-            {editPatient ? (
-              <input
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                value={patientDraft.name || ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    name: e.target.value,
-                  })
-                }
-              />
-            ) : (
-              <p className="text-white">
-                {caseData.patient?.name || "—"}
-              </p>
-            )}
-          </div>
+type TextAreaProps = {
+  label: string;
+  value?: string | null;
+  edit: boolean;
+  onChange: (value: string) => void;
+};
 
-          {/* Age */}
-          <div>
-            <label className="text-gray-400">Age</label>
-            {editPatient ? (
-              <input
-                type="number"
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                value={patientDraft.age ?? ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    age: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-                }
-              />
-            ) : (
-              <p className="text-white">
-                {caseData.patient?.age ?? "—"}
-              </p>
-            )}
-          </div>
-
-          {/* Gender */}
-          <div>
-            <label className="text-gray-400">Gender</label>
-            {editPatient ? (
-              <select
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                value={patientDraft.gender || ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    gender: e.target.value as any,
-                  })
-                }
-              >
-                <option value="">—</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
-            ) : (
-              <p className="text-white capitalize">
-                {caseData.patient?.gender || "—"}
-              </p>
-            )}
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="text-gray-400">Phone</label>
-            {editPatient ? (
-              <input
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                value={patientDraft.phone || ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    phone: e.target.value,
-                  })
-                }
-              />
-            ) : (
-              <p className="text-white">
-                {caseData.patient?.phone || "—"}
-              </p>
-            )}
-          </div>
-
-          {/* Notes */}
-          <div className="col-span-2">
-            <label className="text-gray-400">Notes</label>
-            {editPatient ? (
-              <textarea
-                className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-                rows={3}
-                value={patientDraft.notes || ""}
-                onChange={(e) =>
-                  setPatientDraft({
-                    ...patientDraft,
-                    notes: e.target.value,
-                  })
-                }
-              />
-            ) : (
-              <p className="text-white">
-                {caseData.patient?.notes || "—"}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* =============================
-          NEXT SECTIONS
-      ============================== */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-gray-400 text-sm">
-          Case Information (next)
-        </div>
-
-        <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-gray-400 text-sm">
-          Case Chat (next)
-        </div>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-gray-400 text-sm h-[300px]">
-        Patient Location Map (next)
-      </div>
-
+function TextArea({ label, value, edit, onChange }: TextAreaProps) {
+  return (
+    <div className="col-span-2">
+      <label className="text-gray-400">{label}</label>
+      {edit ? (
+        <textarea
+          rows={3}
+          className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <p className="text-white">{value || "—"}</p>
+      )}
     </div>
   );
 }

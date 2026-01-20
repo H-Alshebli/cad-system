@@ -132,6 +132,12 @@ export default function LoginPage() {
           className="w-full p-2 border rounded dark:bg-gray-700"
           required
         />
+<button
+  onClick={() => router.push("/register")}
+  className="w-full text-sm text-gray-400 hover:text-white mt-2"
+>
+  Create new account
+</button>
 
         <button
           type="submit"
