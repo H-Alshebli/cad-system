@@ -74,18 +74,11 @@ export default function CaseDetailsPage({
 
   const [caseData, setCaseData] = useState<CaseType | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [epcr, setEpcr] = useState<any | null>(null);
 
-  /* -----------------------------
-     PATIENT STATE
-  ------------------------------ */
   const [editPatient, setEditPatient] = useState(false);
   const [patientDraft, setPatientDraft] = useState<PatientInfo>({});
 
-  /* -----------------------------
-     CASE INFO STATE
-  ------------------------------ */
   const [editCaseInfo, setEditCaseInfo] = useState(false);
   const [caseInfoDraft, setCaseInfoDraft] = useState<CaseInfo>({
     complaint: "",
@@ -93,9 +86,6 @@ export default function CaseDetailsPage({
     paramedicNote: "",
   });
 
-  /* -----------------------------
-     CHAT STATE
-  ------------------------------ */
   const [messages, setMessages] = useState<CaseChatMessage[]>([]);
   const [chatText, setChatText] = useState("");
 
@@ -104,7 +94,10 @@ export default function CaseDetailsPage({
   ------------------------------ */
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "cases", caseId), (snap) => {
-      if (!snap.exists()) return;
+      if (!snap.exists()) {
+        setLoading(false);
+        return;
+      }
 
       const data = { id: snap.id, ...(snap.data() as any) };
       const patient = data.patient || {};
@@ -143,7 +136,7 @@ export default function CaseDetailsPage({
   }, [caseId]);
 
   /* -----------------------------
-     LOAD CHAT
+     LOAD CHAT (Realtime)
   ------------------------------ */
   useEffect(() => {
     const q = query(
@@ -170,8 +163,24 @@ export default function CaseDetailsPage({
     getEpcrByCaseId(caseId).then(setEpcr);
   }, [caseId]);
 
-  if (loading) return <div className="p-6">Loading case...</div>;
-  if (!caseData) return <div className="p-6">Case not found</div>;
+  /* -----------------------------
+     SAFE LOADING GUARD (ONLY ONE)
+  ------------------------------ */
+  if (loading) {
+    return (
+      <div className="p-6 text-gray-400">
+        Loading case…
+      </div>
+    );
+  }
+
+  if (!caseData) {
+    return (
+      <div className="p-6 text-red-400">
+        Case not found
+      </div>
+    );
+  }
 
   /* -----------------------------
      ACTIONS
@@ -235,8 +244,13 @@ export default function CaseDetailsPage({
 
       {/* STATUS + TIMELINE */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
-        <StatusButtons caseId={caseData.id} currentStatus={caseData.status} />
-        {caseData.timeline && <CaseTimeline timeline={caseData.timeline} />}
+        <StatusButtons
+          caseId={caseData.id}
+          currentStatus={caseData.status}
+        />
+        {caseData.timeline && (
+          <CaseTimeline timeline={caseData.timeline} />
+        )}
       </div>
 
       {/* PATIENT INFO */}
@@ -261,8 +275,6 @@ export default function CaseDetailsPage({
             } />
           <Field label="Phone" value={patientDraft.phone} edit={editPatient}
             onChange={(v) => setPatientDraft({ ...patientDraft, phone: v })} />
-          <TextArea label="Notes" value={patientDraft.notes} edit={editPatient}
-            onChange={(v) => setPatientDraft({ ...patientDraft, notes: v })} />
         </Grid>
       </Section>
 
@@ -279,8 +291,6 @@ export default function CaseDetailsPage({
             onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, complaint: v })} />
           <Field label="Triage Level" value={caseInfoDraft.level} edit={editCaseInfo}
             onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, level: v })} />
-          <TextArea label="Paramedic Notes" value={caseInfoDraft.paramedicNote} edit={editCaseInfo}
-            onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, paramedicNote: v })} />
         </Grid>
       </Section>
 
@@ -289,20 +299,20 @@ export default function CaseDetailsPage({
         <h3 className="text-sm font-semibold text-gray-200">Case Chat</h3>
 
         <div className="h-64 overflow-y-auto space-y-2 pr-2">
-          {messages.length === 0 && (
+          {messages.length === 0 ? (
             <p className="text-sm text-gray-400 text-center mt-10">
               No messages yet
             </p>
-          )}
-
-          {messages.map((m) => (
-            <div key={m.id} className="bg-slate-800 p-3 rounded text-white">
-              <div className="text-xs text-gray-400 mb-1">
-                {m.senderName}
+          ) : (
+            messages.map((m) => (
+              <div key={m.id} className="bg-slate-800 p-3 rounded text-white">
+                <div className="text-xs text-gray-400 mb-1">
+                  {m.senderName}
+                </div>
+                <div className="text-sm">{m.message}</div>
               </div>
-              <div className="text-sm">{m.message}</div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -325,7 +335,7 @@ export default function CaseDetailsPage({
 }
 
 /* =============================
-   UI HELPERS (TYPED)
+   UI HELPERS
 ============================= */
 type SectionProps = {
   title: string;
@@ -336,14 +346,7 @@ type SectionProps = {
   children: React.ReactNode;
 };
 
-function Section({
-  title,
-  edit,
-  onEdit,
-  onSave,
-  onCancel,
-  children,
-}: SectionProps) {
+function Section({ title, edit, onEdit, onSave, onCancel, children }: SectionProps) {
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
       <div className="flex justify-between">
@@ -366,15 +369,6 @@ function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-4 text-sm">{children}</div>;
 }
 
-type FieldProps = {
-  label: string;
-  value?: string | number | null;
-  edit: boolean;
-  type?: "text" | "number";
-  colSpan?: boolean;
-  onChange: (value: string) => void;
-};
-
 function Field({
   label,
   value,
@@ -382,38 +376,20 @@ function Field({
   type = "text",
   colSpan,
   onChange,
-}: FieldProps) {
+}: {
+  label: string;
+  value?: string | number | null;
+  edit: boolean;
+  type?: "text" | "number";
+  colSpan?: boolean;
+  onChange: (value: string) => void;
+}) {
   return (
     <div className={colSpan ? "col-span-2" : ""}>
       <label className="text-gray-400">{label}</label>
       {edit ? (
         <input
           type={type}
-          className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <p className="text-white">{value || "—"}</p>
-      )}
-    </div>
-  );
-}
-
-type TextAreaProps = {
-  label: string;
-  value?: string | null;
-  edit: boolean;
-  onChange: (value: string) => void;
-};
-
-function TextArea({ label, value, edit, onChange }: TextAreaProps) {
-  return (
-    <div className="col-span-2">
-      <label className="text-gray-400">{label}</label>
-      {edit ? (
-        <textarea
-          rows={3}
           className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}

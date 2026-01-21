@@ -128,7 +128,6 @@ type TransferTeam = {
 
 type TimeValue = {
   timeHHMM: string;
-  ampm: "AM" | "PM" | "";
 };
 
 type TimeSection = {
@@ -250,8 +249,8 @@ const emptyTransferTeam = (): TransferTeam => ({
 
 const emptyTimeValue = (): TimeValue => ({
   timeHHMM: "",
-  ampm: "",
 });
+
 
 const emptyTime = (): TimeSection => ({
   movingTime: emptyTimeValue(),
@@ -443,11 +442,11 @@ if (!narrativeVitals.vitalsList.length) {
     if (!mem.signatureDataUrl)
       m.push(`Transfer Team #${n}: Signature`);
   });
+if (!time.arrivalTime.timeHHMM)
+  m.push("Time: Arrival Time");
+if (!time.movingTime.timeHHMM)
+  m.push("Time: Moving Time");
 
-  if (!time.arrivalTime.timeHHMM || !time.arrivalTime.ampm)
-    m.push("Time: Arrival Time");
-  if (!time.movingTime.timeHHMM || !time.movingTime.ampm)
-    m.push("Time: Moving Time");
 
   return m;
 }, [data, patientInfo, narrativeVitals, outcome, transferTeam, time]);
@@ -913,6 +912,41 @@ if (!data) {
 
 
       </Section>
+{/* ================= NARRATIVE ================= */}
+<Section title="Narrative">
+  <Select
+    disabled={locked}
+    label="Contacted Medical Director *"
+    value={narrativeVitals.contactedMedicalDirector}
+    onChange={(e) =>
+      setData((prev) => ({
+        ...(prev ?? {}),
+        narrativeVitals: {
+          ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
+          contactedMedicalDirector: e.target.value as YesNo,
+        },
+      }))
+    }
+  >
+    <option value="yes">Yes</option>
+    <option value="no">No</option>
+  </Select>
+
+  <Textarea
+    disabled={locked}
+    label="Narrative *"
+    value={narrativeVitals.narrative}
+    onChange={(e) =>
+      setData((prev) => ({
+        ...(prev ?? {}),
+        narrativeVitals: {
+          ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
+          narrative: e.target.value,
+        },
+      }))
+    }
+  />
+</Section>
 
       {/* ================= NARRATIVE & VITALS ================= */}
       <SectionInnerTitle>Vital Signs</SectionInnerTitle>
@@ -1703,27 +1737,37 @@ function TimeField({
   onChange: (v: TimeValue) => void;
   disabled?: boolean;
 }) {
+  const setNow = () => {
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, "0");
+    const mm = now.getMinutes().toString().padStart(2, "0");
+    onChange({ timeHHMM: `${hh}:${mm}` });
+  };
+
   return (
     <div className="space-y-1">
       <label className="block text-sm">{label}</label>
+
       <div className="flex gap-2">
         <input
           type="time"
           disabled={disabled}
           value={value.timeHHMM}
-          onChange={(e) => onChange({ ...value, timeHHMM: e.target.value })}
+          onChange={(e) =>
+            onChange({ timeHHMM: e.target.value })
+          }
           className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
         />
-        <select
-          disabled={disabled}
-          value={value.ampm}
-          onChange={(e) => onChange({ ...value, ampm: e.target.value as "AM" | "PM" | "" })}
-          className="w-20 p-2 rounded bg-[#020617] border border-gray-700"
-        >
-          <option value="">--</option>
-          <option value="AM">AM</option>
-          <option value="PM">PM</option>
-        </select>
+
+        {!disabled && (
+          <button
+            type="button"
+            onClick={setNow}
+            className="px-3 rounded bg-gray-700 text-sm"
+          >
+            Now
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1784,52 +1828,98 @@ function SignatureBox({
   onChange: (dataUrl: string) => void;
   disabled?: boolean;
 }) {
-  const onPickFile = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      onChange(result);
-    };
-    reader.readAsDataURL(file);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const drawing = React.useRef(false);
+
+  // load saved signature
+  useEffect(() => {
+    if (!value || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0);
+    img.src = value;
+  }, [value]);
+
+  const start = (e: any) => {
+    if (disabled) return;
+    drawing.current = true;
+    draw(e);
+  };
+
+  const end = () => {
+    if (!drawing.current || disabled) return;
+    drawing.current = false;
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      onChange(canvas.toDataURL("image/png"));
+    }
+  };
+
+  const draw = (e: any) => {
+    if (!drawing.current || disabled) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x =
+      (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+    const y =
+      (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
+
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#fff";
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    onChange("");
   };
 
   return (
     <div className="space-y-2">
       <label className="text-sm">{label}</label>
 
-      <div className="border border-gray-700 rounded p-3 bg-[#020617] space-y-2">
-        {value ? (
-          <img src={value} alt="Signature" className="h-20 object-contain" />
-        ) : (
-          <div className="text-xs text-gray-400">No signature uploaded</div>
-        )}
-
-        {!disabled && (
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onPickFile(f);
-              }}
-              className="text-xs"
-            />
-            {value && (
-              <button
-                type="button"
-                className="text-xs underline"
-                onClick={() => onChange("")}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
+      <div className="border border-gray-700 rounded bg-[#020617] p-2">
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={150}
+          className="w-full bg-black rounded"
+          onMouseDown={start}
+          onMouseUp={end}
+          onMouseMove={draw}
+          onTouchStart={start}
+          onTouchEnd={end}
+          onTouchMove={draw}
+        />
       </div>
+
+      {!disabled && (
+        <button
+          type="button"
+          onClick={clear}
+          className="text-xs underline text-gray-400"
+        >
+          Clear signature
+        </button>
+      )}
     </div>
   );
 }
+
   function BodyDiagram({
   value,
   onChange,

@@ -1,113 +1,130 @@
+// lib/epcr.ts
 import {
-  addDoc,
-  collection,
-  serverTimestamp,
-  query,
-  where,
-  getDocs,
   doc,
-  updateDoc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-/* =====================================================
+/* =========================
    GET ePCR BY CASE ID
-   - Used to prevent duplicate ePCRs
-   - Returns first matching ePCR (1:1 relationship)
-===================================================== */
-export async function getEpcrByCaseId(caseId: string) {
+   (1:1 relationship)
+========================= */
+export const getEpcrByCaseId = async (caseId: string) => {
   if (!caseId) return null;
 
-  const q = query(
-    collection(db, "epcr"),
-    where("caseId", "==", caseId)
-  );
+  const ref = doc(db, "epcr", caseId);
+  const snap = await getDoc(ref);
 
-  const snap = await getDocs(q);
+  if (!snap.exists()) return null;
 
-  if (snap.empty) return null;
-
-  const docSnap = snap.docs[0];
   return {
-    id: docSnap.id,
-    ...docSnap.data(),
+    id: snap.id,
+    ...snap.data(),
   };
-}
+};
 
-/* =====================================================
-   CREATE ePCR FROM CASE  (FIX OPTION 1)
-   - Ensures ONE ePCR per case
-   - Stores epcrId inside CASE document
-   - Returns epcrId
-===================================================== */
-export async function createEpcrFromCase(
+/* =========================
+   CREATE ePCR FROM CASE
+   - One ePCR per Case
+   - Draft by default
+========================= */
+export const createEpcrFromCase = async (
   caseData: any,
-  userId: string
-) {
+  createdBy: string
+) => {
   if (!caseData?.id) {
-    throw new Error("caseData is missing");
+    throw new Error("caseData.id is missing");
   }
 
-  const caseId = caseData.id;
+  const ref = doc(db, "epcr", caseData.id);
+  const snap = await getDoc(ref);
 
-  /* ---------------------------------
-     1) Check if ePCR already exists
-  ---------------------------------- */
-  const existingEpcr = await getEpcrByCaseId(caseId);
-
-  if (existingEpcr?.id) {
-    // 🔁 Make sure case has epcrId (for old cases)
-    await updateDoc(doc(db, "cases", caseId), {
-      epcrId: existingEpcr.id,
-    });
-
-    return existingEpcr.id;
+  // 🛑 Do NOT create twice
+  if (snap.exists()) {
+    return snap.id;
   }
 
-  /* ---------------------------------
-     2) Create new ePCR
-  ---------------------------------- */
-  const epcrRef = await addDoc(collection(db, "epcr"), {
-    // 🔗 relation
-    caseId,
-    projectId: caseData.projectId ?? null,
+  await setDoc(ref, {
+    /* =====================
+       RELATIONSHIP
+    ===================== */
+    epcrId: caseData.id,              // same as doc id
+    caseId: caseData.id,
+    projectId: caseData.projectId,    // ✅ REQUIRED for Project ePCR list
 
-    // 📋 snapshot from CASE
-    chiefComplaint: caseData.chiefComplaint ?? "",
-    triageLevel: caseData.level ?? "",
-    locationText: caseData.locationText ?? "",
-    lat: caseData.lat ?? null,
-    lng: caseData.lng ?? null,
+    /* =====================
+       PATIENT INFO (SNAPSHOT)
+    ===================== */
+    patientInfo: {
+      firstName:
+        caseData.patient?.name?.split(" ")[0] ||
+        caseData.patientName?.split(" ")[0] ||
+        "",
 
-    patient: {
-      name: caseData.patientName ?? "",
-      age: null,
-      gender: null,
+      lastName:
+        caseData.patient?.name
+          ?.split(" ")
+          .slice(1)
+          .join(" ") ||
+        caseData.patientName
+          ?.split(" ")
+          .slice(1)
+          .join(" ") ||
+        "",
+
+      age: caseData.patient?.age ?? null,
+      gender: caseData.patient?.gender ?? "unknown",
+      phone:
+        caseData.patient?.phone ??
+        caseData.contactNumber ??
+        "",
+
+      factoryName: "",
+      nationality: "",
+
+      /* ✅ TRIAGE SNAPSHOT */
+      triageColor:
+        caseData.caseInfo?.level ??
+        caseData.level ??
+        "",
+
+      healthClassification: "",
+
+      chiefComplaints: caseData.caseInfo?.complaint
+        ? [caseData.caseInfo.complaint]
+        : caseData.chiefComplaint
+        ? [caseData.chiefComplaint]
+        : [],
+
+      signsAndSymptoms: [],
     },
 
-    vitals: {
-      bp: null,
-      hr: null,
-      rr: null,
-      spo2: null,
-      temp: null,
+    /* =====================
+       NARRATIVE (RESTORED ✅)
+    ===================== */
+    narrative: {
+      narrative: "",
+      contactedMedicalDirector: false,
+      contactedTime: null,
+      doctorName: "",
     },
 
-    status: "draft",
+    /* =====================
+       STATUS / CONTROL
+    ===================== */
+    status: "draft",        // draft | finalized
+    locked: false,          // lock on finalize
+    finalizedAt: null,
 
+    /* =====================
+       META
+    ===================== */
+    createdBy,
     createdAt: serverTimestamp(),
-    createdBy: userId,
     updatedAt: serverTimestamp(),
-    completedAt: null,
   });
 
-  /* ---------------------------------
-     3) Store epcrId inside CASE
-  ---------------------------------- */
-  await updateDoc(doc(db, "cases", caseId), {
-    epcrId: epcrRef.id,
-    epcrCreatedAt: serverTimestamp(),
-  });
-
-  return epcrRef.id;
-}
+  return caseData.id;
+};
