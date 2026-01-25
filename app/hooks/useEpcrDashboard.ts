@@ -6,8 +6,6 @@ import {
   getDocs,
   query,
   where,
-  doc,
-  getDoc,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -42,33 +40,21 @@ type DashboardStats = {
 ====================== */
 
 /**
- * Safely convert Firestore Timestamp | Date | string | number to milliseconds
+ * Convert "HH:mm" → total minutes
+ * Example: "12:03" → 723
  */
-function toMillisSafe(t: any): number | null {
-  if (!t) return null;
+function hhmmToMinutes(time?: string): number | null {
+  if (!time) return null;
 
-  // Firestore Timestamp
-  if (typeof t.toMillis === "function") {
-    return t.toMillis();
-  }
+  const parts = time.split(":");
+  if (parts.length !== 2) return null;
 
-  // JavaScript Date
-  if (t instanceof Date) {
-    return t.getTime();
-  }
+  const hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
 
-  // ISO date string
-  if (typeof t === "string") {
-    const d = new Date(t);
-    return isNaN(d.getTime()) ? null : d.getTime();
-  }
+  if (isNaN(hours) || isNaN(minutes)) return null;
 
-  // Already milliseconds
-  if (typeof t === "number") {
-    return t;
-  }
-
-  return null;
+  return hours * 60 + minutes;
 }
 
 /* ======================
@@ -77,7 +63,8 @@ function toMillisSafe(t: any): number | null {
 
 export function useEpcrDashboard(
   startDate?: Date,
-  endDate?: Date
+  endDate?: Date,
+  projectFilter?: string
 ) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -89,20 +76,24 @@ export function useEpcrDashboard(
       /* ------------------
          QUERY ePCR
       ------------------- */
-      let q = query(collection(db, "epcr"));
+      const constraints: any[] = [];
 
       if (startDate && endDate) {
-        q = query(
-          collection(db, "epcr"),
+        constraints.push(
           where("finalizedAt", ">=", Timestamp.fromDate(startDate)),
           where("finalizedAt", "<=", Timestamp.fromDate(endDate))
         );
       }
 
-      const snap = await getDocs(q);
+      const epcrQuery =
+        constraints.length > 0
+          ? query(collection(db, "epcr"), ...constraints)
+          : query(collection(db, "epcr"));
+
+      const epcrSnap = await getDocs(epcrQuery);
 
       /* ------------------
-         INIT COUNTERS
+         INIT STATS
       ------------------- */
       let totalCases = 0;
 
@@ -121,87 +112,89 @@ export function useEpcrDashboard(
       /* ------------------
          LOOP ePCRs
       ------------------- */
-      for (const epcrDoc of snap.docs) {
+      for (const epcrDoc of epcrSnap.docs) {
         const epcr = epcrDoc.data();
+
+        /* ------------------
+           PROJECT DISCOVERY (ALWAYS)
+        ------------------- */
+        const projectName = epcr.projectInfo?.projectName;
+        if (projectName) {
+          projects[projectName] = (projects[projectName] || 0) + 1;
+        }
+
+        /* ------------------
+           APPLY FILTER (KPIs ONLY)
+        ------------------- */
+        if (projectFilter && projectName !== projectFilter) {
+          continue;
+        }
+
+        /* ------------------
+           KPI COUNTS
+        ------------------- */
         totalCases++;
 
-        /* Gender */
         if (epcr.patientInfo?.gender === "male") gender.male++;
         if (epcr.patientInfo?.gender === "female") gender.female++;
 
-        /* Outcome */
         const dest = epcr.outcome?.destination;
-        if (dest) {
-          outcome[dest] = (outcome[dest] || 0) + 1;
-        }
+        if (dest) outcome[dest] = (outcome[dest] || 0) + 1;
 
-        /* Triage */
         const triageColor = epcr.patientInfo?.triageColor;
         if (triageColor) {
           triage[triageColor] = (triage[triageColor] || 0) + 1;
         }
 
-        /* Health Classification */
         const hc = epcr.patientInfo?.healthClassification;
         if (hc) {
           healthClassification[hc] =
             (healthClassification[hc] || 0) + 1;
         }
 
-        /* Chief Complaints */
         const cc: string[] = epcr.patientInfo?.chiefComplaints || [];
         cc.forEach((c) => {
           complaints[c] = (complaints[c] || 0) + 1;
         });
 
-        /* Projects */
-        const projectName = epcr.projectInfo?.projectName;
-        if (projectName) {
-          projects[projectName] =
-            (projects[projectName] || 0) + 1;
-        }
-
-        /* ------------------
+        /* ===================
            RESPONSE TIME
-           Received → OnScene
-        ------------------- */
-        const caseRef = doc(db, "cases", epcrDoc.id);
-        const caseSnap = await getDoc(caseRef);
+           Arrival to PT − Moving
+        =================== */
 
-        if (caseSnap.exists()) {
-          const timeline = caseSnap.data().timeline;
+        const movingMin = hhmmToMinutes(
+          epcr.time?.movingTime?.timeHHMM
+        );
 
-          const receivedMs = toMillisSafe(timeline?.Received);
-          const onSceneMs = toMillisSafe(timeline?.OnScene);
+        const arrivalToPTMin = hhmmToMinutes(
+          epcr.time?.arrivalToPTTime?.timeHHMM
+        );
 
-          if (
-            receivedMs !== null &&
-            onSceneMs !== null &&
-            onSceneMs > receivedMs
-          ) {
-            const minutes = (onSceneMs - receivedMs) / 60000;
+        if (
+          movingMin !== null &&
+          arrivalToPTMin !== null &&
+          arrivalToPTMin > movingMin
+        ) {
+          const minutes = arrivalToPTMin - movingMin;
 
-            responseSum += minutes;
-            responseMin = Math.min(responseMin, minutes);
-            responseMax = Math.max(responseMax, minutes);
-            responseCount++;
-          }
+          responseSum += minutes;
+          responseMin = Math.min(responseMin, minutes);
+          responseMax = Math.max(responseMax, minutes);
+          responseCount++;
         }
       }
 
       /* ------------------
-         FINAL STATS
+         FINAL RESULT
       ------------------- */
       setStats({
         totalCases,
-
         gender,
         outcome,
         triage,
         healthClassification,
         complaints,
         projects,
-
         responseTime: {
           avgMinutes:
             responseCount > 0
@@ -209,7 +202,8 @@ export function useEpcrDashboard(
               : 0,
           minMinutes:
             responseMin === Infinity ? 0 : Math.round(responseMin),
-          maxMinutes: Math.round(responseMax),
+          maxMinutes:
+            responseCount > 0 ? Math.round(responseMax) : 0,
         },
       });
 
@@ -217,7 +211,7 @@ export function useEpcrDashboard(
     };
 
     load();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, projectFilter]);
 
   return { loading, stats };
 }
