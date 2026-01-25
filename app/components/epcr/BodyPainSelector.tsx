@@ -1,5 +1,8 @@
 "use client";
 
+import { forwardRef, useImperativeHandle, useRef } from "react";
+import html2canvas from "html2canvas";
+
 type Props = {
   values: string[];
   onChange: (vals: string[]) => void;
@@ -36,7 +39,12 @@ const AREAS: Area[] = [
   { id: "Back - Right Leg", label: "Back - Right Leg", x: 340, y: 210, w: 25, h: 110 },
 ];
 
-export default function BodyPainSelector({ values, onChange }: Props) {
+const BodyPainSelector = forwardRef(function BodyPainSelector(
+  { values, onChange }: Props,
+  ref
+) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const toggle = (id: string) => {
     onChange(
       values.includes(id)
@@ -45,8 +53,25 @@ export default function BodyPainSelector({ values, onChange }: Props) {
     );
   };
 
+  // 🔥 EXPOSE EXPORT FUNCTION
+  useImperativeHandle(ref, () => ({
+    async exportImage(): Promise<string | null> {
+      if (!containerRef.current) return null;
+
+      const canvas = await html2canvas(containerRef.current, {
+        backgroundColor: "#020617",
+        scale: 2,
+      });
+
+      return canvas.toDataURL("image/png");
+    },
+  }));
+
   return (
-    <div className="border border-gray-700 rounded-lg bg-[#020617] p-4">
+    <div
+      ref={containerRef}
+      className="border border-gray-700 rounded-lg bg-[#020617] p-4"
+    >
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
         <span className="text-sm text-gray-300">
@@ -71,7 +96,6 @@ export default function BodyPainSelector({ values, onChange }: Props) {
 
       {/* SVG BODY */}
       <svg viewBox="0 0 460 350" className="w-full">
-        {/* Titles */}
         <text x="115" y="14" fill="#9CA3AF" fontSize="10">
           FRONT
         </text>
@@ -79,13 +103,11 @@ export default function BodyPainSelector({ values, onChange }: Props) {
           BACK
         </text>
 
-        {/* Silhouette */}
         <g opacity="0.25" fill="#94A3B8">
           <rect x="90" y="20" width="90" height="300" rx="40" />
           <rect x="290" y="20" width="90" height="300" rx="40" />
         </g>
 
-        {/* Clickable areas */}
         {AREAS.map((a) => {
           const active = values.includes(a.id);
           return (
@@ -121,4 +143,6 @@ export default function BodyPainSelector({ values, onChange }: Props) {
       </svg>
     </div>
   );
-}
+});
+
+export default BodyPainSelector;

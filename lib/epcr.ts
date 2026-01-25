@@ -58,48 +58,52 @@ export const createEpcrFromCase = async (
        PATIENT INFO (SNAPSHOT)
     ===================== */
     patientInfo: {
-      firstName:
-        caseData.patient?.name?.split(" ")[0] ||
-        caseData.patientName?.split(" ")[0] ||
-        "",
+  patientId:
+    caseData.patient?.idNumber ??
+    caseData.patientId ??
+    caseData.id, // fallback (safe)
 
-      lastName:
-        caseData.patient?.name
-          ?.split(" ")
-          .slice(1)
-          .join(" ") ||
-        caseData.patientName
-          ?.split(" ")
-          .slice(1)
-          .join(" ") ||
-        "",
+  firstName:
+    caseData.patient?.name?.split(" ")[0] ||
+    caseData.patientName?.split(" ")[0] ||
+    "",
 
-      age: caseData.patient?.age ?? null,
-      gender: caseData.patient?.gender ?? "unknown",
-      phone:
-        caseData.patient?.phone ??
-        caseData.contactNumber ??
-        "",
+  lastName:
+    caseData.patient?.name
+      ?.split(" ")
+      .slice(1)
+      .join(" ") ||
+    caseData.patientName
+      ?.split(" ")
+      .slice(1)
+      .join(" ") ||
+    "",
 
-      factoryName: "",
-      nationality: "",
+  age: caseData.patient?.age ?? null,
+  gender: caseData.patient?.gender ?? "unknown",
+  phone:
+    caseData.patient?.phone ??
+    caseData.contactNumber ??
+    "",
 
-      /* ✅ TRIAGE SNAPSHOT */
-      triageColor:
-        caseData.caseInfo?.level ??
-        caseData.level ??
-        "",
+  factoryName: "",
+  nationality: "",
 
-      healthClassification: "",
+  triageColor:
+    caseData.caseInfo?.level ??
+    caseData.level ??
+    "",
 
-      chiefComplaints: caseData.caseInfo?.complaint
-        ? [caseData.caseInfo.complaint]
-        : caseData.chiefComplaint
-        ? [caseData.chiefComplaint]
-        : [],
+  healthClassification: "",
+  chiefComplaints: caseData.caseInfo?.complaint
+    ? [caseData.caseInfo.complaint]
+    : caseData.chiefComplaint
+    ? [caseData.chiefComplaint]
+    : [],
 
-      signsAndSymptoms: [],
-    },
+  signsAndSymptoms: [],
+},
+
 
     /* =====================
        NARRATIVE (RESTORED ✅)

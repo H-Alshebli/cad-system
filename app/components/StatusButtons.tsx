@@ -1,6 +1,7 @@
 "use client";
 
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 
 const statuses = [
@@ -21,11 +22,14 @@ export default function StatusButtons({
   currentStatus: string;
 }) {
   const updateStatus = async (newStatus: string) => {
-    await updateDoc(doc(db, "cases", caseId), {
-      status: newStatus,
-    });
-    alert(`Status updated to: ${newStatus}`);
-  };
+  await updateDoc(doc(db, "cases", caseId), {
+    status: newStatus,
+    [`timeline.${newStatus}`]: serverTimestamp(),
+  });
+
+  alert(`Status updated to: ${newStatus}`);
+};
+
 
   return (
     <div>

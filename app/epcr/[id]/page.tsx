@@ -1,7 +1,18 @@
 "use client";
 
+import { useRef } from "react";
+
+
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  getDoc,          // ✅ ADD THIS
+} from "firebase/firestore";
+import { generateEpcrPdf } from "@/lib/epcrPdf";
+
+
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import BodyPainSelector from "@/app/components/epcr/BodyPainSelector";
@@ -26,6 +37,10 @@ type Gender = "male" | "female" | "unknown";
 type TriageColor = "Level 1 (Resuscitation)" | "Level 2 (Emergent)" | "Level 3 (Urgent)" | "Level 4 (Less Urgent)" | "Level 5 (non-urgent)" | "death";
 
 
+type ProjectInfo = {
+  projectId?: string;
+  projectName?: string;
+};
 
 
 type HealthClassification =
@@ -36,6 +51,7 @@ type HealthClassification =
   | "other";
 
 type PatientInfo = {
+  patientId?: string;
   firstName: string;
   lastName: string;
   age: number | null;
@@ -80,7 +96,6 @@ type VitalItem = {
   bgl: string;
   time: {
     timeHHMM: string;
-    ampm: "AM" | "PM" | "";
   };
 };
 
@@ -143,7 +158,7 @@ type TimeSection = {
 
 type EpcrDoc = {
   locked?: boolean;
-
+  projectInfo?: ProjectInfo;
   patientInfo?: PatientInfo;
   medicalHistory?: MedicalHistory;
   headToToe?: HeadToToeExam;
@@ -160,7 +175,14 @@ type EpcrDoc = {
    FACTORIES
 ========================= */
 
+const emptyProjectInfo = (): ProjectInfo => ({
+  projectId: "",
+  projectName: "",
+});
+
+
 const emptyPatientInfo = (): PatientInfo => ({
+   patientId: "",   
   firstName: "",
   lastName: "",
   age: null,
@@ -201,9 +223,9 @@ const emptyVitalItem = (): VitalItem => ({
   bgl: "",
   time: {
     timeHHMM: "",
-    ampm: "",
   },
 });
+
 
 
 const emptyMedicationItem = (): MedicationItem => ({
@@ -370,27 +392,145 @@ const BODY_AREAS = [
 /* =========================
    PAGE
 ========================= */
+const timestampToHHMM = (ts: any): string => {
+  if (!ts || typeof ts.toDate !== "function") return "";
+
+  const d = ts.toDate();
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+
+  return `${hh}:${mm}`;
+};
+
 
 export default function EpcrPage({ params }: { params: { id: string } }) {
+
+type BodyPainRef = {
+  exportImage: () => Promise<string | null>;
+};
+
+const bodyPainRef = useRef<BodyPainRef | null>(null);
+
+
+
+
   const epcrId = params.id;
   const router = useRouter();
 
   const [data, setData] = useState<EpcrDoc | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const ref = doc(db, "epcr", epcrId);
-    const unsub = onSnapshot(ref, (snap) => {
-      setData(snap.exists() ? (snap.data() as EpcrDoc) : null);
+useEffect(() => {
+  const epcrRef = doc(db, "epcr", epcrId);
+
+  const unsub = onSnapshot(epcrRef, async (epcrSnap) => {
+    if (!epcrSnap.exists()) {
+      setData(null);
       setLoading(false);
+      return;
+    }
+
+    const epcrData = epcrSnap.data() as EpcrDoc;
+
+    // 🧠 CASE ID STRATEGY
+    // Assumption: epcrId === caseId
+    // (If different, we’ll adjust in next step)
+  const caseRef = doc(db, "cases", epcrId);
+const caseSnap = await getDoc(caseRef);
+
+if (caseSnap.exists()) {
+  const caseData = caseSnap.data(); // ✅ مهم جدًا
+  const timeline = caseData.timeline;
+// =====================
+// PROJECT INFO (FIXED)
+// =====================
+if (caseData.projectId && !epcrData.projectInfo?.projectName) {
+  const projectRef = doc(db, "projects", caseData.projectId);
+  const projectSnap = await getDoc(projectRef);
+
+  if (projectSnap.exists()) {
+    const projectData = projectSnap.data();
+
+    // ⚠️ انتبه: اسم الحقل في projects هو projectName
+    const projectInfo: ProjectInfo = {
+      projectId: caseData.projectId,
+      projectName: projectData.projectName || "",
+    };
+
+    // 1️⃣ خزّن في Firestore
+    await updateDoc(epcrRef, {
+      projectInfo,
+      updatedAt: new Date(),
     });
-    return () => unsub();
-  }, [epcrId]);
+
+    // 2️⃣ حدّث React state (نسخة جديدة)
+    setData((prev) => ({
+      ...(prev ?? {}),
+      projectInfo,
+    }));
+
+    setLoading(false);
+    return; // ⛔ مهم جدًا
+  }
+}
+
+
+
+  // 🆔 Copy Patient ID once
+  if (caseData.patientId && !epcrData.patientInfo?.patientId) {
+    epcrData.patientInfo = {
+      ...(epcrData.patientInfo ?? emptyPatientInfo()),
+      patientId: caseData.patientId,
+    };
+  }
+
+  // ⏱ Auto-fill time fields
+  if (timeline) {
+    epcrData.time = {
+      ...(epcrData.time ?? emptyTime()),
+
+      movingTime:
+        epcrData.time?.movingTime?.timeHHMM
+          ? epcrData.time.movingTime
+          : { timeHHMM: timestampToHHMM(timeline.EnRoute) },
+
+      arrivalToPTTime:
+        epcrData.time?.arrivalToPTTime?.timeHHMM
+          ? epcrData.time.arrivalToPTTime
+          : { timeHHMM: timestampToHHMM(timeline.OnScene) },
+
+      leavingSceneTime:
+        epcrData.time?.leavingSceneTime?.timeHHMM
+          ? epcrData.time.leavingSceneTime
+          : { timeHHMM: timestampToHHMM(timeline.Transporting) },
+
+      hospitalTime:
+        epcrData.time?.hospitalTime?.timeHHMM
+          ? epcrData.time.hospitalTime
+          : { timeHHMM: timestampToHHMM(timeline.Hospital) },
+
+      backTime:
+        epcrData.time?.backTime?.timeHHMM
+          ? epcrData.time.backTime
+          : { timeHHMM: timestampToHHMM(timeline.Closed) },
+    };
+  }
+}
+
+
+    setData(epcrData);
+    setLoading(false);
+  });
+
+  return () => unsub();
+}, [epcrId]);
+
 
  const locked = data?.locked === true;
 
 // controlled sections (آمنة حتى لو data = null)
 const patientInfo = data?.patientInfo ?? emptyPatientInfo();
+const projectInfo = data?.projectInfo ?? emptyProjectInfo();
 const medicalHistory = data?.medicalHistory ?? emptyMedicalHistory();
 const headToToe = data?.headToToe ?? emptyHeadToToe();
 const narrativeVitals = data?.narrativeVitals ?? emptyNarrativeVitals();
@@ -460,6 +600,33 @@ if (!data) {
 }
 
   const canFinalize = missing.length === 0;
+const exportPdf = async () => {
+  if (!bodyPainRef.current) {
+    alert("Body diagram not ready yet");
+    return;
+  }
+
+  const diagramImage = await bodyPainRef.current.exportImage();
+
+  console.log("Diagram image:", diagramImage); // 🔍 مهم
+
+  generateEpcrPdf({
+  projectInfo,
+    patientInfo,
+    medicalHistory,
+    headToToe: {
+      ...headToToe,
+      diagramImage,
+    },
+    narrativeVitals,
+    outcome,
+    transferTeam,
+    time,
+  });
+};
+
+
+
 
   const saveDraft = async () => {
     const ref = doc(db, "epcr", epcrId);
@@ -512,6 +679,12 @@ if (!data) {
         )}
       </div>
 
+       {/* ================= PATIENT INFORMATION ================= */}
+<button onClick={exportPdf} className="px-4 py-2 bg-slate-800 border">
+  Export Professional PDF
+</button>
+
+
       {!locked && missing.length > 0 && (
         <Section title="Missing Required Fields">
           <ul className="list-disc ml-6 text-sm text-yellow-200">
@@ -521,9 +694,28 @@ if (!data) {
           </ul>
         </Section>
       )}
+<Section title="Case Information">
+  <Input
+    disabled
+    label="Project Name"
+    value={projectInfo.projectName || "—"}
+  />
+
+  <Input
+    disabled
+    label="Project ID"
+    value={projectInfo.projectId || "—"}
+  />
+</Section>
 
       {/* ================= PATIENT INFORMATION ================= */}
       <Section title="Patient Information">
+        <Input
+  disabled
+  label="Patient ID"
+  value={patientInfo.patientId || "—"}
+/>
+
         <div className="grid grid-cols-2 gap-4">
           <Input
             disabled={locked}
@@ -588,7 +780,7 @@ if (!data) {
           >
             <option value="male">Male</option>
             <option value="female">Female</option>
-            <option value="unknown">Unknown</option>
+            
           </Select>
         </div>
 
@@ -897,7 +1089,8 @@ if (!data) {
           }
         />
 
-       <BodyPainSelector
+<BodyPainSelector
+  ref={bodyPainRef}
   values={headToToe.painLocations}
   onChange={(vals) =>
     setData((prev) => ({
@@ -909,6 +1102,7 @@ if (!data) {
     }))
   }
 />
+
 
 
       </Section>
@@ -1618,8 +1812,12 @@ if (!data) {
               Finalize ePCR
             </button>
           </>
+          
         )}
-
+       {/* ================= PATIENT INFORMATION ================= */}
+<button onClick={exportPdf} className="px-4 py-2 bg-slate-800 border">
+  Export Professional PDF
+</button>
         <button onClick={() => router.back()} className="px-6 py-2 rounded border border-gray-600">
           Back
         </button>
@@ -1781,35 +1979,46 @@ function TimeMini({
   disabled,
 }: {
   label: string;
-  value: { timeHHMM: string; ampm: "AM" | "PM" | "" };
-  onChange: (v: { timeHHMM: string; ampm: "AM" | "PM" | "" }) => void;
+  value: { timeHHMM: string };
+  onChange: (v: { timeHHMM: string }) => void;
   disabled?: boolean;
 }) {
+  const setNow = () => {
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, "0");
+    const mm = now.getMinutes().toString().padStart(2, "0");
+    onChange({ timeHHMM: `${hh}:${mm}` });
+  };
+
   return (
     <div className="space-y-1">
       <label className="block text-sm">{label}</label>
+
       <div className="flex gap-2">
         <input
           type="time"
           disabled={disabled}
           value={value.timeHHMM}
-          onChange={(e) => onChange({ ...value, timeHHMM: e.target.value })}
+          onChange={(e) =>
+            onChange({ timeHHMM: e.target.value })
+          }
           className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
         />
-        <select
-          disabled={disabled}
-          value={value.ampm}
-          onChange={(e) => onChange({ ...value, ampm: e.target.value as "AM" | "PM" | "" })}
-          className="w-20 p-2 rounded bg-[#020617] border border-gray-700"
-        >
-          <option value="">--</option>
-          <option value="AM">AM</option>
-          <option value="PM">PM</option>
-        </select>
+
+        {!disabled && (
+          <button
+            type="button"
+            onClick={setNow}
+            className="px-3 rounded bg-gray-700 text-sm"
+          >
+            Now
+          </button>
+        )}
       </div>
     </div>
   );
 }
+
 
 /**
  * SignatureBox:
@@ -1870,9 +2079,9 @@ function SignatureBox({
     const y =
       (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
 
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = "#F00";
 
     ctx.lineTo(x, y);
     ctx.stroke();
