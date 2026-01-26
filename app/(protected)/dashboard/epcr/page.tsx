@@ -1,9 +1,38 @@
 "use client";
+import { StatsTable } from "@/app/components/StatsTable";
+
 
 import { useState } from "react";
 import { useEpcrDashboard } from "@/app/hooks/useEpcrDashboard";
 
 type ProjectsMap = Record<string, number>;
+
+/* ================= COLORS ================= */
+
+const HEALTH_COLORS: Record<string, string> = {
+  Occupational: "bg-blue-500/15 text-blue-400",
+  "Non-Occupational": "bg-purple-500/15 text-purple-400",
+  "General Health Illnesses": "bg-green-500/15 text-green-400",
+  "Unspecified Medical Conditions": "bg-gray-500/15 text-gray-300",
+};
+
+const TRIAGE_COLORS: Record<string, string> = {
+  "Level 1 (Resuscitation)": "bg-red-600/20 text-red-400",
+  "Level 2 (Emergent)": "bg-orange-500/20 text-orange-400",
+  "Level 3 (Urgent)": "bg-yellow-500/20 text-yellow-300",
+  "Level 4 (Less Urgent)": "bg-green-500/20 text-green-400",
+  "Level 5 (non-urgent)": "bg-blue-500/20 text-blue-400",
+  death: "bg-black/40 text-red-500",
+};
+
+const COMPLAINT_COLORS: Record<string, string> = {
+  "Cardiac complaints": "bg-red-500/15 text-red-400",
+  "Musculoskeletal complaints": "bg-blue-500/15 text-blue-400",
+  "Respiratory complaints": "bg-cyan-500/15 text-cyan-400",
+  "Digestive complaints": "bg-green-500/15 text-green-400",
+  "General medical complaints": "bg-gray-500/15 text-gray-300",
+};
+
 
 export default function EpcrDashboardPage() {
   const [selectedProject, setSelectedProject] = useState<string | undefined>();
@@ -25,6 +54,7 @@ export default function EpcrDashboardPage() {
   return (
     <div className="p-6 text-white space-y-6">
       <h1 className="text-2xl font-bold">ePCR Dashboard</h1>
+      
 
       {/* ================= PROJECT FILTER ================= */}
       {Object.keys(projects).length > 0 && (
@@ -66,6 +96,27 @@ export default function EpcrDashboardPage() {
           value={`${stats.responseTime.avgMinutes} min`}
         />
       </div>
+      {/* ================= MEDICAL STATISTICS ================= */}
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+  <StatsTable
+    title="Health Classification"
+    data={stats.healthClassification}
+    colorMap={HEALTH_COLORS}
+  />
+
+  <StatsTable
+    title="Triage Levels"
+    data={stats.triage}
+    colorMap={TRIAGE_COLORS}
+  />
+
+  <StatsTable
+    title="Chief Complaints"
+    data={stats.complaints}
+    colorMap={COMPLAINT_COLORS}
+  />
+</div>
+
 
       {/* ================= PROJECTS TABLE ================= */}
       <div className="mt-8">
