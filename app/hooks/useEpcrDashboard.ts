@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import {
   collection,
-  getDocs,
   query,
   where,
   Timestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -70,28 +70,23 @@ export function useEpcrDashboard(
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+    const constraints: any[] = [];
 
-      /* ------------------
-         QUERY ePCR
-      ------------------- */
-      const constraints: any[] = [];
+    if (startDate && endDate) {
+      constraints.push(
+        where("finalizedAt", ">=", Timestamp.fromDate(startDate)),
+        where("finalizedAt", "<=", Timestamp.fromDate(endDate))
+      );
+    }
 
-      if (startDate && endDate) {
-        constraints.push(
-          where("finalizedAt", ">=", Timestamp.fromDate(startDate)),
-          where("finalizedAt", "<=", Timestamp.fromDate(endDate))
-        );
-      }
+    const epcrQuery =
+      constraints.length > 0
+        ? query(collection(db, "epcr"), ...constraints)
+        : query(collection(db, "epcr"));
 
-      const epcrQuery =
-        constraints.length > 0
-          ? query(collection(db, "epcr"), ...constraints)
-          : query(collection(db, "epcr"));
+    setLoading(true);
 
-      const epcrSnap = await getDocs(epcrQuery);
-
+    const unsub = onSnapshot(epcrQuery, (epcrSnap) => {
       /* ------------------
          INIT STATS
       ------------------- */
@@ -109,30 +104,16 @@ export function useEpcrDashboard(
       let responseMax = 0;
       let responseCount = 0;
 
-      /* ------------------
-         LOOP ePCRs
-      ------------------- */
       for (const epcrDoc of epcrSnap.docs) {
         const epcr = epcrDoc.data();
 
-        /* ------------------
-           PROJECT DISCOVERY (ALWAYS)
-        ------------------- */
         const projectName = epcr.projectInfo?.projectName;
         if (projectName) {
           projects[projectName] = (projects[projectName] || 0) + 1;
         }
 
-        /* ------------------
-           APPLY FILTER (KPIs ONLY)
-        ------------------- */
-        if (projectFilter && projectName !== projectFilter) {
-          continue;
-        }
+        if (projectFilter && projectName !== projectFilter) continue;
 
-        /* ------------------
-           KPI COUNTS
-        ------------------- */
         totalCases++;
 
         if (epcr.patientInfo?.gender === "male") gender.male++;
@@ -142,9 +123,7 @@ export function useEpcrDashboard(
         if (dest) outcome[dest] = (outcome[dest] || 0) + 1;
 
         const triageColor = epcr.patientInfo?.triageColor;
-        if (triageColor) {
-          triage[triageColor] = (triage[triageColor] || 0) + 1;
-        }
+        if (triageColor) triage[triageColor] = (triage[triageColor] || 0) + 1;
 
         const hc = epcr.patientInfo?.healthClassification;
         if (hc) {
@@ -157,26 +136,17 @@ export function useEpcrDashboard(
           complaints[c] = (complaints[c] || 0) + 1;
         });
 
-        /* ===================
-           RESPONSE TIME
-           Arrival to PT − Moving
-        =================== */
-
-        const movingMin = hhmmToMinutes(
-          epcr.time?.movingTime?.timeHHMM
-        );
-
-        const arrivalToPTMin = hhmmToMinutes(
+        const movingMin = hhmmToMinutes(epcr.time?.movingTime?.timeHHMM);
+        const arrivalMin = hhmmToMinutes(
           epcr.time?.arrivalToPTTime?.timeHHMM
         );
 
         if (
           movingMin !== null &&
-          arrivalToPTMin !== null &&
-          arrivalToPTMin > movingMin
+          arrivalMin !== null &&
+          arrivalMin > movingMin
         ) {
-          const minutes = arrivalToPTMin - movingMin;
-
+          const minutes = arrivalMin - movingMin;
           responseSum += minutes;
           responseMin = Math.min(responseMin, minutes);
           responseMax = Math.max(responseMax, minutes);
@@ -184,9 +154,6 @@ export function useEpcrDashboard(
         }
       }
 
-      /* ------------------
-         FINAL RESULT
-      ------------------- */
       setStats({
         totalCases,
         gender,
@@ -208,10 +175,11 @@ export function useEpcrDashboard(
       });
 
       setLoading(false);
-    };
+    });
 
-    load();
+    return () => unsub();
   }, [startDate, endDate, projectFilter]);
 
+  // ✅ THIS IS THE MISSING PART
   return { loading, stats };
 }

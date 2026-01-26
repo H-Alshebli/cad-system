@@ -128,6 +128,11 @@ export default function Sidebar() {
             Dashboard
           </Link>
         )}
+        {(isAdmin || can(permissions, "dashboards", "view")) && (
+          <Link className={`block rounded px-3 py-2 ${linkClass("/dashboard/epcr")}`} href="/dashboard/epcr">
+            ePCR Dashboard
+          </Link>
+        )}
 
         {(isAdmin || can(permissions, "projects", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/projects")}`} href="/projects">

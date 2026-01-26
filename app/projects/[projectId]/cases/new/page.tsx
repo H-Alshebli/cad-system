@@ -5,6 +5,7 @@ import {
   addDoc,
   collection,
   serverTimestamp,
+  Timestamp,
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -15,6 +16,28 @@ import dynamic from "next/dynamic";
    Client-only map
 ----------------------------*/
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
+
+/* ---------------------------
+   CONSTANTS
+----------------------------*/
+const CHIEF_COMPLAINT_OPTIONS = [
+  "Cardiac complaints",
+  "Musculoskeletal complaints",
+  "Metabolic and endocrine complaints",
+  "Environmental and toxicological complaints",
+  "Gastrointestinal complaints",
+  "Infectious disease complaints",
+  "Other",
+];
+
+const TRIAGE_LEVELS = [
+  "Level 1 (Resuscitation)",
+  "Level 2 (Emergent)",
+  "Level 3 (Urgent)",
+  "Level 4 (Less Urgent)",
+  "Level 5 (Non-Urgent)",
+  "Death",
+];
 
 /* ---------------------------
    UI Helpers
@@ -60,12 +83,24 @@ export default function NewProjectCasePage({
   const router = useRouter();
 
   /* ---------------------------
+     TIMELINE STATE
+  ----------------------------*/
+  const [receivedAt, setReceivedAt] = useState<Timestamp | null>(null);
+
+  useEffect(() => {
+    // Received time when page opens
+    setReceivedAt(Timestamp.now());
+  }, []);
+
+  /* ---------------------------
      FORM STATE
   ----------------------------*/
   const [callerName, setCallerName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
 
   const [chiefComplaint, setChiefComplaint] = useState("");
+  const [otherComplaint, setOtherComplaint] = useState("");
+
   const [triageLevel, setTriageLevel] = useState("");
   const [patientName, setPatientName] = useState("");
 
@@ -109,10 +144,13 @@ export default function NewProjectCasePage({
   }, [unitType]);
 
   /* ---------------------------
-     SUBMIT
+     CREATE CASE
   ----------------------------*/
   const createCase = async () => {
-    const now = new Date().toISOString();
+    if (!chiefComplaint || !triageLevel || !locationText || !selectedUnitId) {
+      alert("Please complete chief complaint, triage, location, and unit.");
+      return;
+    }
 
     await addDoc(collection(db, "cases"), {
       projectId: params.projectId,
@@ -120,7 +158,9 @@ export default function NewProjectCasePage({
       callerName,
       contactNumber,
 
-      chiefComplaint,
+      chiefComplaint:
+        chiefComplaint === "Other" ? otherComplaint : chiefComplaint,
+
       level: triageLevel,
       patientName,
 
@@ -132,22 +172,28 @@ export default function NewProjectCasePage({
         source: isFromMapLink ? "google_link" : "manual",
       },
 
-      assignedUnit:
-        unitType && selectedUnitId
-          ? {
-              type: unitType,
-              id: selectedUnitId,
-            }
-          : null,
-
-      status: "Received",
-      createdAt: serverTimestamp(),
-      timeline: {
-        Received: now,
+      assignedUnit: {
+        type: unitType,
+        id: selectedUnitId,
       },
+
+      status: "Assigned",
+
+      timeline: {
+        receivedAt,                   // page opened
+        assignedAt: serverTimestamp(), // create clicked
+        enRouteAt: null,
+        onSceneAt: null,
+        transportingAt: null,
+        hospitalAt: null,
+        closedAt: null,
+      },
+
+      createdAt: serverTimestamp(),
     });
 
-    router.push(`/dev/projects/${params.projectId}/cad`);
+    router.push(`/projects/${params.projectId}/cad`);
+
   };
 
   /* ---------------------------
@@ -155,9 +201,7 @@ export default function NewProjectCasePage({
   ----------------------------*/
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold text-white">
-        New Case (Project)
-      </h1>
+      <h1 className="text-xl font-bold text-white">New Case (Project)</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ================= FORM ================= */}
@@ -167,79 +211,65 @@ export default function NewProjectCasePage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <FieldLabel text="Caller Name" />
-              <input
-                className={inputClass}
-                value={callerName}
-                onChange={(e) => setCallerName(e.target.value)}
-              />
+              <input className={inputClass} value={callerName} onChange={(e) => setCallerName(e.target.value)} />
             </div>
-
             <div>
               <FieldLabel text="Contact Number" />
-              <input
-                className={inputClass}
-                value={contactNumber}
-                onChange={(e) => setContactNumber(e.target.value)}
-              />
+              <input className={inputClass} value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
             </div>
           </div>
 
-          {/* Case */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <FieldLabel text="Chief Complaint" />
-              <input
-                className={inputClass}
-                value={chiefComplaint}
-                onChange={(e) => setChiefComplaint(e.target.value)}
-              />
-            </div>
+          {/* Chief Complaint */}
+          <div>
+            <FieldLabel text="Prehospital Chief Complaints *" />
+            <select className={inputClass} value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)}>
+              <option value="">Select complaint</option>
+              {CHIEF_COMPLAINT_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
 
-            <div>
-              <FieldLabel text="Triage Level" />
+            {chiefComplaint === "Other" && (
               <input
-                className={inputClass}
-                value={triageLevel}
-                onChange={(e) => setTriageLevel(e.target.value)}
+                className={`${inputClass} mt-2`}
+                placeholder="Specify other complaint"
+                value={otherComplaint}
+                onChange={(e) => setOtherComplaint(e.target.value)}
               />
-            </div>
+            )}
           </div>
 
+          {/* Triage */}
+          <div>
+            <FieldLabel text="Prehospital Triage Color-Coded Scale *" />
+            <select className={inputClass} value={triageLevel} onChange={(e) => setTriageLevel(e.target.value)}>
+              <option value="">Select triage level</option>
+              {TRIAGE_LEVELS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Patient */}
           <div>
             <FieldLabel text="Patient Name" />
-            <input
-              className={inputClass}
-              value={patientName}
-              onChange={(e) => setPatientName(e.target.value)}
-            />
+            <input className={inputClass} value={patientName} onChange={(e) => setPatientName(e.target.value)} />
           </div>
 
           {/* Location */}
           <div className="border border-gray-700 rounded p-4 space-y-3">
-            <h3 className="text-white text-sm font-semibold">
-              Location Information
-            </h3>
+            <h3 className="text-white text-sm font-semibold">Location Information</h3>
 
             <FieldLabel text="Location Description" />
-            <input
-              className={inputClass}
-              value={locationText}
-              onChange={(e) => setLocationText(e.target.value)}
-            />
+            <input className={inputClass} value={locationText} onChange={(e) => setLocationText(e.target.value)} />
 
             <FieldLabel text="Google Maps Link (Auto-Pin)" />
             <input
               className={inputClass}
-              placeholder="Paste Google Maps link here"
               value={mapLink}
               onChange={(e) => {
                 const value = e.target.value;
                 setMapLink(value);
-
-                if (!value) {
-                  setIsFromMapLink(false);
-                  return;
-                }
 
                 const coords = extractLatLngFromGoogleMaps(value);
                 if (coords) {
@@ -255,41 +285,24 @@ export default function NewProjectCasePage({
                 <FieldLabel text="Latitude" />
                 <input
                   disabled={isFromMapLink}
-                  className={`${inputClass} ${
-                    isFromMapLink
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
+                  className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={lat ?? ""}
-                  onChange={(e) =>
-                    setLat(e.target.value ? Number(e.target.value) : null)
-                  }
+                  onChange={(e) => setLat(e.target.value ? Number(e.target.value) : null)}
                 />
               </div>
-
               <div>
                 <FieldLabel text="Longitude" />
                 <input
                   disabled={isFromMapLink}
-                  className={`${inputClass} ${
-                    isFromMapLink
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
+                  className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`}
                   value={lng ?? ""}
-                  onChange={(e) =>
-                    setLng(e.target.value ? Number(e.target.value) : null)
-                  }
+                  onChange={(e) => setLng(e.target.value ? Number(e.target.value) : null)}
                 />
               </div>
             </div>
 
             {googleMapLink && (
-              <a
-                href={googleMapLink}
-                target="_blank"
-                className="text-blue-400 text-sm underline"
-              >
+              <a href={googleMapLink} target="_blank" className="text-blue-400 text-sm underline">
                 Open in Google Maps
               </a>
             )}
@@ -297,31 +310,19 @@ export default function NewProjectCasePage({
 
           {/* Assign Unit */}
           <div className="border border-gray-700 rounded p-4 space-y-3">
-            <h3 className="text-white text-sm font-semibold">
-              Assign Unit
-            </h3>
+            <h3 className="text-white text-sm font-semibold">Assign Unit</h3>
 
             <div className="flex gap-6 text-white text-sm">
               {["ambulance", "clinic", "roaming"].map((t) => (
                 <label key={t} className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={unitType === t}
-                    onChange={() =>
-                      setUnitType(t as "ambulance" | "clinic" | "roaming")
-                    }
-                  />
+                  <input type="radio" checked={unitType === t} onChange={() => setUnitType(t as any)} />
                   {t}
                 </label>
               ))}
             </div>
 
             {unitType && units.length > 0 && (
-              <select
-                className={inputClass}
-                value={selectedUnitId}
-                onChange={(e) => setSelectedUnitId(e.target.value)}
-              >
+              <select className={inputClass} value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)}>
                 <option value="">Select unit</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -332,10 +333,7 @@ export default function NewProjectCasePage({
             )}
           </div>
 
-          <button
-            onClick={createCase}
-            className="w-full h-11 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold"
-          >
+          <button onClick={createCase} className="w-full h-11 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold">
             Create Case
           </button>
         </div>

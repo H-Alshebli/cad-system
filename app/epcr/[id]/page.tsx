@@ -402,6 +402,14 @@ const timestampToHHMM = (ts: any): string => {
   return `${hh}:${mm}`;
 };
 
+// 🧠 Pick timeline time (supports NEW + OLD keys)
+const pickTimelineTime = (
+  timeline: any,
+  newKey: string,
+  oldKey: string
+) => {
+  return timeline?.[newKey] ?? timeline?.[oldKey] ?? null;
+};
 
 export default function EpcrPage({ params }: { params: { id: string } }) {
 
@@ -432,88 +440,97 @@ useEffect(() => {
 
     const epcrData = epcrSnap.data() as EpcrDoc;
 
-    // 🧠 CASE ID STRATEGY
-    // Assumption: epcrId === caseId
-    // (If different, we’ll adjust in next step)
-  const caseRef = doc(db, "cases", epcrId);
-const caseSnap = await getDoc(caseRef);
+    const caseRef = doc(db, "cases", epcrId);
+    const caseSnap = await getDoc(caseRef);
 
-if (caseSnap.exists()) {
-  const caseData = caseSnap.data(); // ✅ مهم جدًا
+
+     if (caseSnap.exists()) {
+  const caseData = caseSnap.data();
   const timeline = caseData.timeline;
-// =====================
-// PROJECT INFO (FIXED)
-// =====================
-if (caseData.projectId && !epcrData.projectInfo?.projectName) {
+
+  /* =========================
+   PROJECT INFO (WRITE ONCE)
+========================= */
+let projectUpdated = false;
+const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
+
+// 1️⃣ Always copy projectId from case
+if (!newProjectInfo.projectId && caseData.projectId) {
+  newProjectInfo.projectId = caseData.projectId;
+  projectUpdated = true;
+}
+
+// 2️⃣ Fetch projectName from projects collection
+if (
+  caseData.projectId &&
+  !newProjectInfo.projectName
+) {
   const projectRef = doc(db, "projects", caseData.projectId);
   const projectSnap = await getDoc(projectRef);
 
   if (projectSnap.exists()) {
     const projectData = projectSnap.data();
 
-    // ⚠️ انتبه: اسم الحقل في projects هو projectName
-    const projectInfo: ProjectInfo = {
-      projectId: caseData.projectId,
-      projectName: projectData.projectName || "",
-    };
+    newProjectInfo.projectName =
+      projectData.projectName ?? "";
 
-    // 1️⃣ خزّن في Firestore
-    await updateDoc(epcrRef, {
-      projectInfo,
-      updatedAt: new Date(),
-    });
-
-    // 2️⃣ حدّث React state (نسخة جديدة)
-    setData((prev) => ({
-      ...(prev ?? {}),
-      projectInfo,
-    }));
-
-    setLoading(false);
-    return; // ⛔ مهم جدًا
+    projectUpdated = true;
   }
 }
 
+// 3️⃣ WRITE ONCE
+if (projectUpdated) {
+  await updateDoc(epcrRef, {
+    projectInfo: newProjectInfo,
+    updatedAt: new Date(),
+  });
+
+  epcrData.projectInfo = newProjectInfo;
+  setData(epcrData);
+  setLoading(false);
+  return; // ⛔ stop snapshot loop
+}
 
 
-  // 🆔 Copy Patient ID once
-  if (caseData.patientId && !epcrData.patientInfo?.patientId) {
-    epcrData.patientInfo = {
-      ...(epcrData.patientInfo ?? emptyPatientInfo()),
-      patientId: caseData.patientId,
-    };
-  }
-
-  // ⏱ Auto-fill time fields
+  /* =========================
+     TIMELINE → TIME (WRITE ONCE)
+     ========================= */
   if (timeline) {
-    epcrData.time = {
-      ...(epcrData.time ?? emptyTime()),
+    let timeUpdated = false;
+    const newTime = { ...(epcrData.time ?? emptyTime()) };
 
-      movingTime:
-        epcrData.time?.movingTime?.timeHHMM
-          ? epcrData.time.movingTime
-          : { timeHHMM: timestampToHHMM(timeline.EnRoute) },
-
-      arrivalToPTTime:
-        epcrData.time?.arrivalToPTTime?.timeHHMM
-          ? epcrData.time.arrivalToPTTime
-          : { timeHHMM: timestampToHHMM(timeline.OnScene) },
-
-      leavingSceneTime:
-        epcrData.time?.leavingSceneTime?.timeHHMM
-          ? epcrData.time.leavingSceneTime
-          : { timeHHMM: timestampToHHMM(timeline.Transporting) },
-
-      hospitalTime:
-        epcrData.time?.hospitalTime?.timeHHMM
-          ? epcrData.time.hospitalTime
-          : { timeHHMM: timestampToHHMM(timeline.Hospital) },
-
-      backTime:
-        epcrData.time?.backTime?.timeHHMM
-          ? epcrData.time.backTime
-          : { timeHHMM: timestampToHHMM(timeline.Closed) },
+    const fill = (
+      key: keyof TimeSection,
+      newKey: string,
+      oldKey: string
+    ) => {
+      if (!newTime[key]?.timeHHMM) {
+        const ts = pickTimelineTime(timeline, newKey, oldKey);
+        if (ts) {
+          newTime[key] = { timeHHMM: timestampToHHMM(ts) };
+          timeUpdated = true;
+        }
+      }
     };
+
+    fill("movingTime", "enRouteAt", "EnRoute");
+    fill("arrivalTime", "onSceneAt", "OnScene");
+    fill("arrivalToPTTime", "onSceneAt", "OnScene");
+    fill("leavingSceneTime", "transportingAt", "Transporting");
+    fill("hospitalTime", "hospitalAt", "Hospital");
+    fill("backTime", "closedAt", "Closed");
+
+    if (timeUpdated) {
+      await updateDoc(epcrRef, {
+        time: newTime,
+        updatedAt: new Date(),
+      });
+
+      epcrData.time = newTime;
+      setData(epcrData);
+      setLoading(false);
+      return; // ⛔ STOP snapshot
+    }
   }
 }
 
@@ -524,6 +541,8 @@ if (caseData.projectId && !epcrData.projectInfo?.projectName) {
 
   return () => unsub();
 }, [epcrId]);
+
+
 
 
  const locked = data?.locked === true;
@@ -679,6 +698,9 @@ const exportPdf = async () => {
         )}
       </div>
 
+      <button onClick={() => router.back()} className="px-6 py-2 rounded border border-gray-600">
+          Back
+        </button>
        {/* ================= PATIENT INFORMATION ================= */}
 <button onClick={exportPdf} className="px-4 py-2 bg-slate-800 border">
   Export Professional PDF
