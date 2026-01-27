@@ -323,12 +323,6 @@ export default function CaseDetailsPage({ params }: { params: { id: string } }) 
     </button>
   </div>
 
-  {/* ✅ CASE CHAT */}
-  <CaseChat
-    caseId={caseId}
-    role="dispatcher"
-    senderName="Dispatcher"
-  />
 </div>
 
 
