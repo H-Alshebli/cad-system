@@ -3,7 +3,10 @@
 export const PERMISSION_MATRIX = {
   dashboards: ["view"],
   cases: ["view", "create", "edit", "delete"],
-  projects: ["view", "create"],
+
+  // ✅ add missing permissions
+  projects: ["view", "create", "edit", "assign", "view_all"],
+
   clinics: ["view"],
   ambulances: ["view"],
   roaming: ["view"],

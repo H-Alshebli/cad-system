@@ -1,34 +1,37 @@
 "use client";
 
+import { usePermissions } from "@/lib/usePermissions";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Can from "../components/Can";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function ProjectsPage() {
   const { user, loading } = useCurrentUser();
+  const { permissions, loading: permsLoading } = usePermissions(user?.role);
+
   const [projects, setProjects] = useState<any[]>([]);
 
+  // ✅ view-all scope (admin OR permission)
+  const canViewAll = useMemo(() => {
+    if (!user) return false;
+    return user.role === "admin" || permissions?.projects?.view_all === true;
+  }, [user?.role, permissions?.projects?.view_all]);
+
   useEffect(() => {
-    if (!user) return;
+    // wait for both user + permissions
+    if (!user || permsLoading) return;
 
-    let q;
+    const qRef = canViewAll
+      ? collection(db, "projects")
+      : query(
+          collection(db, "projects"),
+          where(`assignedUsers.${user.uid}`, "==", true)
+        );
 
-    // ✅ ADMIN → see everything
-    if (user.role === "admin") {
-      q = collection(db, "projects");
-    } 
-    // ✅ NON-ADMIN → see only assigned projects
-    else {
-      q = query(
-        collection(db, "projects"),
-        where(`assignedUsers.${user.uid}`, "==", true)
-      );
-    }
-
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(qRef, (snap) => {
       const data = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
@@ -37,9 +40,9 @@ export default function ProjectsPage() {
     });
 
     return () => unsub();
-  }, [user]);
+  }, [user?.uid, canViewAll, permsLoading]);
 
-  if (loading) {
+  if (loading || permsLoading) {
     return <div className="p-6 text-gray-400">Loading projects...</div>;
   }
 
@@ -62,7 +65,7 @@ export default function ProjectsPage() {
       {/* ✅ EMPTY STATE */}
       {projects.length === 0 && (
         <div className="text-gray-400 text-sm">
-          No projects assigned to you.
+          {canViewAll ? "No projects found." : "No projects assigned to you."}
         </div>
       )}
 
