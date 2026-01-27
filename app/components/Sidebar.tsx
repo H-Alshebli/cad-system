@@ -186,6 +186,11 @@ export default function Sidebar() {
             Roles
           </Link>
         )}
+           {(isAdmin || can(permissions, "users", "view")) && (
+          <Link className={`block rounded px-3 py-2 ${linkClass("/location-picker")}`} href="/location-picker">
+            location-picker
+          </Link>
+        )}
       </nav>
 
       {/* FOOTER */}

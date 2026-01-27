@@ -120,13 +120,13 @@ export default function AmbulancesPage() {
           <option value="busy">Busy</option>
           <option value="offline">Offline</option>
         </select>
- {/* 
+ 
        <button
           onClick={addAmbulance}
           className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
         >
           Add Ambulance
-        </button>*/}
+        </button>
       </div>
 
       {/* LIST OF AMBULANCES */}

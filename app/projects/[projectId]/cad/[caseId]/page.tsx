@@ -29,14 +29,7 @@ type CaseInfo = {
   paramedicNote?: string;
 };
 
-type CaseChatMessage = {
-  id: string;
-  caseId: string;
-  senderRole: "dispatcher" | "medical";
-  senderName: string;
-  message: string;
-  createdAt?: any;
-};
+
 
 type CaseType = {
   id: string;
