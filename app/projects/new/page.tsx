@@ -28,18 +28,27 @@ export default function NewProjectPage() {
       <h1 className="text-xl font-bold">New Project</h1>
 
       <input
-        className="w-full p-2 border rounded"
-        placeholder="Project Name"
-        value={projectName}
-        onChange={(e) => setProjectName(e.target.value)}
-      />
+  className="w-full p-2 rounded
+             bg-slate-800 text-white
+             border border-slate-700
+             placeholder:text-slate-400
+             focus:outline-none focus:ring-2 focus:ring-blue-500"
+  placeholder="Project Name"
+  value={projectName}
+  onChange={(e) => setProjectName(e.target.value)}
+/>
 
-      <input
-        className="w-full p-2 border rounded"
-        placeholder="Client"
-        value={client}
-        onChange={(e) => setClient(e.target.value)}
-      />
+<input
+  className="w-full p-2 rounded
+             bg-slate-800 text-white
+             border border-slate-700
+             placeholder:text-slate-400
+             focus:outline-none focus:ring-2 focus:ring-blue-500"
+  placeholder="Client"
+  value={client}
+  onChange={(e) => setClient(e.target.value)}
+/>
+
 
       <button
         onClick={createProject}
