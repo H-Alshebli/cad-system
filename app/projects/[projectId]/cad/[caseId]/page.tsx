@@ -1,22 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  collection,
-  query,
-  where,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import CaseChat from "@/app/components/CaseChat";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
 import StatusButtons from "@/app/components/StatusButtons";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
+
 
 /* =============================
    TYPES
@@ -86,8 +79,7 @@ export default function CaseDetailsPage({
     paramedicNote: "",
   });
 
-  const [messages, setMessages] = useState<CaseChatMessage[]>([]);
-  const [chatText, setChatText] = useState("");
+
 
   /* -----------------------------
      LOAD CASE (Realtime)
@@ -135,26 +127,7 @@ export default function CaseDetailsPage({
     return () => unsub();
   }, [caseId]);
 
-  /* -----------------------------
-     LOAD CHAT (Realtime)
-  ------------------------------ */
-  useEffect(() => {
-    const q = query(
-      collection(db, "caseChats"),
-      where("caseId", "==", caseId)
-    );
 
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        }))
-      );
-    });
-
-    return () => unsub();
-  }, [caseId]);
 
   /* -----------------------------
      CHECK ePCR
@@ -204,19 +177,7 @@ export default function CaseDetailsPage({
     setEditCaseInfo(false);
   };
 
-  const sendMessage = async () => {
-    if (!chatText.trim()) return;
 
-    await addDoc(collection(db, "caseChats"), {
-      caseId,
-      senderRole: "dispatcher",
-      senderName: "Dispatcher",
-      message: chatText.trim(),
-      createdAt: serverTimestamp(),
-    });
-
-    setChatText("");
-  };
 
   /* =============================
      RENDER
@@ -293,46 +254,18 @@ export default function CaseDetailsPage({
             onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, level: v })} />
         </Grid>
       </Section>
+{/* CASE CHAT */}
+<CaseChat
+  caseId={caseId}
+  disabled={caseData.status === "Closed"}
+/>
 
-      {/* CASE CHAT */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-200">Case Chat</h3>
 
-        <div className="h-64 overflow-y-auto space-y-2 pr-2">
-          {messages.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center mt-10">
-              No messages yet
-            </p>
-          ) : (
-            messages.map((m) => (
-              <div key={m.id} className="bg-slate-800 p-3 rounded text-white">
-                <div className="text-xs text-gray-400 mb-1">
-                  {m.senderName}
-                </div>
-                <div className="text-sm">{m.message}</div>
-              </div>
-            ))
-          )}
-        </div>
 
-        <div className="flex gap-2">
-          <input
-            value={chatText}
-            onChange={(e) => setChatText(e.target.value)}
-            className="flex-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
-            placeholder="Type message..."
-          />
-          <button
-            onClick={sendMessage}
-            className="px-4 rounded bg-blue-600 text-white"
-          >
-            Send
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
+
 
 /* =============================
    UI HELPERS
