@@ -83,6 +83,19 @@ export default function LoginPage() {
         onSubmit={login}
         className="bg-slate-800 p-6 rounded w-80 space-y-4 border border-slate-700"
       >
+         <div className="p-4 border-b dark:border-gray-700 flex flex-col items-center text-center gap-2">
+        <img
+          src="/icons/icon-512.png"
+          alt="Lazem Logo"
+          className="w-16 h-16 object-contain"
+        />
+
+        <div className="text-lg font-bold text-gray-900 dark:text-white">
+          Lazem HCAD
+        </div>
+
+       
+      </div>
         <h1 className="text-xl font-bold text-center text-white">Login</h1>
 
         {error && (
