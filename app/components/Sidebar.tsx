@@ -87,9 +87,22 @@ export default function Sidebar() {
 
   if (!user) {
     return (
-      <aside className="fixed left-0 top-0 h-screen w-64 bg-red-900 text-white p-4">
-        Not logged in
-      </aside>
+     
+       <div className="fixed left-0 top-0 h-screen w-64 bg-gray-400 text-white p-4">
+        <img
+          src="/icons/icon-512.png"
+          alt="Lazem Logo"
+          className="w-16 h-16 object-contain"
+        />
+
+        <div className="text-lg font-bold text-gray-900 dark:text-white">
+          
+          Lazem HCAD
+        </div>
+         
+
+   
+      </div>
     );
   }
 
