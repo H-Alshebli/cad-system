@@ -9,6 +9,11 @@ import { useRouter } from "next/navigation";
 import StatusButtons from "@/app/components/StatusButtons";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("@/app/components/Map"), {
+  ssr: false,
+});
 
 
 /* =============================
@@ -39,12 +44,28 @@ type CaseType = {
   patient?: PatientInfo;
   caseInfo?: CaseInfo;
 
+  location?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+
+  destination?: {
+    id: string;
+    name: string;
+    type: "hospital" | "clinic";
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+
   // legacy
   patientName?: string;
   contactNumber?: string;
   chiefComplaint?: string;
   level?: string;
 };
+
 
 /* =============================
    PAGE
@@ -199,9 +220,16 @@ export default function CaseDetailsPage({
       {/* STATUS + TIMELINE */}
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
         <StatusButtons
-          caseId={caseData.id}
-          currentStatus={caseData.status}
-        />
+  caseId={caseData.id}
+  currentStatus={caseData.status}
+  caseLocation={caseData.location}
+  onDestinationSelected={(destination) => {
+    setCaseData((prev) =>
+      prev ? { ...prev, destination } : prev
+    );
+  }}
+/>
+
         {caseData.timeline && (
           <CaseTimeline timeline={caseData.timeline} />
         )}
@@ -247,6 +275,54 @@ export default function CaseDetailsPage({
             onChange={(v) => setCaseInfoDraft({ ...caseInfoDraft, level: v })} />
         </Grid>
       </Section>
+      {/* PATIENT LOCATION */}
+{caseData.location && (
+  <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
+    <h3 className="text-sm font-semibold text-gray-200 mb-3">
+      Patient Location
+    </h3>
+
+    <div className="w-full h-[350px] rounded overflow-hidden">
+<Map
+  caseLat={caseData.location.lat}
+  caseLng={caseData.location.lng}
+  caseName={caseData.patient?.name || "Patient"}
+  centerLat={caseData.location.lat}
+  centerLng={caseData.location.lng}
+/>
+
+
+
+    </div>
+  </div>
+)}
+{/* DESTINATION LOCATION */}
+{caseData.destination && caseData.location && (
+  <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
+    <h3 className="text-sm font-semibold text-gray-200 mb-3">
+      Destination ({caseData.destination.type})
+    </h3>
+
+    <div className="w-full h-[350px] rounded overflow-hidden">
+      <Map
+        caseLat={caseData.location.lat}
+        caseLng={caseData.location.lng}
+        caseName={caseData.patient?.name || "Patient"}
+        clinics={[
+          {
+            id: caseData.destination.id,
+            name: caseData.destination.name,
+            lat: caseData.destination.lat,
+            lng: caseData.destination.lng,
+          },
+        ]}
+        centerLat={caseData.destination.lat}
+        centerLng={caseData.destination.lng}
+      />
+    </div>
+  </div>
+)}
+
 {/* CASE CHAT */}
 <CaseChat
   caseId={caseId}
@@ -258,6 +334,7 @@ export default function CaseDetailsPage({
     </div>
   );
 }
+
 
 
 /* =============================
