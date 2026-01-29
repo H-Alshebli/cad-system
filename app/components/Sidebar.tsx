@@ -152,42 +152,42 @@ export default function Sidebar() {
             Projects
           </Link>
         )}
-
+{/*
         {(isAdmin || can(permissions, "cases", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/cases")}`} href="/cases">
             Cases
           </Link>
-        )}
-
+        )} */}
+{/*
         {(isAdmin || can(permissions, "cases", "create")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/cases/new")}`} href="/cases/new">
             New Case
           </Link>
-        )}
-
+        )} */}
+{/*
         {(isAdmin || can(permissions, "clinics", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/clinic")}`} href="/clinic">
             Clinics
           </Link>
-        )}
+        )} */}
 
         {(isAdmin || can(permissions, "ambulances", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/ambulances")}`} href="/ambulances">
             Ambulances
           </Link>
         )}
-
+{/*
         {(isAdmin || can(permissions, "roaming", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/roaming")}`} href="/roaming">
             Roaming
           </Link>
-        )}
-
+        )} */}
+{/*
         {(isAdmin || can(permissions, "reports", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/reports")}`} href="/reports">
             Reports
           </Link>
-        )}
+        )} */}
 
         {(isAdmin || can(permissions, "users", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/admin/users")}`} href="/admin/users">
