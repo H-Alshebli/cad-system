@@ -6,6 +6,8 @@ export const PERMISSION_MATRIX = {
 
   // ✅ add missing permissions
   projects: ["view", "create", "edit", "assign", "view_all"],
+  transport: ["view", "create", "approve", "ops", "assign", "reject"],
+
 
   clinics: ["view"],
   ambulances: ["view"],

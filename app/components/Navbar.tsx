@@ -45,7 +45,7 @@ export default function Navbar() {
           <Link className={linkClass("/ambulances")} href="/ambulances/">Ambulances</Link>
            <Link className={linkClass("/roaming")} href="/roaming/">Roaming</Link>
            <Link className={linkClass("/location-picker")} href="/location-picker/">location-picker</Link>
-        </div>
+        </div>  
 
         <button
           onClick={toggleTheme}

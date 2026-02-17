@@ -188,6 +188,11 @@ export default function Sidebar() {
             Reports
           </Link>
         )} */}
+{(isAdmin || can(permissions, "transport", "view")) && (
+  <Link className={`block rounded px-3 py-2 ${linkClass("/transport")}`} href="/transport">
+    Transporting
+  </Link>
+)}
 
         {(isAdmin || can(permissions, "users", "view")) && (
           <Link className={`block rounded px-3 py-2 ${linkClass("/admin/users")}`} href="/admin/users">
