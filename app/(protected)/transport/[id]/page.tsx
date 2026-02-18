@@ -108,15 +108,15 @@ export default function TransportDetailsPage() {
 function fireEmail(
   fallbackGroup: "OPS" | "SALES",
   args: Parameters<typeof buildEmail>[0],
-  to?: string
+  ownerEmail?: string
 ) {
   try {
     const email = buildEmail(args);
-    const direct = pickEmail(to);
+    const owner = pickEmail(ownerEmail);
 
-    // ✅ if we have direct recipient, use it. otherwise fallback to group
-    const payload = direct
-      ? { ...email, to: direct }
+    // ✅ Always send to group + CC owner (if exists)
+    const payload = owner
+      ? { ...email, recipientGroup: fallbackGroup, cc: owner }
       : { ...email, recipientGroup: fallbackGroup };
 
     void sendEmail(payload as any).catch(console.error);
@@ -124,6 +124,7 @@ function fireEmail(
     console.error("buildEmail failed:", e);
   }
 }
+
 
 
   async function setStatus(next: TransportStatus, note?: string) {

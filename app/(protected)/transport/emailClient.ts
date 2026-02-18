@@ -5,6 +5,8 @@ export type RecipientGroup = "OPS" | "SALES";
 export type SendEmailPayload = {
   recipientGroup?: RecipientGroup;
   to?: string | string[];
+  cc?: string | string[];   // ✅ NEW
+  bcc?: string | string[];  // (اختياري)
 
   subject: string;
   text?: string;
