@@ -121,6 +121,10 @@ export default function TransportNewPage() {
         serviceTime: start.toISOString(), // legacy
         requirements: requirements.trim(),
 
+         // ✅ NEW: Sales owner (who created the request)
+  salesOwnerUid: user!.uid,
+  salesOwnerEmail: (user as any)?.email || "",
+
         // Resources (Teams)
         teamNeeded: teams.length > 0,
         teams, // NEW

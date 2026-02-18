@@ -46,6 +46,10 @@ function safeDate(v?: string) {
   if (Number.isNaN(d.getTime())) return null;
   return d;
 }
+function pickEmail(v?: any) {
+  const s = String(v || "").trim();
+  return s.includes("@") ? s : "";
+}
 
 export default function TransportDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -101,18 +105,26 @@ export default function TransportDetailsPage() {
   const canReject = isAdmin || can(permissions, "transport", "reject");
 
   // Helper: send email safely (recipientGroup always LAST)
-  function fireEmail(
-    recipientGroup: "OPS" | "SALES",
-    args: Parameters<typeof buildEmail>[0]
-  ) {
-    try {
-      const email = buildEmail(args);
-      // ✅ recipientGroup last => cannot be overridden by spread
-      void sendEmail({ ...email, recipientGroup }).catch(console.error);
-    } catch (e) {
-      console.error("buildEmail failed:", e);
-    }
+function fireEmail(
+  fallbackGroup: "OPS" | "SALES",
+  args: Parameters<typeof buildEmail>[0],
+  to?: string
+) {
+  try {
+    const email = buildEmail(args);
+    const direct = pickEmail(to);
+
+    // ✅ if we have direct recipient, use it. otherwise fallback to group
+    const payload = direct
+      ? { ...email, to: direct }
+      : { ...email, recipientGroup: fallbackGroup };
+
+    void sendEmail(payload as any).catch(console.error);
+  } catch (e) {
+    console.error("buildEmail failed:", e);
   }
+}
+
 
   async function setStatus(next: TransportStatus, note?: string) {
     if (!id || !user?.uid) return;
@@ -171,6 +183,13 @@ export default function TransportDetailsPage() {
         patch.clientApprovedAt = serverTimestamp();
         patch.clientApprovedBy = user.uid;
       }
+      // ✅ NEW: capture ops owner the first time Ops touches the request
+const currentOpsOwner = pickEmail((data as any)?.opsOwnerEmail);
+if (canOps && !currentOpsOwner) {
+  patch.opsOwnerUid = user.uid;
+  patch.opsOwnerEmail = (user as any)?.email || "";
+}
+
 
       // ✅ 1) Update DB first
       await updateDoc(ref, patch);
@@ -193,42 +212,52 @@ export default function TransportDetailsPage() {
       // ✅ 3) Send email AFTER success (exact mapping)
       if (next === "ops_available") {
         // Ops -> Sales
-        fireEmail("SALES", {
-          type: "OPS_AVAILABLE",
-          req: reqForEmail,
-          id: requestId,
-        });
+     const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+
+fireEmail(
+  "SALES",
+  { type: "OPS_AVAILABLE", req: reqForEmail, id: requestId },
+  salesTo
+);
+
       }
 
       if (next === "rejected") {
         if (current === "new") {
           // Ops Reject -> Sales
-          fireEmail("SALES", {
-            type: "OPS_REJECT",
-            req: reqForEmail,
-            id: requestId,
-            note,
-          });
+         const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+
+fireEmail(
+  "SALES",
+  { type: "OPS_REJECT", req: reqForEmail, id: requestId, note },
+  salesTo
+);
+
         }
 
         if (current === "ops_available") {
           // Sales Reject -> Ops
-          fireEmail("OPS", {
-            type: "CLIENT_REJECT",
-            req: reqForEmail,
-            id: requestId,
-            note,
-          });
+         const opsTo = pickEmail((data as any)?.opsOwnerEmail);
+
+fireEmail(
+  "OPS",
+  { type: "CLIENT_REJECT", req: reqForEmail, id: requestId, note },
+  opsTo
+);
+
         }
       }
 
       if (next === "client_approved") {
         // Sales Approve -> Ops
-        fireEmail("OPS", {
-          type: "CLIENT_APPROVED",
-          req: reqForEmail,
-          id: requestId,
-        });
+     const opsTo = pickEmail((data as any)?.opsOwnerEmail);
+
+fireEmail(
+  "OPS",
+  { type: "CLIENT_APPROVED", req: reqForEmail, id: requestId },
+  opsTo
+);
+
       }
 
       // local UI update
@@ -288,11 +317,14 @@ export default function TransportDetailsPage() {
         assignedCrew: crewArr,
       };
 
-      fireEmail("SALES", {
-        type: "ASSIGNED",
-        req: reqForEmail,
-        id: requestId,
-      });
+    const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+
+fireEmail(
+  "SALES",
+  { type: "ASSIGNED", req: reqForEmail, id: requestId },
+  salesTo
+);
+
 
       setAssignOpen(false);
     } catch (e: any) {

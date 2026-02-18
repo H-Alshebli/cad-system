@@ -134,4 +134,9 @@ export type TransportRequest = {
   createdBy?: string;
   updatedAt?: any;
   updatedBy?: string;
+    salesOwnerUid?: string;
+  salesOwnerEmail?: string;
+
+  opsOwnerUid?: string;
+  opsOwnerEmail?: string;
 };
