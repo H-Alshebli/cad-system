@@ -1,5 +1,6 @@
 // app/api/send-email/route.ts
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
@@ -41,27 +42,30 @@ export async function POST(req: Request) {
     const body = (await req.json()) as SendEmailBody;
 
     // ✅ Debug logs (visible in Vercel function logs)
-    console.log("[send-email] body =>", body);
+    console.log("[send-email] body =>", {
+      recipientGroup: body?.recipientGroup,
+      to: body?.to,
+      subject: body?.subject,
+      hasText: Boolean(body?.text && body.text.trim()),
+      hasHtml: Boolean(body?.html && body.html.trim()),
+    });
 
     const { recipientGroup, to, subject, text, html } = body ?? {};
 
     // ✅ Validate subject
     if (!subject?.trim()) {
-      return NextResponse.json(
-        { error: "Missing subject" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Missing subject" }, { status: 400 });
     }
 
     // ✅ Validate email content
     if (!hasContent(text, html)) {
       return NextResponse.json(
-        { error: "Missing email content: provide 'text' or 'html'." },
+        { ok: false, error: "Missing email content: provide 'text' or 'html'." },
         { status: 400 }
       );
     }
 
-    // ✅ Resolve recipients: direct 'to' OR group
+    // ✅ Resolve recipients: direct 'to' OR group env lists
     let finalTo: string[] = normalizeTo(to);
 
     if (!finalTo.length && recipientGroup) {
@@ -72,6 +76,7 @@ export async function POST(req: Request) {
     if (!finalTo.length) {
       return NextResponse.json(
         {
+          ok: false,
           error: "Missing recipients: provide 'to' or valid 'recipientGroup'.",
           debug: {
             recipientGroup,
@@ -94,8 +99,8 @@ export async function POST(req: Request) {
     if (!host || !user || !pass || !from) {
       return NextResponse.json(
         {
-          error:
-            "SMTP env vars are missing (SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM).",
+          ok: false,
+          error: "SMTP env vars are missing (SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM).",
           debug: {
             hasHost: Boolean(host),
             hasUser: Boolean(user),
@@ -107,21 +112,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Office365 (smtp.office365.com) recommended: STARTTLS on 587
+    // ✅ Office365 recommended: STARTTLS on 587
     const transporter = nodemailer.createTransport({
       host,
       port,
       secure: false, // 587 => STARTTLS
       auth: { user, pass },
-      // ✅ Usually not required. Keep it minimal & stable.
-      // If you ever face SSL/cert issues locally only, you can enable dev-only tls override.
-      tls:
-        process.env.NODE_ENV === "development"
-          ? { rejectUnauthorized: false }
-          : undefined,
+      // Keep TLS minimal & stable. Only relax in dev if needed.
+      tls: process.env.NODE_ENV === "development" ? { rejectUnauthorized: false } : undefined,
     });
 
-    // Optional: verify SMTP connection (useful in dev)
+    // ✅ Optional verify (enable temporarily for troubleshooting)
     // await transporter.verify();
 
     const info = await transporter.sendMail({
@@ -140,11 +141,19 @@ export async function POST(req: Request) {
   } catch (e: any) {
     console.error("[send-email] error =>", e);
 
-    const msg =
-      e?.response?.toString?.() ||
-      e?.message ||
-      "Send failed";
-
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: e?.message || "Send failed",
+        debug: {
+          code: e?.code,
+          command: e?.command,
+          responseCode: e?.responseCode,
+          response: e?.response,
+          hostname: e?.hostname,
+        },
+      },
+      { status: 500 }
+    );
   }
 }
