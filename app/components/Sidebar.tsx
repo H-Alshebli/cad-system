@@ -190,7 +190,7 @@ export default function Sidebar() {
         )} */}
 {(isAdmin || can(permissions, "transport", "view")) && (
   <Link className={`block rounded px-3 py-2 ${linkClass("/transport")}`} href="/transport">
-    Transporting
+    Transporting\Coverage
   </Link>
 )}
 
