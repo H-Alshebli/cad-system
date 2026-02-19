@@ -69,6 +69,7 @@ export async function POST(req: Request) {
 
     // ✅ Resolve recipients: direct 'to' OR group env lists
     let finalTo: string[] = normalizeTo(to);
+    
 
     if (!finalTo.length && recipientGroup) {
       if (recipientGroup === "OPS") finalTo = parseEmails(process.env.OPS_EMAILS);
@@ -97,6 +98,15 @@ export async function POST(req: Request) {
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
     const from = process.env.SMTP_FROM || user;
+    const finalCc = normalizeTo(body.cc);
+    const finalBcc = normalizeTo(body.bcc);
+
+    console.log("[send-email] FINAL RECIPIENTS =>", {
+  to: finalTo,
+  cc: finalCc,
+  bcc: finalBcc,
+});
+
 
     if (!host || !user || !pass || !from) {
       return NextResponse.json(
@@ -130,6 +140,8 @@ export async function POST(req: Request) {
     const info = await transporter.sendMail({
       from,
       to: finalTo.join(","), // stable format
+      cc: finalCc.length ? finalCc : undefined,
+      bcc: finalBcc.length ? finalBcc : undefined,
       subject: subject.trim(),
       text: text?.trim(),
       html: html?.trim(),
