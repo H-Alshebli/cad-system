@@ -1,5 +1,5 @@
 "use client";
-
+import * as XLSX from "xlsx";
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -24,6 +24,36 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserType[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const exportToExcel = () => {
+  if (!users.length) return;
+
+  // Prepare clean export data
+  const exportData = users.map((u) => ({
+    Name: u.name,
+    Email: u.email,
+    Role: u.role,
+    Status: u.active ? "Active" : "Disabled",
+  }));
+
+  // Create worksheet
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+  // Create workbook
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Users");
+
+  // Auto column width
+  const maxWidth = exportData.reduce((w, r) => Math.max(w, r.Name.length), 10);
+  worksheet["!cols"] = [
+    { wch: 25 },
+    { wch: 30 },
+    { wch: 20 },
+    { wch: 15 },
+  ];
+
+  // Download file
+  XLSX.writeFile(workbook, "Users_List.xlsx");
+};
 
   /* =========================
      LOAD USERS (Realtime)
@@ -79,6 +109,14 @@ export default function UsersPage() {
       <h1 className="text-xl font-semibold text-white">
         Users Management
       </h1>
+      <div className="flex justify-end">
+  <button
+    onClick={exportToExcel}
+    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-sm font-semibold"
+  >
+    Export to Excel
+  </button>
+</div>
 
       <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
