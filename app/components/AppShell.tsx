@@ -35,7 +35,7 @@ export default function AppShell({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 p-3 lg:p-4 overflow-auto">
+      <main className="flex-1 p-3 lg:p-4 overflow-auto">
         {/* Mobile Top Bar */}
         <div className="lg:hidden flex items-center justify-between mb-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-3">
           <button

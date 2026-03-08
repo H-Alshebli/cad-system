@@ -61,9 +61,7 @@ export default function TransportListPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Transport Requests</h1>
-          <p className="text-sm text-white/70">
-            Phase 1 only: Request → Ops (Available/Reject) → Client Approval → Assignment
-          </p>
+         
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
