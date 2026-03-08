@@ -92,7 +92,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   {onClose && (
     <button
       onClick={onClose}
-      className="absolute right-3 top-3 md:hidden text-gray-500 hover:text-red-500 text-xl"
+      className="absolute right-3 top-3 lg:hidden bg-gray-200 dark:bg-gray-700 px-2 rounded"
     >
       ✕
     </button>
