@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -20,9 +21,20 @@ export default function LoginPage() {
     if (loading) return;
 
     if (user && user.active === true && user.role && user.role !== "none") {
-      router.replace("/dashboard");
+      router.replace("/welcome");
     }
   }, [user, loading, router]);
+
+  async function resetPassword() {
+  if (!email) return alert("Enter your email first");
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    alert("Password reset email sent.");
+  } catch (error:any) {
+    alert(error.message);
+  }
+}
 
   async function login(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +80,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace("/welcome");
     } catch (err: any) {
       setError(err.message || "Login failed");
       setSubmitting(false);
@@ -121,7 +133,13 @@ export default function LoginPage() {
                      placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
-
+<button
+  type="button"
+  onClick={resetPassword}
+  className="text-blue-600 text-sm"
+>
+Forgot Password?
+</button>
         <button
           type="button"
           onClick={() => router.push("/register")}
