@@ -10,9 +10,6 @@ import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import StatusButtons from "@/app/components/StatusButtons";
-import CaseTimeline from "@/app/components/CaseTimeline";
-
 export default function ProjectCadPage({
   params,
 }: {
@@ -20,6 +17,43 @@ export default function ProjectCadPage({
 }) {
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  function getCaseDate(item: any): Date | null {
+    const raw =
+      item.timeline?.Received ||
+      item.createdAt?.toDate?.() ||
+      item.createdAt ||
+      item.created_at ||
+      item.date ||
+      item.caseDate ||
+      null;
+
+    const parsed =
+      raw instanceof Date
+        ? raw
+        : raw?.toDate?.()
+        ? raw.toDate()
+        : raw
+        ? new Date(raw)
+        : null;
+
+    return parsed && !isNaN(parsed.getTime()) ? parsed : null;
+  }
+
+  function formatCaseDate(item: any): string {
+    const dateObj = getCaseDate(item);
+
+    if (!dateObj) return "—";
+
+    return dateObj.toLocaleString("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
 
   useEffect(() => {
     const q = query(
@@ -32,6 +66,13 @@ export default function ProjectCadPage({
         id: d.id,
         ...d.data(),
       }));
+
+      data.sort((a, b) => {
+        const ta = getCaseDate(a)?.getTime() ?? 0;
+        const tb = getCaseDate(b)?.getTime() ?? 0;
+        return tb - ta;
+      });
+
       setCases(data);
       setLoading(false);
     });
@@ -43,7 +84,6 @@ export default function ProjectCadPage({
 
   return (
     <div className="space-y-4">
-      {/* ---------------- HEADER ---------------- */}
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Project CAD</h2>
 
@@ -55,14 +95,12 @@ export default function ProjectCadPage({
         </Link>
       </div>
 
-      {/* ---------------- EMPTY STATE ---------------- */}
       {cases.length === 0 && (
         <div className="text-muted-foreground">
           No cases for this project yet.
         </div>
       )}
 
-      {/* ---------------- CASES LIST ---------------- */}
       <div className="grid gap-4">
         {cases.map((c) => (
           <Link
@@ -70,78 +108,67 @@ export default function ProjectCadPage({
             href={`/projects/${params.projectId}/cad/${c.id}`}
             className="block p-4 bg-card border rounded space-y-3 hover:bg-muted transition"
           >
-            {/* Case Header */}
-            <div className="flex justify-between items-center">
-              <div className="font-semibold">
-                {c.lazemCode || c.id}
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {c.status}
-              </span>
-            </div>
-
-            {/* Status Buttons */}
-        
-
-            {/* Timeline */}
             <div className="border border-gray-700 rounded-lg p-4 bg-[#0f172a] hover:border-blue-500 transition">
-  {/* HEADER */}
-  <div className="flex justify-between items-center mb-3">
-    <div className="font-semibold text-white">
-      {c.lazemCode || c.id}
-    </div>
+              <div className="flex justify-between items-start mb-4 gap-4">
+                <div>
+                  <div className="font-semibold text-white text-base">
+                    {c.id} — {c.patientName || "—"}
+                  </div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    Date & Time: {formatCaseDate(c)}
+                  </div>
+                </div>
 
-    <span
-      className={`text-xs px-3 py-1 rounded-full font-medium
-        ${
-          c.status === "Assigned"
-            ? "bg-blue-600/20 text-blue-400"
-            : c.status === "Received"
-            ? "bg-green-600/20 text-green-400"
-            : "bg-gray-600/20 text-gray-300"
-        }`}
-    >
-      {c.status}
-    </span>
-  </div>
+                <span
+                  className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap
+                    ${
+                      c.status === "Assigned"
+                        ? "bg-blue-600/20 text-blue-400"
+                        : c.status === "Received"
+                        ? "bg-green-600/20 text-green-400"
+                        : c.status === "Closed"
+                        ? "bg-red-600/20 text-red-400"
+                        : c.status === "EnRoute"
+                        ? "bg-yellow-600/20 text-yellow-400"
+                        : c.status === "OnScene"
+                        ? "bg-purple-600/20 text-purple-400"
+                        : "bg-gray-600/20 text-gray-300"
+                    }`}
+                >
+                  {c.status || "—"}
+                </span>
+              </div>
 
-  {/* BODY */}
-  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-    {/* Complaint */}
-    <div>
-      <div className="text-gray-400">Chief Complaint</div>
-      <div className="text-white font-medium">
-        {c.chiefComplaint || "-"}
-      </div>
-    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div>
+                  <div className="text-gray-400">Chief Complaint</div>
+                  <div className="text-white font-medium">
+                    {c.chiefComplaint || "-"}
+                  </div>
+                </div>
 
-    {/* Triage */}
-    <div>
-      <div className="text-gray-400">Triage</div>
-      <div className="text-white font-medium">
-        {c.level || "-"}
-      </div>
-    </div>
+                <div>
+                  <div className="text-gray-400">Project Name</div>
+                  <div className="text-white font-medium">
+                    {c.patientName || "-"}
+                  </div>
+                </div>
 
-    {/* Location */}
-    <div className="col-span-2">
-      <div className="text-gray-400">Location</div>
-      <div className="text-white">
-        {c.locationText || "-"}
-      </div>
-    </div>
+                <div className="col-span-1 md:col-span-2">
+                  <div className="text-gray-400">Location</div>
+                  <div className="text-white">
+                    {c.locationText || "-"}
+                  </div>
+                </div>
 
-    {/* Assigned Unit */}
-    <div className="col-span-2">
-      <div className="text-gray-400">Assigned Unit</div>
-      <div className="text-white">
-        {c.ambulanceCode || c.roaming || c.clinicId || "-"}
-      </div>
-    </div>
-  </div>
-</div>
-
-            
+                <div className="col-span-1 md:col-span-2">
+                  <div className="text-gray-400">Assigned Unit</div>
+                  <div className="text-white">
+                    {c.ambulanceCode || c.roaming || c.clinicId || "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
           </Link>
         ))}
       </div>

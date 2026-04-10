@@ -12,7 +12,6 @@ import {
 import { db } from "@/lib/firebase";
 
 import CasesOverview from "@/app/components/CasesOverview";
-import ProjectUsers from "@/app/components/ProjectUsers";
 
 export default function ProjectDetailsPage({
   params,
@@ -23,9 +22,6 @@ export default function ProjectDetailsPage({
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  /* =========================
-     LOAD PROJECT
-  ========================= */
   useEffect(() => {
     const loadProject = async () => {
       const ref = doc(db, "projects", params.projectId);
@@ -39,9 +35,6 @@ export default function ProjectDetailsPage({
     loadProject();
   }, [params.projectId]);
 
-  /* =========================
-     LOAD CASES
-  ========================= */
   useEffect(() => {
     const q = query(
       collection(db, "cases"),
@@ -66,26 +59,8 @@ export default function ProjectDetailsPage({
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* ================= PROJECT HEADER ================= */}
-      <div>
-        <h1 className="text-2xl font-bold">{project.projectName}</h1>
-        <div className="text-sm text-gray-400">
-          {project.client} • {project.status}
-        </div>
-      </div>
-
-      {/* ================= PROJECT USERS ================= */}
-      <ProjectUsers
-        projectId={project.id}
-        assignedUsers={project.assignedUsers || {}}
-      />
-
-      {/* ================= CASES ================= */}
-      <CasesOverview
-        title="Cases"
-        cases={cases}
-      />
+    <div className="space-y-6">
+      <CasesOverview title="Cases" cases={cases} />
     </div>
   );
 }

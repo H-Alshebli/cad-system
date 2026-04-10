@@ -20,9 +20,12 @@ export default function ProjectLayout({
     const unsub = onSnapshot(
       doc(db, "projects", params.projectId),
       (snap) => {
-        setProject({ id: snap.id, ...snap.data() });
+        if (snap.exists()) {
+          setProject({ id: snap.id, ...snap.data() });
+        }
       }
     );
+
     return () => unsub();
   }, [params.projectId]);
 
@@ -30,13 +33,13 @@ export default function ProjectLayout({
 
   const tabs = [
     { label: "Dashboard", href: `/projects/${params.projectId}` },
+    { label: "Assigned", href: `/projects/${params.projectId}/assigned` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
   ];
 
   return (
     <div className="p-6 space-y-4">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">{project.projectName}</h1>
         <div className="text-sm text-muted-foreground">
@@ -44,20 +47,20 @@ export default function ProjectLayout({
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 border-b">
         {tabs.map((t) => {
-          const active = pathname === t.href;
+          const active =
+            pathname === t.href || pathname.startsWith(`${t.href}/`);
+
           return (
             <Link
               key={t.href}
               href={t.href}
-              className={`px-4 py-2 text-sm rounded-t
-                ${
-                  active
-                    ? "bg-card border border-b-0 font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+              className={`px-4 py-2 text-sm rounded-t ${
+                active
+                  ? "bg-card border border-b-0 font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               {t.label}
             </Link>
@@ -65,7 +68,6 @@ export default function ProjectLayout({
         })}
       </div>
 
-      {/* Content */}
       <div>{children}</div>
     </div>
   );

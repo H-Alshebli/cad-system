@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
@@ -10,15 +10,54 @@ export default function Dashboard() {
   const { user, loading } = useCurrentUser();
   console.log("CURRENT USER (Sidebar):", user);
 
-
   const [cases, setCases] = useState<any[]>([]);
   const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [epcrs, setEpcrs] = useState<any[]>([]);
+  const [showAllCases, setShowAllCases] = useState(false);
 
-  /* =====================================================
-     🔥 FIRESTORE LISTENERS (GUARDED)
-  ===================================================== */
+  function getCaseDate(item: any): Date | null {
+    const raw =
+      item.timeline?.Received ||
+      item.createdAt?.toDate?.() ||
+      item.createdAt ||
+      item.created_at ||
+      item.date ||
+      item.caseDate ||
+      null;
+
+    const parsed =
+      raw instanceof Date
+        ? raw
+        : raw?.toDate?.()
+          ? raw.toDate()
+          : raw
+            ? new Date(raw)
+            : null;
+
+    return parsed && !isNaN(parsed.getTime()) ? parsed : null;
+  }
+
+  function formatCaseDate(item: any): string {
+    const dateObj = getCaseDate(item);
+
+    if (!dateObj) return "—";
+
+    return dateObj.toLocaleString("en-GB", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  function getMatchedEpcrId(caseItem: any): string {
+    const matched = epcrs.find((e) => e.caseId === caseItem.id);
+    return matched?.id || "—";
+  }
+
   useEffect(() => {
-    // ⛔ انتظر auth + role
     if (loading) return;
     if (!user || user.role === "none") return;
 
@@ -32,14 +71,9 @@ export default function Dashboard() {
           ...d.data(),
         }));
 
-        // sort by timeline.Received (latest first)
         list.sort((a, b) => {
-          const ta = a.timeline?.Received
-            ? new Date(a.timeline.Received).getTime()
-            : 0;
-          const tb = b.timeline?.Received
-            ? new Date(b.timeline.Received).getTime()
-            : 0;
+          const ta = getCaseDate(a)?.getTime() ?? 0;
+          const tb = getCaseDate(b)?.getTime() ?? 0;
           return tb - ta;
         });
 
@@ -64,65 +98,77 @@ export default function Dashboard() {
       }
     );
 
+    const unsubEpcr = onSnapshot(
+      collection(db, "epcr"),
+      (snap) => {
+        const list: any[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        setEpcrs(list);
+      },
+      (error) => {
+        console.error("ePCR listener error:", error);
+      }
+    );
+
     return () => {
       unsubCases();
       unsubAmb();
+      unsubEpcr();
     };
   }, [user, loading]);
 
-  /* =====================================================
-     🔍 CASES (NO DATE FILTER)
-  ===================================================== */
-  const filteredCases = cases;
+  const visibleCases = useMemo(() => {
+    if (showAllCases) return cases;
+    return cases.filter((c) => c.status !== "Closed");
+  }, [cases, showAllCases]);
 
-  /* =====================================================
-     📊 STATS
-  ===================================================== */
-  const totalCases = filteredCases.length;
+  const totalCases = cases.length;
 
-  const OnSceneCases = filteredCases.filter(
+  const OnSceneCases = cases.filter(
     (c) => c.status === "OnScene"
   ).length;
 
-  const EnRouteCases = filteredCases.filter(
+  const EnRouteCases = cases.filter(
     (c) => c.status === "EnRoute"
   ).length;
 
-  const activeCases = filteredCases.filter(
+  const activeCases = cases.filter(
     (c) => c.status !== "Closed"
   ).length;
 
-  const closedCases = filteredCases.filter(
+  const closedCases = cases.filter(
     (c) => c.status === "Closed"
   ).length;
 
-  const unreceivedCases = filteredCases.filter(
+  const unreceivedCases = cases.filter(
     (c) => c.status === "Assigned" || c.status === "Received"
   ).length;
 
-  const transportingCases = filteredCases.filter(
+  const transportingCases = cases.filter(
     (c) => ["Transporting", "Hospital"].includes(c.status)
   ).length;
 
-  const closedHospitalCases = filteredCases.filter(
+  const closedHospitalCases = cases.filter(
     (c) =>
       c.status === "Closed" &&
       c.transportingToType === "hospital"
   ).length;
 
-  const transportingHospitalCases = filteredCases.filter(
+  const transportingHospitalCases = cases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "hospital"
   ).length;
 
-  const transportingClinicCases = filteredCases.filter(
+  const transportingClinicCases = cases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "clinic"
   ).length;
 
-  const closedclinicCases = filteredCases.filter(
+  const closedclinicCases = cases.filter(
     (c) =>
       c.status === "Closed" &&
       c.transportingToType === "clinic"
@@ -130,9 +176,6 @@ export default function Dashboard() {
 
   const totalAmbulances = ambulances.length;
 
-  /* =====================================================
-     ⛔ BLOCK UI UNTIL READY
-  ===================================================== */
   if (loading || !user || user.role === "none") {
     return (
       <div className="p-6 dark:bg-gray-900 min-h-screen text-white">
@@ -141,18 +184,13 @@ export default function Dashboard() {
     );
   }
 
-  /* =====================================================
-     UI
-  ===================================================== */
   return (
     <div className="p-6 dark:bg-gray-900 min-h-screen">
       <h1 className="text-3xl font-bold mb-6 dark:text-white">
         Dispatch Dashboard
       </h1>
 
-      {/* ================== TOP SUMMARY CARDS ================== */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
-
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-lg font-bold">Total Cases</h3>
           <p className="text-4xl font-extrabold">{totalCases}</p>
@@ -204,20 +242,38 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ================== CASE LIST ================== */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-xl font-bold dark:text-white">Cases Timeline</h2>
+          <p className="text-sm text-gray-400">
+            Showing {visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""}
+            {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowAllCases((prev) => !prev)}
+          className="px-4 py-2 rounded border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+        >
+          {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredCases.map((c) => (
+        {visibleCases.map((c) => (
           <div
             key={c.id}
             className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
           >
-            <h2 className="text-xl font-bold">
-              Lazem Code: {c.lazemCode || "—"} — {c.level}
-            </h2>
+            <div className="mb-3">
+              <h2 className="text-xl font-bold">
+                {getMatchedEpcrId(c)} — {c.patientName || "—"}
+              </h2>
 
-            <p className="text-gray-400">
-              Ijrny Code: {c.ijrny || "—"}
-            </p>
+              <p className="text-gray-400">
+                Date & Time: {formatCaseDate(c)}
+              </p>
+            </div>
 
             <CaseTimeline timeline={c.timeline || {}} />
           </div>

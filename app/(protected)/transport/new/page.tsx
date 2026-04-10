@@ -120,6 +120,7 @@ export default function TransportNewPage() {
         serviceEndTime: end.toISOString(),
         serviceTime: start.toISOString(), // legacy
         requirements: requirements.trim(),
+        
 
          // ✅ NEW: Sales owner (who created the request)
   salesOwnerUid: user!.uid,
