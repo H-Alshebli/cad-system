@@ -701,10 +701,50 @@ const exportPdf = async () => {
       <button onClick={() => router.back()} className="px-6 py-2 rounded border border-gray-600">
           Back
         </button>
-       {/* ================= PATIENT INFORMATION ================= */}
-<button onClick={exportPdf} className="px-4 py-2 bg-slate-800 border">
-  Export Professional PDF
-</button>
+
+<div className="flex gap-4 justify-end flex-wrap">
+  {!locked && (
+    <>
+      <button
+        onClick={saveDraft}
+        className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+      >
+        Save Draft
+      </button>
+
+      <button
+        onClick={finalize}
+        disabled={!canFinalize}
+        className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+      >
+        Finalize ePCR
+      </button>
+    </>
+  )}
+
+  <button
+    onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
+    className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+  >
+    Refusal of Treatment Form
+  </button>
+
+  <button
+    onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
+    className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+  >
+    Data Sharing Consent Form
+  </button>
+
+  <button
+    onClick={exportPdf}
+    className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+  >
+    Export Professional PDF
+  </button>
+
+
+</div>
 
 
       {!locked && missing.length > 0 && (
@@ -1819,31 +1859,54 @@ const exportPdf = async () => {
       </Section>
 
       {/* ================= ACTIONS ================= */}
-      <div className="flex gap-4 justify-end">
-        {!locked && (
-          <>
-            <button onClick={saveDraft} className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700">
-              Save Draft
-            </button>
+      <div className="flex gap-4 justify-end flex-wrap">
+  {!locked && (
+    <>
+      <button
+        onClick={saveDraft}
+        className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+      >
+        Save Draft
+      </button>
 
-            <button
-              onClick={finalize}
-              disabled={!canFinalize}
-              className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
-            >
-              Finalize ePCR
-            </button>
-          </>
-          
-        )}
-       {/* ================= PATIENT INFORMATION ================= */}
-<button onClick={exportPdf} className="px-4 py-2 bg-slate-800 border">
-  Export Professional PDF
-</button>
-        <button onClick={() => router.back()} className="px-6 py-2 rounded border border-gray-600">
-          Back
-        </button>
-      </div>
+      <button
+        onClick={finalize}
+        disabled={!canFinalize}
+        className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+      >
+        Finalize ePCR
+      </button>
+    </>
+  )}
+
+  <button
+    onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
+    className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+  >
+    Refusal of Treatment Form
+  </button>
+
+  <button
+    onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
+    className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+  >
+    Data Sharing Consent Form
+  </button>
+
+  <button
+    onClick={exportPdf}
+    className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+  >
+    Export Professional PDF
+  </button>
+
+  <button
+    onClick={() => router.back()}
+    className="px-6 py-2 rounded border border-gray-600"
+  >
+    Back
+  </button>
+</div>
     </div>
   );
 }
