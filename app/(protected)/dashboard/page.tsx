@@ -15,6 +15,10 @@ export default function Dashboard() {
   const [epcrs, setEpcrs] = useState<any[]>([]);
   const [showAllCases, setShowAllCases] = useState(false);
 
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
   function getCaseDate(item: any): Date | null {
     const raw =
       item.timeline?.Received ||
@@ -29,10 +33,10 @@ export default function Dashboard() {
       raw instanceof Date
         ? raw
         : raw?.toDate?.()
-          ? raw.toDate()
-          : raw
-            ? new Date(raw)
-            : null;
+        ? raw.toDate()
+        : raw
+        ? new Date(raw)
+        : null;
 
     return parsed && !isNaN(parsed.getTime()) ? parsed : null;
   }
@@ -52,9 +56,48 @@ export default function Dashboard() {
     });
   }
 
+  function getMatchedEpcr(caseItem: any) {
+    return epcrs.find((e) => e.caseId === caseItem.id) || null;
+  }
+
   function getMatchedEpcrId(caseItem: any): string {
-    const matched = epcrs.find((e) => e.caseId === caseItem.id);
+    const matched = getMatchedEpcr(caseItem);
     return matched?.id || "—";
+  }
+
+  function getMatchedProjectName(caseItem: any): string {
+    const matched = getMatchedEpcr(caseItem);
+
+    return (
+      matched?.projectInfo?.projectName ||
+      matched?.projectName ||
+      caseItem?.projectName ||
+      caseItem?.projectInfo?.projectName ||
+      "—"
+    );
+  }
+
+  function isVisibleRecord(item: any) {
+    return item?.isArchived !== true && item?.projectArchived !== true;
+  }
+
+  function matchesDateFilter(item: any) {
+    const caseDate = getCaseDate(item);
+    if (!caseDate) return !startDate && !endDate;
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      if (caseDate < start) return false;
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      if (caseDate > end) return false;
+    }
+
+    return true;
   }
 
   useEffect(() => {
@@ -66,10 +109,12 @@ export default function Dashboard() {
     const unsubCases = onSnapshot(
       collection(db, "cases"),
       (snap) => {
-        const list: any[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+        const list: any[] = snap.docs
+          .map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }))
+          .filter(isVisibleRecord);
 
         list.sort((a, b) => {
           const ta = getCaseDate(a)?.getTime() ?? 0;
@@ -101,10 +146,13 @@ export default function Dashboard() {
     const unsubEpcr = onSnapshot(
       collection(db, "epcr"),
       (snap) => {
-        const list: any[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+        const list: any[] = snap.docs
+          .map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }))
+          .filter(isVisibleRecord);
+
         setEpcrs(list);
       },
       (error) => {
@@ -119,62 +167,92 @@ export default function Dashboard() {
     };
   }, [user, loading]);
 
+  const projectOptions = useMemo(() => {
+    const set = new Set<string>();
+
+    cases.forEach((c) => {
+      const name = getMatchedProjectName(c);
+      if (name && name !== "—") set.add(name);
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [cases, epcrs]);
+
+  const filteredCases = useMemo(() => {
+    return cases.filter((c) => {
+      const projectName = getMatchedProjectName(c);
+
+      const matchesProject =
+        !selectedProject || projectName === selectedProject;
+
+      const matchesDate = matchesDateFilter(c);
+
+      return matchesProject && matchesDate;
+    });
+  }, [cases, epcrs, selectedProject, startDate, endDate]);
+
   const visibleCases = useMemo(() => {
-    if (showAllCases) return cases;
-    return cases.filter((c) => c.status !== "Closed");
-  }, [cases, showAllCases]);
+    if (showAllCases) return filteredCases;
+    return filteredCases.filter((c) => c.status !== "Closed");
+  }, [filteredCases, showAllCases]);
 
-  const totalCases = cases.length;
+  const totalCases = filteredCases.length;
 
-  const OnSceneCases = cases.filter(
+  const onSceneCases = filteredCases.filter(
     (c) => c.status === "OnScene"
   ).length;
 
-  const EnRouteCases = cases.filter(
+  const enRouteCases = filteredCases.filter(
     (c) => c.status === "EnRoute"
   ).length;
 
-  const activeCases = cases.filter(
+  const activeCases = filteredCases.filter(
     (c) => c.status !== "Closed"
   ).length;
 
-  const closedCases = cases.filter(
+  const closedCases = filteredCases.filter(
     (c) => c.status === "Closed"
   ).length;
 
-  const unreceivedCases = cases.filter(
+  const unreceivedCases = filteredCases.filter(
     (c) => c.status === "Assigned" || c.status === "Received"
   ).length;
 
-  const transportingCases = cases.filter(
+  const transportingCases = filteredCases.filter(
     (c) => ["Transporting", "Hospital"].includes(c.status)
   ).length;
 
-  const closedHospitalCases = cases.filter(
+  const closedHospitalCases = filteredCases.filter(
     (c) =>
       c.status === "Closed" &&
       c.transportingToType === "hospital"
   ).length;
 
-  const transportingHospitalCases = cases.filter(
+  const transportingHospitalCases = filteredCases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "hospital"
   ).length;
 
-  const transportingClinicCases = cases.filter(
+  const transportingClinicCases = filteredCases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
       c.transportingToType === "clinic"
   ).length;
 
-  const closedclinicCases = cases.filter(
+  const closedClinicCases = filteredCases.filter(
     (c) =>
       c.status === "Closed" &&
       c.transportingToType === "clinic"
   ).length;
 
   const totalAmbulances = ambulances.length;
+
+  function clearFilters() {
+    setSelectedProject("");
+    setStartDate("");
+    setEndDate("");
+  }
 
   if (loading || !user || user.role === "none") {
     return (
@@ -190,6 +268,70 @@ export default function Dashboard() {
         Dispatch Dashboard
       </h1>
 
+      {/* FILTERS */}
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800">
+        <div className="mb-3">
+          <h2 className="text-lg font-bold dark:text-white">Filters</h2>
+          <p className="text-sm text-gray-400">
+            Filter dashboard by project and case date.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              Project
+            </label>
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+            >
+              <option value="">All Projects</option>
+              {projectOptions.map((project) => (
+                <option key={project} value={project}>
+                  {project}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              Start Date
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              End Date
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <button
+              onClick={clearFilters}
+              className="w-full rounded border px-3 py-2 text-sm bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-lg font-bold">Total Cases</h3>
@@ -208,12 +350,12 @@ export default function Dashboard() {
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-sm text-gray-400">EnRoute</h3>
-          <p className="text-2xl font-bold text-blue-600">{EnRouteCases}</p>
+          <p className="text-2xl font-bold text-blue-600">{enRouteCases}</p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
           <h3 className="text-sm text-gray-400">OnScene</h3>
-          <p className="text-2xl font-bold text-blue-600">{OnSceneCases}</p>
+          <p className="text-2xl font-bold text-blue-600">{onSceneCases}</p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
@@ -230,7 +372,7 @@ export default function Dashboard() {
           <h3 className="text-sm text-gray-400">Treated</h3>
           <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
           <p className="text-gray-400">
-            Hospital: {closedHospitalCases} - Clinic: {closedclinicCases}
+            Hospital: {closedHospitalCases} - Clinic: {closedClinicCases}
           </p>
         </div>
 
@@ -242,7 +384,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
+      {/* TIMELINE HEADER */}
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold dark:text-white">Cases Timeline</h2>
           <p className="text-sm text-gray-400">
@@ -259,6 +402,7 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* TIMELINE CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {visibleCases.map((c) => (
           <div
@@ -267,7 +411,7 @@ export default function Dashboard() {
           >
             <div className="mb-3">
               <h2 className="text-xl font-bold">
-                {getMatchedEpcrId(c)} — {c.patientName || "—"}
+                {getMatchedEpcrId(c)} — {getMatchedProjectName(c)}
               </h2>
 
               <p className="text-gray-400">

@@ -10,24 +10,17 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-/* ======================
-   TYPES
-====================== */
-
 type DashboardStats = {
   totalCases: number;
-
   gender: {
     male: number;
     female: number;
   };
-
   outcome: Record<string, number>;
   triage: Record<string, number>;
   healthClassification: Record<string, number>;
   complaints: Record<string, number>;
   projects: Record<string, number>;
-
   responseTime: {
     avgMinutes: number;
     minMinutes: number;
@@ -35,14 +28,6 @@ type DashboardStats = {
   };
 };
 
-/* ======================
-   HELPERS
-====================== */
-
-/**
- * Convert "HH:mm" → total minutes
- * Example: "12:03" → 723
- */
 function hhmmToMinutes(time?: string): number | null {
   if (!time) return null;
 
@@ -57,9 +42,9 @@ function hhmmToMinutes(time?: string): number | null {
   return hours * 60 + minutes;
 }
 
-/* ======================
-   HOOK
-====================== */
+function isVisibleEpcr(item: any) {
+  return item?.isArchived !== true && item?.projectArchived !== true;
+}
 
 export function useEpcrDashboard(
   startDate?: Date,
@@ -87,9 +72,6 @@ export function useEpcrDashboard(
     setLoading(true);
 
     const unsub = onSnapshot(epcrQuery, (epcrSnap) => {
-      /* ------------------
-         INIT STATS
-      ------------------- */
       let totalCases = 0;
 
       const gender = { male: 0, female: 0 };
@@ -104,10 +86,16 @@ export function useEpcrDashboard(
       let responseMax = 0;
       let responseCount = 0;
 
-      for (const epcrDoc of epcrSnap.docs) {
-        const epcr = epcrDoc.data();
+      const visibleEpcrs: any[] = epcrSnap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as any),
+        }))
+        .filter(isVisibleEpcr);
 
+      for (const epcr of visibleEpcrs) {
         const projectName = epcr.projectInfo?.projectName;
+
         if (projectName) {
           projects[projectName] = (projects[projectName] || 0) + 1;
         }
@@ -127,8 +115,7 @@ export function useEpcrDashboard(
 
         const hc = epcr.patientInfo?.healthClassification;
         if (hc) {
-          healthClassification[hc] =
-            (healthClassification[hc] || 0) + 1;
+          healthClassification[hc] = (healthClassification[hc] || 0) + 1;
         }
 
         const cc: string[] = epcr.patientInfo?.chiefComplaints || [];
@@ -137,9 +124,7 @@ export function useEpcrDashboard(
         });
 
         const movingMin = hhmmToMinutes(epcr.time?.movingTime?.timeHHMM);
-        const arrivalMin = hhmmToMinutes(
-          epcr.time?.arrivalToPTTime?.timeHHMM
-        );
+        const arrivalMin = hhmmToMinutes(epcr.time?.arrivalToPTTime?.timeHHMM);
 
         if (
           movingMin !== null &&
@@ -180,6 +165,5 @@ export function useEpcrDashboard(
     return () => unsub();
   }, [startDate, endDate, projectFilter]);
 
-  // ✅ THIS IS THE MISSING PART
   return { loading, stats };
 }
