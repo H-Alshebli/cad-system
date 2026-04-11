@@ -10,7 +10,8 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
-function openGoogleMaps(lat: number, lng: number, label?: string) {
+
+function openGoogleMaps(lat: number, lng: number) {
   const url = `https://www.google.com/maps?q=${lat},${lng}`;
   window.open(url, "_blank");
 }
@@ -34,8 +35,18 @@ L.Icon.Default.mergeOptions({
 --------------------------------------------------------- */
 const patientIcon = L.icon({
   iconUrl: "/icons/patient.png",
-  iconSize: [40, 40],
-  iconAnchor: [20, 40],
+  iconRetinaUrl: "/icons/patient.png",
+  iconSize: [42, 42],
+  iconAnchor: [21, 42],
+  popupAnchor: [0, -36],
+});
+
+const destinationIcon = L.icon({
+  iconUrl: "/icons/clinic.png",
+  iconRetinaUrl: "/icons/clinic.png",
+  iconSize: [38, 38],
+  iconAnchor: [19, 38],
+  popupAnchor: [0, -32],
 });
 
 /* ---------------------------------------------------------
@@ -45,12 +56,38 @@ function ChangeView({ lat, lng }: { lat?: number; lng?: number }) {
   const map = useMap();
 
   useEffect(() => {
-    if (lat && lng) {
+    if (lat != null && lng != null) {
       map.setView([lat, lng], 16, { animate: true });
     }
   }, [lat, lng, map]);
 
   return null;
+}
+
+function RecenterButton({
+  lat,
+  lng,
+  label,
+}: {
+  lat?: number;
+  lng?: number;
+  label: string;
+}) {
+  const map = useMap();
+
+  if (lat == null || lng == null) return null;
+
+  return (
+    <div className="absolute top-3 right-3 z-[9999]">
+      <button
+        type="button"
+        onClick={() => map.setView([lat, lng], 16, { animate: true })}
+        className="px-3 py-2 rounded-md bg-slate-900/95 text-white text-xs font-medium border border-slate-600 shadow-lg hover:bg-slate-800"
+      >
+        {label}
+      </button>
+    </div>
+  );
 }
 
 /* ---------------------------------------------------------
@@ -73,11 +110,12 @@ interface MapProps {
   clinics?: Unit[];
   roaming?: Unit[];
 
-  // ✅ ADD THESE
   centerLat?: number;
   centerLng?: number;
-}
 
+  showRecenterButton?: boolean;
+  recenterLabel?: string;
+}
 
 /* ---------------------------------------------------------
    MAP COMPONENT
@@ -89,114 +127,106 @@ export default function Map({
   ambulances = [],
   clinics = [],
   roaming = [],
-
-  // ✅ ADD THESE
   centerLat,
   centerLng,
+  showRecenterButton = true,
+  recenterLabel = "Back to point",
 }: MapProps) {
+  const focusLat = centerLat ?? caseLat ?? 24.7136;
+  const focusLng = centerLng ?? caseLng ?? 46.6753;
 
   return (
-  <MapContainer
-  center={[
-    centerLat ?? caseLat ?? 24.997,
-    centerLng ?? caseLng ?? 46.5,
-  ]}
-  zoom={15}
-  scrollWheelZoom
-  style={{ width: "100%", height: "100%" }}
->
+    <div className="relative w-full h-full">
+      <MapContainer
+        center={[focusLat, focusLng]}
+        zoom={15}
+        scrollWheelZoom
+        style={{ width: "100%", height: "100%" }}
+      >
+        <TileLayer
+          url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+          subdomains={["mt0", "mt1", "mt2", "mt3"]}
+        />
 
-      {/* Google Maps tiles */}
-      <TileLayer
-        url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-        subdomains={["mt0", "mt1", "mt2", "mt3"]}
-      />
+        <ChangeView lat={focusLat} lng={focusLng} />
 
-      {/* Move map when coords change */}
-     <ChangeView
-  lat={centerLat ?? caseLat}
-  lng={centerLng ?? caseLng}
-/>
+        {showRecenterButton && (
+          <RecenterButton
+            lat={focusLat}
+            lng={focusLng}
+            label={recenterLabel}
+          />
+        )}
 
+        {/* Patient marker */}
+        {caseLat != null && caseLng != null && (
+          <Marker
+            position={[caseLat, caseLng]}
+            icon={patientIcon}
+            eventHandlers={{
+              click: () => openGoogleMaps(caseLat, caseLng),
+            }}
+          >
+            <Popup>
+              <strong>Patient</strong>
+              <br />
+              {caseName}
+            </Popup>
+          </Marker>
+        )}
 
-      {/* Patient marker */}
-      {caseLat && caseLng && (
-       <Marker
-  position={[caseLat, caseLng]}
-  icon={patientIcon}
-  eventHandlers={{
-    click: () => openGoogleMaps(caseLat, caseLng, caseName),
-  }}
->
+        {/* Clinics / Destination */}
+        {clinics.map((c) => {
+          if (c.lat == null || c.lng == null) return null;
 
-          <Popup>
-            <strong>Patient</strong>
-            <br />
-            {caseName}
-          </Popup>
-        </Marker>
-      )}
+          return (
+            <Marker
+              key={c.id}
+              position={[c.lat, c.lng]}
+              icon={destinationIcon}
+              eventHandlers={{
+                click: () => openGoogleMaps(c.lat!, c.lng!),
+              }}
+            >
+              <Popup>🏥 {c.name || c.id}</Popup>
+            </Marker>
+          );
+        })}
 
-      {/* Ambulances */}
-      {ambulances.map((a) => {
-  if (a.lat == null || a.lng == null) return null;
+        {/* Ambulances */}
+        {ambulances.map((a) => {
+          if (a.lat == null || a.lng == null) return null;
 
-  const lat = a.lat;
-  const lng = a.lng;
+          return (
+            <Marker
+              key={a.id}
+              position={[a.lat, a.lng]}
+              eventHandlers={{
+                click: () => openGoogleMaps(a.lat!, a.lng!),
+              }}
+            >
+              <Popup>🚑 {a.code || a.id}</Popup>
+            </Marker>
+          );
+        })}
 
-  return (
-    <Marker
-      key={a.id}
-      position={[lat, lng]}
-      eventHandlers={{
-        click: () => openGoogleMaps(lat, lng, a.code),
-      }}
-    >
-      <Popup>🚑 {a.code || a.id}</Popup>
-    </Marker>
-  );
-})}
+        {/* Roaming */}
+        {roaming.map((r) => {
+          if (r.lat == null || r.lng == null) return null;
 
-
-     {clinics.map((c) => {
-  if (c.lat == null || c.lng == null) return null;
-
-  const lat = c.lat;
-  const lng = c.lng;
-
-  return (
-    <Marker
-      key={c.id}
-      position={[lat, lng]}
-      eventHandlers={{
-        click: () => openGoogleMaps(lat, lng, c.name),
-      }}
-    >
-      <Popup>🏥 {c.name || c.id}</Popup>
-    </Marker>
-  );
-})}
-
-      {/* Roaming */}
-      {roaming.map((r) => {
-  if (r.lat == null || r.lng == null) return null;
-
-  const lat = r.lat;
-  const lng = r.lng;
-
-  return (
-    <Marker
-      key={r.id}
-      position={[lat, lng]}
-      eventHandlers={{
-        click: () => openGoogleMaps(lat, lng, r.code),
-      }}
-    >
-      <Popup>🚶 {r.code || r.id}</Popup>
-    </Marker>
-  );
-})}
-
-    </MapContainer>
+          return (
+            <Marker
+              key={r.id}
+              position={[r.lat, r.lng]}
+              eventHandlers={{
+                click: () => openGoogleMaps(r.lat!, r.lng!),
+              }}
+            >
+              <Popup>🚶 {r.code || r.id}</Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
+    </div>
   );
 }

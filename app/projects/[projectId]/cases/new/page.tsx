@@ -340,14 +340,18 @@ export default function NewProjectCasePage({
 
         {/* ================= MAP ================= */}
         <div className="h-[520px] border border-gray-700 rounded-lg overflow-hidden">
-          <Map
-            caseLat={lat ?? undefined}
-            caseLng={lng ?? undefined}
-            caseName={locationText}
-            ambulances={unitType === "ambulance" ? units : []}
-            clinics={unitType === "clinic" ? units : []}
-            roaming={unitType === "roaming" ? units : []}
-          />
+         <Map
+  caseLat={lat ?? undefined}
+  caseLng={lng ?? undefined}
+  caseName={locationText}
+  ambulances={unitType === "ambulance" ? units : []}
+  clinics={unitType === "clinic" ? units : []}
+  roaming={unitType === "roaming" ? units : []}
+  centerLat={lat ?? undefined}
+  centerLng={lng ?? undefined}
+  showRecenterButton={true}
+  recenterLabel="Back to location"
+/>
         </div>
       </div>
     </div>
