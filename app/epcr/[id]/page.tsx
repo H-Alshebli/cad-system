@@ -1,22 +1,12 @@
 "use client";
 
 import { useRef } from "react";
-
-
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  getDoc,          // ✅ ADD THIS
-} from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
 import { generateEpcrPdf } from "@/lib/epcrPdf";
-
-
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import BodyPainSelector from "@/app/components/epcr/BodyPainSelector";
-
 
 /* =========================
    TYPES
@@ -34,14 +24,18 @@ const NATIONALITIES = [
 ] as const;
 
 type Gender = "male" | "female" | "unknown";
-type TriageColor = "Level 1 (Resuscitation)" | "Level 2 (Emergent)" | "Level 3 (Urgent)" | "Level 4 (Less Urgent)" | "Level 5 (non-urgent)" | "death";
-
+type TriageColor =
+  | "Level 1 (Resuscitation)"
+  | "Level 2 (Emergent)"
+  | "Level 3 (Urgent)"
+  | "Level 4 (Less Urgent)"
+  | "Level 5 (non-urgent)"
+  | "death";
 
 type ProjectInfo = {
   projectId?: string;
   projectName?: string;
 };
-
 
 type HealthClassification =
   | "Occupational"
@@ -65,6 +59,7 @@ type PatientInfo = {
   healthClassification: HealthClassification | "";
 
   chiefComplaints: string[];
+  chiefComplaintDetails: Record<string, string[]>;
   signsAndSymptoms: string[];
 };
 
@@ -99,7 +94,6 @@ type VitalItem = {
   };
 };
 
-
 type MedicationItem = {
   medication: string;
   other: string;
@@ -119,7 +113,6 @@ type NarrativeVitals = {
   medications: MedicationItem[];
   consumables: ConsumableItem[];
 };
-
 
 type Outcome = {
   destination: string;
@@ -180,9 +173,8 @@ const emptyProjectInfo = (): ProjectInfo => ({
   projectName: "",
 });
 
-
 const emptyPatientInfo = (): PatientInfo => ({
-   patientId: "",   
+  patientId: "",
   firstName: "",
   lastName: "",
   age: null,
@@ -194,6 +186,7 @@ const emptyPatientInfo = (): PatientInfo => ({
   triageColor: "",
   healthClassification: "",
   chiefComplaints: [],
+  chiefComplaintDetails: {},
   signsAndSymptoms: [],
 });
 
@@ -226,8 +219,6 @@ const emptyVitalItem = (): VitalItem => ({
   },
 });
 
-
-
 const emptyMedicationItem = (): MedicationItem => ({
   medication: "",
   other: "",
@@ -247,7 +238,6 @@ const emptyNarrativeVitals = (): NarrativeVitals => ({
   medications: [emptyMedicationItem()],
   consumables: [emptyConsumableItem()],
 });
-
 
 const emptyOutcome = (): Outcome => ({
   destination: "",
@@ -272,7 +262,6 @@ const emptyTransferTeam = (): TransferTeam => ({
 const emptyTimeValue = (): TimeValue => ({
   timeHHMM: "",
 });
-
 
 const emptyTime = (): TimeSection => ({
   movingTime: emptyTimeValue(),
@@ -302,7 +291,7 @@ const MED_HISTORY_CONDITIONS = [
   "Psychiatric",
 ] as const;
 
-const EYES_OPTIONS = ["Equal", "Light", "Reactive", "Non-Reactive"] as const;
+const EYES_OPTIONS = ["Equal", "Round", "Reactive to light"] as const;
 
 const CHIEF_COMPLAINTS = [
   "Cardiac complaints",
@@ -319,6 +308,90 @@ const CHIEF_COMPLAINTS = [
   "Other critical complaints",
   "Other",
 ] as const;
+
+const CHIEF_COMPLAINT_DETAILS: Record<string, string[]> = {
+  "Cardiac complaints": [
+    "Chest Pain",
+    "Palpitations",
+    "Syncope (Fainting)",
+    "Hypertension",
+    "Hypotension",
+    "Other",
+  ],
+  "Respiratory complaints": [
+    "Shortness of Breath",
+    "Respiratory Distress",
+    "Asthma Exacerbation",
+    "Airway Obstruction",
+    "Other",
+  ],
+  "Musculoskeletal complaints": [
+    "Fracture",
+    "Joint Pain",
+    "Back Pain",
+    "Sprain",
+    "Other",
+  ],
+  "Digestive complaints": [
+    "Abdominal Pain",
+    "Constipation",
+    "Indigestion",
+    "Other",
+  ],
+  "Metabolic and endocrine complaints": [
+    "Hypoglycemia",
+    "Hyperglycemia",
+    "Other",
+  ],
+  "General medical complaints": [
+    "Generalized Weakness",
+    "Dizziness",
+    "Fatigue",
+    "Malaise",
+    "Dehydration",
+    "Other",
+  ],
+  "Environmental and toxicological complaints": [
+    "Heat Stroke",
+    "Hypothermia",
+    "Poisoning",
+    "Overdose",
+    "Bites and Stings",
+    "Other",
+  ],
+  "Obstetric and gynecology complaints": [
+    "Labor Pain",
+    "Vaginal Bleeding",
+    "Pregnancy Complications",
+    "Other",
+  ],
+  "Gastrointestinal complaints": [
+    "Abdominal Pain",
+    "Nausea/Vomiting",
+    "Diarrhea",
+    "Other",
+  ],
+  "Behavioral and psychological complaints": [
+    "Anxiety",
+    "Agitation",
+    "Other",
+  ],
+  "Infectious disease complaints": [
+    "Fever",
+    "Suspected Sepsis",
+    "Flu-like Symptoms",
+    "Other",
+  ],
+  "Other critical complaints": [
+    "Cardiac Arrest",
+    "Respiratory Arrest",
+    "Difficulty Breathing (due to allergic reaction)",
+    "Throat Swelling (due to allergic reaction)",
+    "Skin Rash (due to allergic reaction)",
+    "Other",
+  ],
+  Other: ["Other"],
+};
 
 const SIGNS_SYMPTOMS = [
   "Unconscious",
@@ -376,22 +449,10 @@ const CONSUMABLES_LIST = [
   "Other",
 ] as const;
 
-const BODY_AREAS = [
-  "Head",
-  "Neck",
-  "Chest",
-  "Back",
-  "Abdomen",
-  "Pelvis",
-  "Left Arm",
-  "Right Arm",
-  "Left Leg",
-  "Right Leg",
-] as const;
-
 /* =========================
    PAGE
 ========================= */
+
 const timestampToHHMM = (ts: any): string => {
   if (!ts || typeof ts.toDate !== "function") return "";
 
@@ -402,25 +463,16 @@ const timestampToHHMM = (ts: any): string => {
   return `${hh}:${mm}`;
 };
 
-// 🧠 Pick timeline time (supports NEW + OLD keys)
-const pickTimelineTime = (
-  timeline: any,
-  newKey: string,
-  oldKey: string
-) => {
+const pickTimelineTime = (timeline: any, newKey: string, oldKey: string) => {
   return timeline?.[newKey] ?? timeline?.[oldKey] ?? null;
 };
 
 export default function EpcrPage({ params }: { params: { id: string } }) {
+  type BodyPainRef = {
+    exportImage: () => Promise<string | null>;
+  };
 
-type BodyPainRef = {
-  exportImage: () => Promise<string | null>;
-};
-
-const bodyPainRef = useRef<BodyPainRef | null>(null);
-
-
-
+  const bodyPainRef = useRef<BodyPainRef | null>(null);
 
   const epcrId = params.id;
   const router = useRouter();
@@ -428,224 +480,205 @@ const bodyPainRef = useRef<BodyPainRef | null>(null);
   const [data, setData] = useState<EpcrDoc | null>(null);
   const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  const epcrRef = doc(db, "epcr", epcrId);
+  useEffect(() => {
+    const epcrRef = doc(db, "epcr", epcrId);
 
-  const unsub = onSnapshot(epcrRef, async (epcrSnap) => {
-    if (!epcrSnap.exists()) {
-      setData(null);
+    const unsub = onSnapshot(epcrRef, async (epcrSnap) => {
+      if (!epcrSnap.exists()) {
+        setData(null);
+        setLoading(false);
+        return;
+      }
+
+      const epcrData = epcrSnap.data() as EpcrDoc;
+      const caseRef = doc(db, "cases", epcrId);
+      const caseSnap = await getDoc(caseRef);
+
+      if (caseSnap.exists()) {
+        const caseData = caseSnap.data();
+        const timeline = caseData.timeline;
+
+        let projectUpdated = false;
+        const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
+
+        if (!newProjectInfo.projectId && caseData.projectId) {
+          newProjectInfo.projectId = caseData.projectId;
+          projectUpdated = true;
+        }
+
+        if (caseData.projectId && !newProjectInfo.projectName) {
+          const projectRef = doc(db, "projects", caseData.projectId);
+          const projectSnap = await getDoc(projectRef);
+
+          if (projectSnap.exists()) {
+            const projectData = projectSnap.data();
+            newProjectInfo.projectName = projectData.projectName ?? "";
+            projectUpdated = true;
+          }
+        }
+
+        if (projectUpdated) {
+          await updateDoc(epcrRef, {
+            projectInfo: newProjectInfo,
+            updatedAt: new Date(),
+          });
+
+          epcrData.projectInfo = newProjectInfo;
+          setData(epcrData);
+          setLoading(false);
+          return;
+        }
+
+        if (timeline) {
+          let timeUpdated = false;
+          const newTime = { ...(epcrData.time ?? emptyTime()) };
+
+          const fill = (
+            key: keyof TimeSection,
+            newKey: string,
+            oldKey: string
+          ) => {
+            if (!newTime[key]?.timeHHMM) {
+              const ts = pickTimelineTime(timeline, newKey, oldKey);
+              if (ts) {
+                newTime[key] = { timeHHMM: timestampToHHMM(ts) };
+                timeUpdated = true;
+              }
+            }
+          };
+
+          fill("movingTime", "enRouteAt", "EnRoute");
+          fill("arrivalTime", "onSceneAt", "OnScene");
+          fill("arrivalToPTTime", "onSceneAt", "OnScene");
+          fill("leavingSceneTime", "transportingAt", "Transporting");
+          fill("hospitalTime", "hospitalAt", "Hospital");
+          fill("backTime", "closedAt", "Closed");
+
+          if (timeUpdated) {
+            await updateDoc(epcrRef, {
+              time: newTime,
+              updatedAt: new Date(),
+            });
+
+            epcrData.time = newTime;
+            setData(epcrData);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      setData(epcrData);
       setLoading(false);
+    });
+
+    return () => unsub();
+  }, [epcrId]);
+
+  const locked = data?.locked === true;
+
+  const patientInfo = data?.patientInfo ?? emptyPatientInfo();
+  const projectInfo = data?.projectInfo ?? emptyProjectInfo();
+  const medicalHistory = data?.medicalHistory ?? emptyMedicalHistory();
+  const headToToe = data?.headToToe ?? emptyHeadToToe();
+  const narrativeVitals = data?.narrativeVitals ?? emptyNarrativeVitals();
+  const outcome = data?.outcome ?? emptyOutcome();
+  const transferTeam = data?.transferTeam ?? emptyTransferTeam();
+  const time = data?.time ?? emptyTime();
+
+  const missing = useMemo(() => {
+    if (!data) return [];
+
+    const m: string[] = [];
+
+    if (!patientInfo.firstName.trim()) m.push("Patient: First Name");
+    if (!patientInfo.lastName.trim()) m.push("Patient: Last Name");
+    if (!patientInfo.age || patientInfo.age <= 0) m.push("Patient: Age");
+    if (!patientInfo.triageColor) m.push("Patient: Triage Color");
+    if (!patientInfo.healthClassification)
+      m.push("Patient: Health Classification");
+    if (!patientInfo.chiefComplaints.length)
+      m.push("Patient: Chief Complaints");
+
+    patientInfo.chiefComplaints.forEach((complaint) => {
+      const details = patientInfo.chiefComplaintDetails?.[complaint] ?? [];
+      if (details.length === 0) {
+        m.push(`Chief Complaint Details: ${complaint}`);
+      }
+    });
+
+    if (!patientInfo.signsAndSymptoms.length)
+      m.push("Patient: Signs & Symptoms");
+
+    if (!narrativeVitals.contactedMedicalDirector) {
+      m.push("Narrative: Contacted Medical Director");
+    }
+    if (!narrativeVitals.narrative.trim()) {
+      m.push("Narrative: Narrative");
+    }
+
+    if (!narrativeVitals.vitalsList.length) {
+      m.push("Vitals: At least one vital set required");
+    } else {
+      narrativeVitals.vitalsList.forEach((v, i) => {
+        const idx = i + 1;
+        if (!v.hr.trim()) m.push(`Vitals #${idx}: HR`);
+        if (!v.bp.trim()) m.push(`Vitals #${idx}: BP`);
+        if (!v.spo2.trim()) m.push(`Vitals #${idx}: SpO2`);
+      });
+    }
+
+    if (!outcome.destination.trim()) m.push("Outcome: Destination");
+    if (!outcome.hospitalName.trim()) m.push("Outcome: Hospital Name");
+    if (!outcome.hospitalMember.trim()) m.push("Outcome: Hospital Member");
+    if (!outcome.hospitalSignatureDataUrl) {
+      m.push("Outcome: Hospital Signature");
+    }
+
+    transferTeam.members.forEach((mem, idx) => {
+      const n = idx + 1;
+      if (!mem.name.trim()) m.push(`Transfer Team #${n}: Paramedic Name`);
+      if (!mem.signatureDataUrl) m.push(`Transfer Team #${n}: Signature`);
+    });
+
+    if (!time.arrivalTime.timeHHMM) m.push("Time: Arrival Time");
+    if (!time.movingTime.timeHHMM) m.push("Time: Moving Time");
+
+    return m;
+  }, [data, patientInfo, narrativeVitals, outcome, transferTeam, time]);
+
+  if (loading) {
+    return <div className="p-6 text-white">Loading ePCR...</div>;
+  }
+
+  if (!data) {
+    return <div className="p-6 text-white">ePCR not found</div>;
+  }
+
+  const canFinalize = missing.length === 0;
+
+  const exportPdf = async () => {
+    if (!bodyPainRef.current) {
+      alert("Body diagram not ready yet");
       return;
     }
 
-    const epcrData = epcrSnap.data() as EpcrDoc;
+    const diagramImage = await bodyPainRef.current.exportImage();
 
-    const caseRef = doc(db, "cases", epcrId);
-    const caseSnap = await getDoc(caseRef);
-
-
-     if (caseSnap.exists()) {
-  const caseData = caseSnap.data();
-  const timeline = caseData.timeline;
-
-  /* =========================
-   PROJECT INFO (WRITE ONCE)
-========================= */
-let projectUpdated = false;
-const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
-
-// 1️⃣ Always copy projectId from case
-if (!newProjectInfo.projectId && caseData.projectId) {
-  newProjectInfo.projectId = caseData.projectId;
-  projectUpdated = true;
-}
-
-// 2️⃣ Fetch projectName from projects collection
-if (
-  caseData.projectId &&
-  !newProjectInfo.projectName
-) {
-  const projectRef = doc(db, "projects", caseData.projectId);
-  const projectSnap = await getDoc(projectRef);
-
-  if (projectSnap.exists()) {
-    const projectData = projectSnap.data();
-
-    newProjectInfo.projectName =
-      projectData.projectName ?? "";
-
-    projectUpdated = true;
-  }
-}
-
-// 3️⃣ WRITE ONCE
-if (projectUpdated) {
-  await updateDoc(epcrRef, {
-    projectInfo: newProjectInfo,
-    updatedAt: new Date(),
-  });
-
-  epcrData.projectInfo = newProjectInfo;
-  setData(epcrData);
-  setLoading(false);
-  return; // ⛔ stop snapshot loop
-}
-
-
-  /* =========================
-     TIMELINE → TIME (WRITE ONCE)
-     ========================= */
-  if (timeline) {
-    let timeUpdated = false;
-    const newTime = { ...(epcrData.time ?? emptyTime()) };
-
-    const fill = (
-      key: keyof TimeSection,
-      newKey: string,
-      oldKey: string
-    ) => {
-      if (!newTime[key]?.timeHHMM) {
-        const ts = pickTimelineTime(timeline, newKey, oldKey);
-        if (ts) {
-          newTime[key] = { timeHHMM: timestampToHHMM(ts) };
-          timeUpdated = true;
-        }
-      }
-    };
-
-    fill("movingTime", "enRouteAt", "EnRoute");
-    fill("arrivalTime", "onSceneAt", "OnScene");
-    fill("arrivalToPTTime", "onSceneAt", "OnScene");
-    fill("leavingSceneTime", "transportingAt", "Transporting");
-    fill("hospitalTime", "hospitalAt", "Hospital");
-    fill("backTime", "closedAt", "Closed");
-
-    if (timeUpdated) {
-      await updateDoc(epcrRef, {
-        time: newTime,
-        updatedAt: new Date(),
-      });
-
-      epcrData.time = newTime;
-      setData(epcrData);
-      setLoading(false);
-      return; // ⛔ STOP snapshot
-    }
-  }
-}
-
-
-    setData(epcrData);
-    setLoading(false);
-  });
-
-  return () => unsub();
-}, [epcrId]);
-
-
-
-
- const locked = data?.locked === true;
-
-// controlled sections (آمنة حتى لو data = null)
-const patientInfo = data?.patientInfo ?? emptyPatientInfo();
-const projectInfo = data?.projectInfo ?? emptyProjectInfo();
-const medicalHistory = data?.medicalHistory ?? emptyMedicalHistory();
-const headToToe = data?.headToToe ?? emptyHeadToToe();
-const narrativeVitals = data?.narrativeVitals ?? emptyNarrativeVitals();
-const outcome = data?.outcome ?? emptyOutcome();
-const transferTeam = data?.transferTeam ?? emptyTransferTeam();
-const time = data?.time ?? emptyTime();
-
-const missing = useMemo(() => {
-  if (!data) return [];
-
-  const m: string[] = [];
-
-  if (!patientInfo.firstName.trim()) m.push("Patient: First Name");
-  if (!patientInfo.lastName.trim()) m.push("Patient: Last Name");
-  if (!patientInfo.age || patientInfo.age <= 0) m.push("Patient: Age");
-  if (!patientInfo.triageColor) m.push("Patient: Triage Color");
-  if (!patientInfo.healthClassification) m.push("Patient: Health Classification");
-  if (!patientInfo.chiefComplaints.length) m.push("Patient: Chief Complaints");
-  if (!patientInfo.signsAndSymptoms.length) m.push("Patient: Signs & Symptoms");
-
-  if (!narrativeVitals.contactedMedicalDirector)
-    m.push("Narrative: Contacted Medical Director");
-  if (!narrativeVitals.narrative.trim())
-    m.push("Narrative: Narrative");
-
-if (!narrativeVitals.vitalsList.length) {
-  m.push("Vitals: At least one vital set required");
-} else {
-  narrativeVitals.vitalsList.forEach((v, i) => {
-    const idx = i + 1;
-
-    if (!v.hr.trim()) m.push(`Vitals #${idx}: HR`);
-    if (!v.bp.trim()) m.push(`Vitals #${idx}: BP`);
-    if (!v.spo2.trim()) m.push(`Vitals #${idx}: SpO2`);
-  });
-}
-
-
-  if (!outcome.destination.trim()) m.push("Outcome: Destination");
-  if (!outcome.hospitalName.trim()) m.push("Outcome: Hospital Name");
-  if (!outcome.hospitalMember.trim()) m.push("Outcome: Hospital Member");
-  if (!outcome.hospitalSignatureDataUrl)
-    m.push("Outcome: Hospital Signature");
-
-  transferTeam.members.forEach((mem, idx) => {
-    const n = idx + 1;
-    if (!mem.name.trim())
-      m.push(`Transfer Team #${n}: Paramedic Name`);
-    if (!mem.signatureDataUrl)
-      m.push(`Transfer Team #${n}: Signature`);
-  });
-if (!time.arrivalTime.timeHHMM)
-  m.push("Time: Arrival Time");
-if (!time.movingTime.timeHHMM)
-  m.push("Time: Moving Time");
-
-
-  return m;
-}, [data, patientInfo, narrativeVitals, outcome, transferTeam, time]);
-  
-if (loading) {
-  return <div className="p-6 text-white">Loading ePCR...</div>;
-}
-
-if (!data) {
-  return <div className="p-6 text-white">ePCR not found</div>;
-}
-
-  const canFinalize = missing.length === 0;
-const exportPdf = async () => {
-  if (!bodyPainRef.current) {
-    alert("Body diagram not ready yet");
-    return;
-  }
-
-  const diagramImage = await bodyPainRef.current.exportImage();
-
-  console.log("Diagram image:", diagramImage); // 🔍 مهم
-
-  generateEpcrPdf({
-  projectInfo,
-    patientInfo,
-    medicalHistory,
-    headToToe: {
-      ...headToToe,
-      diagramImage,
-    },
-    narrativeVitals,
-    outcome,
-    transferTeam,
-    time,
-  });
-};
-
-
-
+    generateEpcrPdf({
+      projectInfo,
+      patientInfo,
+      medicalHistory,
+      headToToe: {
+        ...headToToe,
+        diagramImage,
+      },
+      narrativeVitals,
+      outcome,
+      transferTeam,
+      time,
+    });
+  };
 
   const saveDraft = async () => {
     const ref = doc(db, "epcr", epcrId);
@@ -698,54 +731,54 @@ const exportPdf = async () => {
         )}
       </div>
 
-      <button onClick={() => router.back()} className="px-6 py-2 rounded border border-gray-600">
-          Back
+      <button
+        onClick={() => router.back()}
+        className="px-6 py-2 rounded border border-gray-600"
+      >
+        Back
+      </button>
+
+      <div className="flex gap-4 justify-end flex-wrap">
+        {!locked && (
+          <>
+            <button
+              onClick={saveDraft}
+              className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+            >
+              Save Draft
+            </button>
+
+            <button
+              onClick={finalize}
+              disabled={!canFinalize}
+              className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+            >
+              Finalize ePCR
+            </button>
+          </>
+        )}
+
+        <button
+          onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
+          className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+        >
+          Refusal of Treatment Form
         </button>
 
-<div className="flex gap-4 justify-end flex-wrap">
-  {!locked && (
-    <>
-      <button
-        onClick={saveDraft}
-        className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
-      >
-        Save Draft
-      </button>
+        <button
+          onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
+          className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+        >
+          Data Sharing Consent Form
+        </button>
 
-      <button
-        onClick={finalize}
-        disabled={!canFinalize}
-        className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
-      >
-        Finalize ePCR
-      </button>
-    </>
-  )}
-
-  <button
-    onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
-    className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
-  >
-    Refusal of Treatment Form
-  </button>
-
-  <button
-    onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
-    className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
-  >
-    Data Sharing Consent Form
-  </button>
-
-  <button
-    onClick={exportPdf}
-    className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
-  >
-    Export Professional PDF
-  </button>
-
-
-</div>
-
+        <button
+          onClick={exportPdf}
+          className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+        >
+          Export Professional PDF
+        </button>
+      </div>
 
       {!locked && missing.length > 0 && (
         <Section title="Missing Required Fields">
@@ -756,27 +789,14 @@ const exportPdf = async () => {
           </ul>
         </Section>
       )}
-<Section title="Case Information">
-  <Input
-    disabled
-    label="Project Name"
-    value={projectInfo.projectName || "—"}
-  />
 
-  <Input
-    disabled
-    label="Project ID"
-    value={projectInfo.projectId || "—"}
-  />
-</Section>
+      <Section title="Case Information">
+        <Input disabled label="Project Name" value={projectInfo.projectName || "—"} />
+        <Input disabled label="Project ID" value={projectInfo.projectId || "—"} />
+      </Section>
 
-      {/* ================= PATIENT INFORMATION ================= */}
       <Section title="Patient Information">
-        <Input
-  disabled
-  label="Patient ID"
-  value={patientInfo.patientId || "—"}
-/>
+        <Input disabled label="Patient ID" value={patientInfo.patientId || "—"} />
 
         <div className="grid grid-cols-2 gap-4">
           <Input
@@ -842,7 +862,6 @@ const exportPdf = async () => {
           >
             <option value="male">Male</option>
             <option value="female">Female</option>
-            
           </Select>
         </div>
 
@@ -893,27 +912,26 @@ const exportPdf = async () => {
               }))
             }
           />
-      <Select
-  disabled={locked}
-  label="Nationality"
-  value={patientInfo.nationality ?? ""}
-  onChange={(e) =>
-    setData((prev) => ({
-      ...(prev ?? {}),
-      patientInfo: {
-        ...(prev?.patientInfo ?? emptyPatientInfo()),
-        nationality: e.target.value,
-      },
-    }))
-  }
->
-  {NATIONALITIES.map((n) => (
-    <option key={n} value={n}>
-      {n}
-    </option>
-  ))}
-</Select>
-
+          <Select
+            disabled={locked}
+            label="Nationality"
+            value={patientInfo.nationality ?? ""}
+            onChange={(e) =>
+              setData((prev) => ({
+                ...(prev ?? {}),
+                patientInfo: {
+                  ...(prev?.patientInfo ?? emptyPatientInfo()),
+                  nationality: e.target.value,
+                },
+              }))
+            }
+          >
+            {NATIONALITIES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </Select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -961,17 +979,28 @@ const exportPdf = async () => {
           </Select>
         </div>
 
-        <MultiCheckbox
+        <ChiefComplaintSelector
           disabled={locked}
           title="Prehospital Chief Complaints *"
           options={[...CHIEF_COMPLAINTS]}
-          value={patientInfo.chiefComplaints}
-          onChange={(vals) =>
+          detailsMap={CHIEF_COMPLAINT_DETAILS}
+          selectedComplaints={patientInfo.chiefComplaints}
+          selectedDetails={patientInfo.chiefComplaintDetails ?? {}}
+          onComplaintsChange={(vals) =>
             setData((prev) => ({
               ...(prev ?? {}),
               patientInfo: {
                 ...(prev?.patientInfo ?? emptyPatientInfo()),
                 chiefComplaints: vals,
+              },
+            }))
+          }
+          onDetailsChange={(details) =>
+            setData((prev) => ({
+              ...(prev ?? {}),
+              patientInfo: {
+                ...(prev?.patientInfo ?? emptyPatientInfo()),
+                chiefComplaintDetails: details,
               },
             }))
           }
@@ -994,7 +1023,6 @@ const exportPdf = async () => {
         />
       </Section>
 
-      {/* ================= RELEVANT MEDICAL HISTORY ================= */}
       <Section title="Relevant Medical History">
         <MultiCheckbox
           disabled={locked}
@@ -1044,7 +1072,6 @@ const exportPdf = async () => {
         />
       </Section>
 
-      {/* ================= HEAD-TO-TOE ================= */}
       <Section title="Head - To - Toe - Physical Examination">
         <Input
           disabled={locked}
@@ -1151,449 +1178,471 @@ const exportPdf = async () => {
           }
         />
 
-<BodyPainSelector
-  ref={bodyPainRef}
-  values={headToToe.painLocations}
-  onChange={(vals) =>
-    setData((prev) => ({
-      ...(prev ?? {}),
-      headToToe: {
-        ...(prev?.headToToe ?? emptyHeadToToe()),
-        painLocations: vals,
-      },
-    }))
-  }
-/>
-
-
-
+        <BodyPainSelector
+          ref={bodyPainRef}
+          values={headToToe.painLocations}
+          onChange={(vals) =>
+            setData((prev) => ({
+              ...(prev ?? {}),
+              headToToe: {
+                ...(prev?.headToToe ?? emptyHeadToToe()),
+                painLocations: vals,
+              },
+            }))
+          }
+        />
       </Section>
-{/* ================= NARRATIVE ================= */}
-<Section title="Narrative">
-  <Select
-    disabled={locked}
-    label="Contacted Medical Director *"
-    value={narrativeVitals.contactedMedicalDirector}
-    onChange={(e) =>
-      setData((prev) => ({
-        ...(prev ?? {}),
-        narrativeVitals: {
-          ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
-          contactedMedicalDirector: e.target.value as YesNo,
-        },
-      }))
-    }
-  >
-    <option value="yes">Yes</option>
-    <option value="no">No</option>
-  </Select>
 
-  <Textarea
-    disabled={locked}
-    label="Narrative *"
-    value={narrativeVitals.narrative}
-    onChange={(e) =>
-      setData((prev) => ({
-        ...(prev ?? {}),
-        narrativeVitals: {
-          ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
-          narrative: e.target.value,
-        },
-      }))
-    }
-  />
-</Section>
+      <Section title="Narrative">
+        <Select
+          disabled={locked}
+          label="Contacted Medical Director *"
+          value={narrativeVitals.contactedMedicalDirector}
+          onChange={(e) =>
+            setData((prev) => ({
+              ...(prev ?? {}),
+              narrativeVitals: {
+                ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
+                contactedMedicalDirector: e.target.value as YesNo,
+              },
+            }))
+          }
+        >
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </Select>
 
-      {/* ================= NARRATIVE & VITALS ================= */}
+        <Textarea
+          disabled={locked}
+          label="Narrative *"
+          value={narrativeVitals.narrative}
+          onChange={(e) =>
+            setData((prev) => ({
+              ...(prev ?? {}),
+              narrativeVitals: {
+                ...(prev?.narrativeVitals ?? emptyNarrativeVitals()),
+                narrative: e.target.value,
+              },
+            }))
+          }
+        />
+      </Section>
+
       <SectionInnerTitle>Vital Signs</SectionInnerTitle>
 
-{narrativeVitals.vitalsList.map((vital, idx) => (
-  <div
-    key={idx}
-    className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
-  >
-    <div className="text-sm font-semibold text-gray-300">
-      Vital Set #{idx + 1}
-    </div>
-
-    <div className="grid grid-cols-4 gap-4">
-      <Input
-        disabled={locked}
-        label="Temp"
-        value={vital.temp}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], temp: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-
-      <Input
-        disabled={locked}
-        label="HR"
-        value={vital.hr}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], hr: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-
-      <Input
-        disabled={locked}
-        label="BP"
-        value={vital.bp}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], bp: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-
-      <Input
-        disabled={locked}
-        label="SpO2"
-        value={vital.spo2}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], spo2: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-    </div>
-
-    <div className="grid grid-cols-3 gap-4">
-      <Input
-        disabled={locked}
-        label="GCS"
-        value={vital.gcs}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], gcs: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-
-      <Input
-        disabled={locked}
-        label="BGL"
-        value={vital.bgl}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], bgl: e.target.value };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-
-      <TimeMini
-        disabled={locked}
-        label="Time"
-        value={vital.time}
-        onChange={(t) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const list = [...nv.vitalsList];
-            list[idx] = { ...list[idx], time: t };
-            return {
-              ...(prev ?? {}),
-              narrativeVitals: { ...nv, vitalsList: list },
-            };
-          })
-        }
-      />
-    </div>
-
-    {!locked && (
-      <div className="flex gap-2">
-        <button
-          className="border border-gray-600 px-3 py-1 rounded"
-          onClick={() =>
-            setData((prev) => {
-              const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-              return {
-                ...(prev ?? {}),
-                narrativeVitals: {
-                  ...nv,
-                  vitalsList: [...nv.vitalsList, emptyVitalItem()],
-                },
-              };
-            })
-          }
+      {narrativeVitals.vitalsList.map((vital, idx) => (
+        <div
+          key={idx}
+          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
         >
-          + Add Vital
-        </button>
+          <div className="text-sm font-semibold text-gray-300">
+            Vital Set #{idx + 1}
+          </div>
 
-        {narrativeVitals.vitalsList.length > 1 && (
-          <button
-            className="border border-gray-600 px-3 py-1 rounded"
-            onClick={() =>
-              setData((prev) => {
-                const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-                const list = nv.vitalsList.slice();
-                list.splice(idx, 1);
-                return {
-                  ...(prev ?? {}),
-                  narrativeVitals: { ...nv, vitalsList: list },
-                };
-              })
-            }
-          >
-            Remove
-          </button>
-        )}
-      </div>
-    )}
-  </div>
-))}
+          <div className="grid grid-cols-4 gap-4">
+            <Input
+              disabled={locked}
+              label="Temp"
+              value={vital.temp}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], temp: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
 
+            <Input
+              disabled={locked}
+              label="HR"
+              value={vital.hr}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], hr: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
 
-        {/* Medications */}
-       <SectionInnerTitle>Medications</SectionInnerTitle>
+            <Input
+              disabled={locked}
+              label="BP"
+              value={vital.bp}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], bp: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
 
-{narrativeVitals.medications.map((item, idx) => (
-  <div
-    key={idx}
-    className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
-  >
-    <div className="text-sm font-semibold text-gray-300">
-      Medication #{idx + 1}
-    </div>
+            <Input
+              disabled={locked}
+              label="SpO2"
+              value={vital.spo2}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], spo2: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
+          </div>
 
-    <div className="grid grid-cols-3 gap-4">
-      <Select
-        disabled={locked}
-        label="Medication"
-        value={item.medication}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const meds = [...nv.medications];
-            meds[idx] = { ...meds[idx], medication: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, medications: meds } };
-          })
-        }
-      >
-        {MEDICATIONS_LIST.map((m) => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </Select>
+          <div className="grid grid-cols-3 gap-4">
+            <Input
+              disabled={locked}
+              label="GCS"
+              value={vital.gcs}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], gcs: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
 
-      <Input
-        disabled={locked}
-        label="Other"
-        value={item.other}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const meds = [...nv.medications];
-            meds[idx] = { ...meds[idx], other: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, medications: meds } };
-          })
-        }
-      />
+            <Input
+              disabled={locked}
+              label="BGL"
+              value={vital.bgl}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], bgl: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
 
-      <Select
-        disabled={locked}
-        label="Qty"
-        value={item.qty}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const meds = [...nv.medications];
-            meds[idx] = { ...meds[idx], qty: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, medications: meds } };
-          })
-        }
-      >
-        {QTY_LIST.map((q) => (
-          <option key={q} value={q}>{q}</option>
-        ))}
-      </Select>
-    </div>
+            <TimeMini
+              disabled={locked}
+              label="Time"
+              value={vital.time}
+              onChange={(t) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const list = [...nv.vitalsList];
+                  list[idx] = { ...list[idx], time: t };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, vitalsList: list },
+                  };
+                })
+              }
+            />
+          </div>
 
-    {!locked && (
-      <div className="flex gap-2">
-        <button
-          className="border border-gray-600 px-3 py-1 rounded"
-          onClick={() =>
-            setData((prev) => {
-              const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-              return {
-                ...(prev ?? {}),
-                narrativeVitals: {
-                  ...nv,
-                  medications: [...nv.medications, emptyMedicationItem()],
-                },
-              };
-            })
-          }
+          {!locked && (
+            <div className="flex gap-2">
+              <button
+                className="border border-gray-600 px-3 py-1 rounded"
+                onClick={() =>
+                  setData((prev) => {
+                    const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                    return {
+                      ...(prev ?? {}),
+                      narrativeVitals: {
+                        ...nv,
+                        vitalsList: [...nv.vitalsList, emptyVitalItem()],
+                      },
+                    };
+                  })
+                }
+              >
+                + Add Vital
+              </button>
+
+              {narrativeVitals.vitalsList.length > 1 && (
+                <button
+                  className="border border-gray-600 px-3 py-1 rounded"
+                  onClick={() =>
+                    setData((prev) => {
+                      const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                      const list = nv.vitalsList.slice();
+                      list.splice(idx, 1);
+                      return {
+                        ...(prev ?? {}),
+                        narrativeVitals: { ...nv, vitalsList: list },
+                      };
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <SectionInnerTitle>Medications</SectionInnerTitle>
+
+      {narrativeVitals.medications.map((item, idx) => (
+        <div
+          key={idx}
+          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
         >
-          + Add Medication
-        </button>
+          <div className="text-sm font-semibold text-gray-300">
+            Medication #{idx + 1}
+          </div>
 
-        {narrativeVitals.medications.length > 1 && (
-          <button
-            className="border border-gray-600 px-3 py-1 rounded"
-            onClick={() =>
-              setData((prev) => {
-                const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-                const meds = [...nv.medications];
-                meds.splice(idx, 1);
-                return { ...(prev ?? {}), narrativeVitals: { ...nv, medications: meds } };
-              })
-            }
-          >
-            Remove
-          </button>
-        )}
-      </div>
-    )}
-  </div>
-))}
+          <div className="grid grid-cols-3 gap-4">
+            <Select
+              disabled={locked}
+              label="Medication"
+              value={item.medication}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const meds = [...nv.medications];
+                  meds[idx] = { ...meds[idx], medication: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, medications: meds },
+                  };
+                })
+              }
+            >
+              {MEDICATIONS_LIST.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
 
-        {/* Consumables */}
-       <SectionInnerTitle>Consumables</SectionInnerTitle>
+            <Input
+              disabled={locked}
+              label="Other"
+              value={item.other}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const meds = [...nv.medications];
+                  meds[idx] = { ...meds[idx], other: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, medications: meds },
+                  };
+                })
+              }
+            />
 
-{narrativeVitals.consumables.map((item, idx) => (
-  <div
-    key={idx}
-    className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
-  >
-    <div className="text-sm font-semibold text-gray-300">
-      Consumable #{idx + 1}
-    </div>
+            <Select
+              disabled={locked}
+              label="Qty"
+              value={item.qty}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const meds = [...nv.medications];
+                  meds[idx] = { ...meds[idx], qty: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, medications: meds },
+                  };
+                })
+              }
+            >
+              {QTY_LIST.map((q) => (
+                <option key={q} value={q}>
+                  {q}
+                </option>
+              ))}
+            </Select>
+          </div>
 
-    <div className="grid grid-cols-3 gap-4">
-      <Select
-        disabled={locked}
-        label="Consumable"
-        value={item.consumable}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const cons = [...nv.consumables];
-            cons[idx] = { ...cons[idx], consumable: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, consumables: cons } };
-          })
-        }
-      >
-        {CONSUMABLES_LIST.map((c) => (
-          <option key={c} value={c}>{c}</option>
-        ))}
-      </Select>
+          {!locked && (
+            <div className="flex gap-2">
+              <button
+                className="border border-gray-600 px-3 py-1 rounded"
+                onClick={() =>
+                  setData((prev) => {
+                    const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                    return {
+                      ...(prev ?? {}),
+                      narrativeVitals: {
+                        ...nv,
+                        medications: [...nv.medications, emptyMedicationItem()],
+                      },
+                    };
+                  })
+                }
+              >
+                + Add Medication
+              </button>
 
-      <Input
-        disabled={locked}
-        label="Other"
-        value={item.other}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const cons = [...nv.consumables];
-            cons[idx] = { ...cons[idx], other: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, consumables: cons } };
-          })
-        }
-      />
+              {narrativeVitals.medications.length > 1 && (
+                <button
+                  className="border border-gray-600 px-3 py-1 rounded"
+                  onClick={() =>
+                    setData((prev) => {
+                      const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                      const meds = [...nv.medications];
+                      meds.splice(idx, 1);
+                      return {
+                        ...(prev ?? {}),
+                        narrativeVitals: { ...nv, medications: meds },
+                      };
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
 
-      <Select
-        disabled={locked}
-        label="Qty"
-        value={item.qty}
-        onChange={(e) =>
-          setData((prev) => {
-            const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-            const cons = [...nv.consumables];
-            cons[idx] = { ...cons[idx], qty: e.target.value };
-            return { ...(prev ?? {}), narrativeVitals: { ...nv, consumables: cons } };
-          })
-        }
-      >
-        {QTY_LIST.map((q) => (
-          <option key={q} value={q}>{q}</option>
-        ))}
-      </Select>
-    </div>
+      <SectionInnerTitle>Consumables</SectionInnerTitle>
 
-    {!locked && (
-      <div className="flex gap-2">
-        <button
-          className="border border-gray-600 px-3 py-1 rounded"
-          onClick={() =>
-            setData((prev) => {
-              const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-              return {
-                ...(prev ?? {}),
-                narrativeVitals: {
-                  ...nv,
-                  consumables: [...nv.consumables, emptyConsumableItem()],
-                },
-              };
-            })
-          }
+      {narrativeVitals.consumables.map((item, idx) => (
+        <div
+          key={idx}
+          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
         >
-          + Add Consumable
-        </button>
+          <div className="text-sm font-semibold text-gray-300">
+            Consumable #{idx + 1}
+          </div>
 
-        {narrativeVitals.consumables.length > 1 && (
-          <button
-            className="border border-gray-600 px-3 py-1 rounded"
-            onClick={() =>
-              setData((prev) => {
-                const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
-                const cons = [...nv.consumables];
-                cons.splice(idx, 1);
-                return { ...(prev ?? {}), narrativeVitals: { ...nv, consumables: cons } };
-              })
-            }
-          >
-            Remove
-          </button>
-        )}
-      </div>
-    )}
-  </div>
-))}
+          <div className="grid grid-cols-3 gap-4">
+            <Select
+              disabled={locked}
+              label="Consumable"
+              value={item.consumable}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const cons = [...nv.consumables];
+                  cons[idx] = { ...cons[idx], consumable: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, consumables: cons },
+                  };
+                })
+              }
+            >
+              {CONSUMABLES_LIST.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
 
-     
+            <Input
+              disabled={locked}
+              label="Other"
+              value={item.other}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const cons = [...nv.consumables];
+                  cons[idx] = { ...cons[idx], other: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, consumables: cons },
+                  };
+                })
+              }
+            />
 
-      {/* ================= OUTCOME ================= */}
+            <Select
+              disabled={locked}
+              label="Qty"
+              value={item.qty}
+              onChange={(e) =>
+                setData((prev) => {
+                  const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                  const cons = [...nv.consumables];
+                  cons[idx] = { ...cons[idx], qty: e.target.value };
+                  return {
+                    ...(prev ?? {}),
+                    narrativeVitals: { ...nv, consumables: cons },
+                  };
+                })
+              }
+            >
+              {QTY_LIST.map((q) => (
+                <option key={q} value={q}>
+                  {q}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {!locked && (
+            <div className="flex gap-2">
+              <button
+                className="border border-gray-600 px-3 py-1 rounded"
+                onClick={() =>
+                  setData((prev) => {
+                    const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                    return {
+                      ...(prev ?? {}),
+                      narrativeVitals: {
+                        ...nv,
+                        consumables: [...nv.consumables, emptyConsumableItem()],
+                      },
+                    };
+                  })
+                }
+              >
+                + Add Consumable
+              </button>
+
+              {narrativeVitals.consumables.length > 1 && (
+                <button
+                  className="border border-gray-600 px-3 py-1 rounded"
+                  onClick={() =>
+                    setData((prev) => {
+                      const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
+                      const cons = [...nv.consumables];
+                      cons.splice(idx, 1);
+                      return {
+                        ...(prev ?? {}),
+                        narrativeVitals: { ...nv, consumables: cons },
+                      };
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
       <Section title="Outcome">
         <Select
           disabled={locked}
@@ -1602,7 +1651,10 @@ const exportPdf = async () => {
           onChange={(e) =>
             setData((prev) => ({
               ...(prev ?? {}),
-              outcome: { ...(prev?.outcome ?? emptyOutcome()), destination: e.target.value },
+              outcome: {
+                ...(prev?.outcome ?? emptyOutcome()),
+                destination: e.target.value,
+              },
             }))
           }
         >
@@ -1620,7 +1672,10 @@ const exportPdf = async () => {
           onChange={(e) =>
             setData((prev) => ({
               ...(prev ?? {}),
-              outcome: { ...(prev?.outcome ?? emptyOutcome()), hospitalName: e.target.value },
+              outcome: {
+                ...(prev?.outcome ?? emptyOutcome()),
+                hospitalName: e.target.value,
+              },
             }))
           }
         />
@@ -1632,7 +1687,10 @@ const exportPdf = async () => {
           onChange={(e) =>
             setData((prev) => ({
               ...(prev ?? {}),
-              outcome: { ...(prev?.outcome ?? emptyOutcome()), hospitalMember: e.target.value },
+              outcome: {
+                ...(prev?.outcome ?? emptyOutcome()),
+                hospitalMember: e.target.value,
+              },
             }))
           }
         />
@@ -1645,7 +1703,10 @@ const exportPdf = async () => {
             onChange={(dataUrl) =>
               setData((prev) => ({
                 ...(prev ?? {}),
-                outcome: { ...(prev?.outcome ?? emptyOutcome()), hospitalSignatureDataUrl: dataUrl },
+                outcome: {
+                  ...(prev?.outcome ?? emptyOutcome()),
+                  hospitalSignatureDataUrl: dataUrl,
+                },
               }))
             }
           />
@@ -1657,18 +1718,25 @@ const exportPdf = async () => {
             onChange={(dataUrl) =>
               setData((prev) => ({
                 ...(prev ?? {}),
-                outcome: { ...(prev?.outcome ?? emptyOutcome()), patientSignatureDataUrl: dataUrl },
+                outcome: {
+                  ...(prev?.outcome ?? emptyOutcome()),
+                  patientSignatureDataUrl: dataUrl,
+                },
               }))
             }
           />
         </div>
       </Section>
 
-      {/* ================= TRANSFER TEAM ================= */}
       <Section title="Transfer Team">
         {transferTeam.members.map((mem, idx) => (
-          <div key={idx} className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-4">
-            <div className="text-sm font-semibold text-gray-200">Paramedic #{idx + 1}</div>
+          <div
+            key={idx}
+            className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-4"
+          >
+            <div className="text-sm font-semibold text-gray-200">
+              Paramedic #{idx + 1}
+            </div>
 
             <Input
               disabled={locked}
@@ -1677,7 +1745,10 @@ const exportPdf = async () => {
               onChange={(e) =>
                 setData((prev) => {
                   const tt = prev?.transferTeam ?? emptyTransferTeam();
-                  const members: TransferTeam["members"] = [tt.members[0], tt.members[1]];
+                  const members: TransferTeam["members"] = [
+                    tt.members[0],
+                    tt.members[1],
+                  ];
                   members[idx] = { ...members[idx], name: e.target.value };
                   return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                 })
@@ -1691,7 +1762,10 @@ const exportPdf = async () => {
               onChange={(e) =>
                 setData((prev) => {
                   const tt = prev?.transferTeam ?? emptyTransferTeam();
-                  const members: TransferTeam["members"] = [tt.members[0], tt.members[1]];
+                  const members: TransferTeam["members"] = [
+                    tt.members[0],
+                    tt.members[1],
+                  ];
                   members[idx] = { ...members[idx], badgeNo: e.target.value };
                   return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                 })
@@ -1706,7 +1780,10 @@ const exportPdf = async () => {
                 onChange={(e) =>
                   setData((prev) => {
                     const tt = prev?.transferTeam ?? emptyTransferTeam();
-                    const members: TransferTeam["members"] = [tt.members[0], tt.members[1]];
+                    const members: TransferTeam["members"] = [
+                      tt.members[0],
+                      tt.members[1],
+                    ];
                     members[idx] = { ...members[idx], unit: e.target.value };
                     return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                   })
@@ -1726,7 +1803,10 @@ const exportPdf = async () => {
                 onChange={(e) =>
                   setData((prev) => {
                     const tt = prev?.transferTeam ?? emptyTransferTeam();
-                    const members: TransferTeam["members"] = [tt.members[0], tt.members[1]];
+                    const members: TransferTeam["members"] = [
+                      tt.members[0],
+                      tt.members[1],
+                    ];
                     members[idx] = { ...members[idx], position: e.target.value };
                     return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                   })
@@ -1747,7 +1827,10 @@ const exportPdf = async () => {
               onChange={(dataUrl) =>
                 setData((prev) => {
                   const tt = prev?.transferTeam ?? emptyTransferTeam();
-                  const members: TransferTeam["members"] = [tt.members[0], tt.members[1]];
+                  const members: TransferTeam["members"] = [
+                    tt.members[0],
+                    tt.members[1],
+                  ];
                   members[idx] = { ...members[idx], signatureDataUrl: dataUrl };
                   return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                 })
@@ -1757,7 +1840,6 @@ const exportPdf = async () => {
         ))}
       </Section>
 
-      {/* ================= TIME ================= */}
       <Section title="Time">
         <div className="grid grid-cols-2 gap-6">
           <TimeField
@@ -1858,55 +1940,54 @@ const exportPdf = async () => {
         </div>
       </Section>
 
-      {/* ================= ACTIONS ================= */}
       <div className="flex gap-4 justify-end flex-wrap">
-  {!locked && (
-    <>
-      <button
-        onClick={saveDraft}
-        className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
-      >
-        Save Draft
-      </button>
+        {!locked && (
+          <>
+            <button
+              onClick={saveDraft}
+              className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+            >
+              Save Draft
+            </button>
 
-      <button
-        onClick={finalize}
-        disabled={!canFinalize}
-        className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
-      >
-        Finalize ePCR
-      </button>
-    </>
-  )}
+            <button
+              onClick={finalize}
+              disabled={!canFinalize}
+              className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+            >
+              Finalize ePCR
+            </button>
+          </>
+        )}
 
-  <button
-    onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
-    className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
-  >
-    Refusal of Treatment Form
-  </button>
+        <button
+          onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
+          className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+        >
+          Refusal of Treatment Form
+        </button>
 
-  <button
-    onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
-    className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
-  >
-    Data Sharing Consent Form
-  </button>
+        <button
+          onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
+          className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+        >
+          Data Sharing Consent Form
+        </button>
 
-  <button
-    onClick={exportPdf}
-    className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
-  >
-    Export Professional PDF
-  </button>
+        <button
+          onClick={exportPdf}
+          className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+        >
+          Export Professional PDF
+        </button>
 
-  <button
-    onClick={() => router.back()}
-    className="px-6 py-2 rounded border border-gray-600"
-  >
-    Back
-  </button>
-</div>
+        <button
+          onClick={() => router.back()}
+          className="px-6 py-2 rounded border border-gray-600"
+        >
+          Back
+        </button>
+      </div>
     </div>
   );
 }
@@ -1915,7 +1996,13 @@ const exportPdf = async () => {
    UI HELPERS
 ========================= */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="border border-gray-700 rounded-lg p-6 bg-[#0F172A] space-y-4">
       <h2 className="text-xl font-bold">{title}</h2>
@@ -1935,7 +2022,10 @@ function Input({
   return (
     <div>
       <label className="block text-sm mb-1">{label}</label>
-      <input {...props} className="w-full p-2 rounded bg-[#020617] border border-gray-700" />
+      <input
+        {...props}
+        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+      />
     </div>
   );
 }
@@ -1947,7 +2037,10 @@ function Textarea({
   return (
     <div>
       <label className="block text-sm mb-1">{label}</label>
-      <textarea {...props} className="w-full h-24 p-2 rounded bg-[#020617] border border-gray-700" />
+      <textarea
+        {...props}
+        className="w-full h-24 p-2 rounded bg-[#020617] border border-gray-700"
+      />
     </div>
   );
 }
@@ -1963,7 +2056,10 @@ function Select({
   return (
     <div>
       <label className="block text-sm mb-1">{label}</label>
-      <select {...props} className="w-full p-2 rounded bg-[#020617] border border-gray-700">
+      <select
+        {...props}
+        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+      >
         <option value="">Select</option>
         {children}
       </select>
@@ -2009,6 +2105,110 @@ function MultiCheckbox({
   );
 }
 
+function ChiefComplaintSelector({
+  title,
+  options,
+  detailsMap,
+  selectedComplaints,
+  selectedDetails,
+  onComplaintsChange,
+  onDetailsChange,
+  disabled,
+}: {
+  title: string;
+  options: readonly string[];
+  detailsMap: Record<string, string[]>;
+  selectedComplaints: string[];
+  selectedDetails: Record<string, string[]>;
+  onComplaintsChange: (vals: string[]) => void;
+  onDetailsChange: (vals: Record<string, string[]>) => void;
+  disabled?: boolean;
+}) {
+  const toggleComplaint = (complaint: string) => {
+    const exists = selectedComplaints.includes(complaint);
+
+    if (exists) {
+      const nextComplaints = selectedComplaints.filter((c) => c !== complaint);
+      const nextDetails = { ...selectedDetails };
+      delete nextDetails[complaint];
+
+      onComplaintsChange(nextComplaints);
+      onDetailsChange(nextDetails);
+    } else {
+      onComplaintsChange([...selectedComplaints, complaint]);
+      onDetailsChange({
+        ...selectedDetails,
+        [complaint]: selectedDetails[complaint] ?? [],
+      });
+    }
+  };
+
+  const toggleDetail = (complaint: string, detail: string) => {
+    const current = selectedDetails[complaint] ?? [];
+    const exists = current.includes(detail);
+
+    onDetailsChange({
+      ...selectedDetails,
+      [complaint]: exists
+        ? current.filter((d) => d !== detail)
+        : [...current, detail],
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm font-semibold">{title}</div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((complaint) => (
+          <label key={complaint} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              disabled={disabled}
+              checked={selectedComplaints.includes(complaint)}
+              onChange={() => toggleComplaint(complaint)}
+            />
+            {complaint}
+          </label>
+        ))}
+      </div>
+
+      {selectedComplaints.map((complaint) => {
+        const detailOptions = detailsMap[complaint] ?? [];
+        if (!detailOptions.length) return null;
+
+        return (
+          <div
+            key={complaint}
+            className="rounded-lg border border-gray-700 bg-[#0B1220] p-4 space-y-3"
+          >
+            <div className="text-sm font-semibold text-gray-200">
+              {complaint} *
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {detailOptions.map((detail) => (
+                <label
+                  key={`${complaint}-${detail}`}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    disabled={disabled}
+                    checked={(selectedDetails[complaint] ?? []).includes(detail)}
+                    onChange={() => toggleDetail(complaint, detail)}
+                  />
+                  {detail}
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TimeField({
   label,
   value,
@@ -2036,9 +2236,7 @@ function TimeField({
           type="time"
           disabled={disabled}
           value={value.timeHHMM}
-          onChange={(e) =>
-            onChange({ timeHHMM: e.target.value })
-          }
+          onChange={(e) => onChange({ timeHHMM: e.target.value })}
           className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
         />
 
@@ -2056,7 +2254,6 @@ function TimeField({
   );
 }
 
-/** This is used in Narrative vitals time (your vitals type has timeHHMM + ampm) */
 function TimeMini({
   label,
   value,
@@ -2084,9 +2281,7 @@ function TimeMini({
           type="time"
           disabled={disabled}
           value={value.timeHHMM}
-          onChange={(e) =>
-            onChange({ timeHHMM: e.target.value })
-          }
+          onChange={(e) => onChange({ timeHHMM: e.target.value })}
           className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
         />
 
@@ -2104,13 +2299,6 @@ function TimeMini({
   );
 }
 
-
-/**
- * SignatureBox:
- * - Upload image file (png/jpg)
- * - Store as base64 dataURL in Firestore
- * - Works now, no external libraries
- */
 function SignatureBox({
   label,
   value,
@@ -2125,11 +2313,15 @@ function SignatureBox({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const drawing = React.useRef(false);
 
-  // load saved signature
   useEffect(() => {
-    if (!value || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d");
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!value) return;
 
     const img = new Image();
     img.onload = () => ctx.drawImage(img, 0, 0);
@@ -2154,15 +2346,14 @@ function SignatureBox({
 
   const draw = (e: any) => {
     if (!drawing.current || disabled) return;
+
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x =
-      (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
-    const y =
-      (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
+    const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+    const y = (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
@@ -2209,104 +2400,6 @@ function SignatureBox({
         >
           Clear signature
         </button>
-      )}
-    </div>
-  );
-}
-
-  function BodyDiagram({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string[];
-  onChange: (vals: string[]) => void;
-  disabled?: boolean;
-}) {
-  const toggle = (area: string) => {
-    if (disabled) return;
-
-    if (value.includes(area)) {
-      onChange(value.filter((v) => v !== area));
-    } else {
-      onChange([...value, area]);
-    }
-  };
-
-  const isActive = (area: string) =>
-    value.includes(area)
-      ? "bg-blue-600/70 border-blue-400"
-      : "bg-gray-700/40 border-gray-600";
-
-  return (
-    <div className="space-y-3">
-      <div className="text-sm font-semibold">
-        Physical Examination – Pain Locations
-      </div>
-
-      <div className="grid grid-cols-2 gap-6">
-        {/* FRONT */}
-        <div className="space-y-2">
-          <div className="text-xs text-center text-gray-400">FRONT</div>
-
-          {[
-            "Head",
-            "Neck",
-            "Chest",
-            "Abdomen",
-            "Pelvis",
-            "Left Arm",
-            "Right Arm",
-            "Left Leg",
-            "Right Leg",
-          ].map((area) => (
-            <button
-              key={area}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggle(area)}
-              className={`w-full text-sm p-2 rounded border transition ${isActive(
-                area
-              )}`}
-            >
-              {area}
-            </button>
-          ))}
-        </div>
-
-        {/* BACK */}
-        <div className="space-y-2">
-          <div className="text-xs text-center text-gray-400">BACK</div>
-
-          {[
-            "Back - Head",
-            "Back - Upper",
-            "Back - Lower",
-            "Back - Left Arm",
-            "Back - Right Arm",
-            "Back - Left Leg",
-            "Back - Right Leg",
-          ].map((area) => (
-            <button
-              key={area}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggle(area)}
-              className={`w-full text-sm p-2 rounded border transition ${isActive(
-                area
-              )}`}
-            >
-              {area}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selected summary */}
-      {value.length > 0 && (
-        <div className="text-xs text-gray-400">
-          Selected: {value.join(", ")}
-        </div>
       )}
     </div>
   );
