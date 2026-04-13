@@ -7,6 +7,9 @@ import {
   serverTimestamp,
   Timestamp,
   onSnapshot,
+  doc,
+  updateDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
@@ -88,7 +91,6 @@ export default function NewProjectCasePage({
   const [receivedAt, setReceivedAt] = useState<Timestamp | null>(null);
 
   useEffect(() => {
-    // Received time when page opens
     setReceivedAt(Timestamp.now());
   }, []);
 
@@ -124,25 +126,39 @@ export default function NewProjectCasePage({
   const [selectedUnitId, setSelectedUnitId] = useState("");
 
   useEffect(() => {
-    if (!unitType) {
-      setUnits([]);
-      return;
+  if (!unitType) {
+    setUnits([]);
+    setSelectedUnitId("");
+    return;
+  }
+
+  const collectionName =
+    unitType === "ambulance"
+      ? "ambulances"
+      : unitType === "clinic"
+      ? "destinations"
+      : "Roaming";
+
+  const unsub = onSnapshot(collection(db, collectionName), (snap) => {
+    let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    if (unitType === "ambulance") {
+      list = list.filter(
+        (item: any) =>
+          !item.archived &&
+          item.status === "available" &&
+          !item.currentCase &&
+          item.assignedProjectId === params.projectId
+      );
+    } else {
+      list = list.filter((item: any) => !item.archived);
     }
 
-    const collectionName =
-      unitType === "ambulance"
-        ? "ambulances"
-        : unitType === "clinic"
-        ? "destinations"
-        : "Roaming";
+    setUnits(list);
+  });
 
-    const unsub = onSnapshot(collection(db, collectionName), (snap) => {
-      setUnits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => unsub();
-  }, [unitType]);
-
+  return () => unsub();
+}, [unitType, params.projectId]);
   /* ---------------------------
      CREATE CASE
   ----------------------------*/
@@ -152,8 +168,13 @@ export default function NewProjectCasePage({
       return;
     }
 
-    await addDoc(collection(db, "cases"), {
+    const projectRef = doc(db, "projects", params.projectId);
+    const projectSnap = await getDoc(projectRef);
+    const projectData = projectSnap.exists() ? projectSnap.data() : null;
+
+    const caseRef = await addDoc(collection(db, "cases"), {
       projectId: params.projectId,
+      projectName: projectData?.name ?? projectData?.title ?? "Unknown Project",
 
       callerName,
       contactNumber,
@@ -180,8 +201,8 @@ export default function NewProjectCasePage({
       status: "Assigned",
 
       timeline: {
-        receivedAt,                   // page opened
-        assignedAt: serverTimestamp(), // create clicked
+        receivedAt,
+        assignedAt: serverTimestamp(),
         enRouteAt: null,
         onSceneAt: null,
         transportingAt: null,
@@ -192,8 +213,18 @@ export default function NewProjectCasePage({
       createdAt: serverTimestamp(),
     });
 
-    router.push(`/projects/${params.projectId}/cad`);
+    if (unitType === "ambulance") {
+      await updateDoc(doc(db, "ambulances", selectedUnitId), {
+        currentCase: caseRef.id,
+        assignedProjectId: params.projectId,
+        assignedProjectName:
+          projectData?.name ?? projectData?.title ?? "Unknown Project",
+        status: "busy",
+        updatedAt: serverTimestamp(),
+      });
+    }
 
+    router.push(`/projects/${params.projectId}/cad`);
   };
 
   /* ---------------------------
@@ -206,26 +237,37 @@ export default function NewProjectCasePage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ================= FORM ================= */}
         <div className="bg-[#1c2333] border border-gray-700 rounded-lg p-4 space-y-5">
-
-          {/* Caller */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <FieldLabel text="Caller Name" />
-              <input className={inputClass} value={callerName} onChange={(e) => setCallerName(e.target.value)} />
+              <input
+                className={inputClass}
+                value={callerName}
+                onChange={(e) => setCallerName(e.target.value)}
+              />
             </div>
             <div>
               <FieldLabel text="Contact Number" />
-              <input className={inputClass} value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
+              <input
+                className={inputClass}
+                value={contactNumber}
+                onChange={(e) => setContactNumber(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* Chief Complaint */}
           <div>
             <FieldLabel text="Prehospital Chief Complaints *" />
-            <select className={inputClass} value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)}>
+            <select
+              className={inputClass}
+              value={chiefComplaint}
+              onChange={(e) => setChiefComplaint(e.target.value)}
+            >
               <option value="">Select complaint</option>
               {CHIEF_COMPLAINT_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
 
@@ -239,29 +281,42 @@ export default function NewProjectCasePage({
             )}
           </div>
 
-          {/* Triage */}
           <div>
             <FieldLabel text="Prehospital Triage Color-Coded Scale *" />
-            <select className={inputClass} value={triageLevel} onChange={(e) => setTriageLevel(e.target.value)}>
+            <select
+              className={inputClass}
+              value={triageLevel}
+              onChange={(e) => setTriageLevel(e.target.value)}
+            >
               <option value="">Select triage level</option>
               {TRIAGE_LEVELS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
 
-          {/* Patient */}
           <div>
             <FieldLabel text="Patient Name" />
-            <input className={inputClass} value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+            <input
+              className={inputClass}
+              value={patientName}
+              onChange={(e) => setPatientName(e.target.value)}
+            />
           </div>
 
-          {/* Location */}
           <div className="border border-gray-700 rounded p-4 space-y-3">
-            <h3 className="text-white text-sm font-semibold">Location Information</h3>
+            <h3 className="text-white text-sm font-semibold">
+              Location Information
+            </h3>
 
             <FieldLabel text="Location Description" />
-            <input className={inputClass} value={locationText} onChange={(e) => setLocationText(e.target.value)} />
+            <input
+              className={inputClass}
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+            />
 
             <FieldLabel text="Google Maps Link (Auto-Pin)" />
             <input
@@ -285,44 +340,64 @@ export default function NewProjectCasePage({
                 <FieldLabel text="Latitude" />
                 <input
                   disabled={isFromMapLink}
-                  className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`${inputClass} ${
+                    isFromMapLink ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
                   value={lat ?? ""}
-                  onChange={(e) => setLat(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) =>
+                    setLat(e.target.value ? Number(e.target.value) : null)
+                  }
                 />
               </div>
               <div>
                 <FieldLabel text="Longitude" />
                 <input
                   disabled={isFromMapLink}
-                  className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`${inputClass} ${
+                    isFromMapLink ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
                   value={lng ?? ""}
-                  onChange={(e) => setLng(e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) =>
+                    setLng(e.target.value ? Number(e.target.value) : null)
+                  }
                 />
               </div>
             </div>
 
             {googleMapLink && (
-              <a href={googleMapLink} target="_blank" className="text-blue-400 text-sm underline">
+              <a
+                href={googleMapLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 text-sm underline"
+              >
                 Open in Google Maps
               </a>
             )}
           </div>
 
-          {/* Assign Unit */}
           <div className="border border-gray-700 rounded p-4 space-y-3">
             <h3 className="text-white text-sm font-semibold">Assign Unit</h3>
 
             <div className="flex gap-6 text-white text-sm">
               {["ambulance", "clinic", "roaming"].map((t) => (
                 <label key={t} className="flex items-center gap-2">
-                  <input type="radio" checked={unitType === t} onChange={() => setUnitType(t as any)} />
+                  <input
+                    type="radio"
+                    checked={unitType === t}
+                    onChange={() => setUnitType(t as any)}
+                  />
                   {t}
                 </label>
               ))}
             </div>
 
             {unitType && units.length > 0 && (
-              <select className={inputClass} value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)}>
+              <select
+                className={inputClass}
+                value={selectedUnitId}
+                onChange={(e) => setSelectedUnitId(e.target.value)}
+              >
                 <option value="">Select unit</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -331,27 +406,34 @@ export default function NewProjectCasePage({
                 ))}
               </select>
             )}
+
+            {unitType && units.length === 0 && (
+              <p className="text-sm text-gray-400">No available units found.</p>
+            )}
           </div>
 
-          <button onClick={createCase} className="w-full h-11 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold">
+          <button
+            onClick={createCase}
+            className="w-full h-11 bg-blue-600 hover:bg-blue-700 rounded text-white font-semibold"
+          >
             Create Case
           </button>
         </div>
 
         {/* ================= MAP ================= */}
         <div className="h-[520px] border border-gray-700 rounded-lg overflow-hidden">
-         <Map
-  caseLat={lat ?? undefined}
-  caseLng={lng ?? undefined}
-  caseName={locationText}
-  ambulances={unitType === "ambulance" ? units : []}
-  clinics={unitType === "clinic" ? units : []}
-  roaming={unitType === "roaming" ? units : []}
-  centerLat={lat ?? undefined}
-  centerLng={lng ?? undefined}
-  showRecenterButton={true}
-  recenterLabel="Back to location"
-/>
+          <Map
+            caseLat={lat ?? undefined}
+            caseLng={lng ?? undefined}
+            caseName={locationText}
+            ambulances={unitType === "ambulance" ? units : []}
+            clinics={unitType === "clinic" ? units : []}
+            roaming={unitType === "roaming" ? units : []}
+            centerLat={lat ?? undefined}
+            centerLng={lng ?? undefined}
+            showRecenterButton={true}
+            recenterLabel="Back to location"
+          />
         </div>
       </div>
     </div>
