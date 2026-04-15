@@ -1,8 +1,14 @@
-// app/(protected)/transport/[id]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useParams, useRouter } from "next/navigation";
 import { sendEmail } from "../emailClient";
@@ -24,7 +30,7 @@ function Tag({ text }: { text: string }) {
 }
 
 /* =========================
-   NEW: Team Composition Labels
+   Team Composition Labels
 ========================= */
 const TEAM_COMPOSITION_LABEL: Record<string, string> = {
   doctor_emt: "Doctor + EMT",
@@ -46,9 +52,29 @@ function safeDate(v?: string) {
   if (Number.isNaN(d.getTime())) return null;
   return d;
 }
+
 function pickEmail(v?: any) {
   const s = String(v || "").trim();
   return s.includes("@") ? s : "";
+}
+
+function safeTime(v: any) {
+  if (!v) return "—";
+
+  if (typeof v?.toDate === "function") {
+    try {
+      return v.toDate().toLocaleString();
+    } catch {
+      return "—";
+    }
+  }
+
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleString();
+  }
+
+  return "—";
 }
 
 export default function TransportDetailsPage() {
@@ -65,6 +91,10 @@ export default function TransportDetailsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [userMap, setUserMap] = useState<
+    Record<string, { name?: string; email?: string }>
+  >({});
+
   // Assign modal
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignedAmbulanceId, setAssignedAmbulanceId] = useState("");
@@ -73,6 +103,36 @@ export default function TransportDetailsPage() {
 
   // Reject note
   const [rejectNote, setRejectNote] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUsers() {
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        if (!mounted) return;
+
+        const map: Record<string, { name?: string; email?: string }> = {};
+        snap.docs.forEach((d) => {
+          const u = d.data() as any;
+          map[d.id] = {
+            name: u.name || u.displayName || u.fullName || "",
+            email: u.email || "",
+          };
+        });
+
+        setUserMap(map);
+      } catch (e) {
+        console.error("Failed to load users map:", e);
+      }
+    }
+
+    loadUsers();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -97,35 +157,45 @@ export default function TransportDetailsPage() {
 
   const isAdmin = role === "admin";
 
-  // ✅ Permission booleans
   const canView = isAdmin || can(permissions, "transport", "view");
   const canOps = isAdmin || can(permissions, "transport", "ops");
   const canApprove = isAdmin || can(permissions, "transport", "approve");
   const canAssign = isAdmin || can(permissions, "transport", "assign");
   const canReject = isAdmin || can(permissions, "transport", "reject");
 
-  // Helper: send email safely (recipientGroup always LAST)
-function fireEmail(
-  fallbackGroup: "OPS" | "SALES",
-  args: Parameters<typeof buildEmail>[0],
-  ownerEmail?: string
-) {
-  try {
-    const email = buildEmail(args);
-    const owner = pickEmail(ownerEmail);
+  function resolveUser(uid?: string, fallbackEmail?: string) {
+    if (!uid && !fallbackEmail) return "—";
 
-    // ✅ Always send to group + CC owner (if exists)
-    const payload = owner
-      ? { ...email, recipientGroup: fallbackGroup, cc: owner }
-      : { ...email, recipientGroup: fallbackGroup };
+    const found = uid ? userMap[uid] : undefined;
+    const name = found?.name?.trim();
+    const email = fallbackEmail || found?.email || "";
 
-    void sendEmail(payload as any).catch(console.error);
-  } catch (e) {
-    console.error("buildEmail failed:", e);
+    if (name && email) return `${name} (${email})`;
+    if (name) return name;
+    if (email) return email;
+    if (uid) return uid;
+
+    return "—";
   }
-}
 
+  function fireEmail(
+    fallbackGroup: "OPS" | "SALES",
+    args: Parameters<typeof buildEmail>[0],
+    ownerEmail?: string
+  ) {
+    try {
+      const email = buildEmail(args);
+      const owner = pickEmail(ownerEmail);
 
+      const payload = owner
+        ? { ...email, recipientGroup: fallbackGroup, cc: owner }
+        : { ...email, recipientGroup: fallbackGroup };
+
+      void sendEmail(payload as any).catch(console.error);
+    } catch (e) {
+      console.error("buildEmail failed:", e);
+    }
+  }
 
   async function setStatus(next: TransportStatus, note?: string) {
     if (!id || !user?.uid) return;
@@ -157,7 +227,6 @@ function fireEmail(
         updatedBy: user.uid,
       };
 
-      // ====== Build Firestore patch ======
       if (next === "ops_available") {
         patch.opsDecidedAt = serverTimestamp();
         patch.opsDecidedBy = user.uid;
@@ -165,14 +234,12 @@ function fireEmail(
       }
 
       if (next === "rejected") {
-        // Ops Reject (from NEW)
         if (current === "new") {
           patch.opsDecidedAt = serverTimestamp();
           patch.opsDecidedBy = user.uid;
           patch.opsDecisionNote = note || "";
         }
 
-        // Sales Reject (from OPS_AVAILABLE)
         if (current === "ops_available") {
           patch.salesRejectedAt = serverTimestamp();
           patch.salesRejectedBy = user.uid;
@@ -184,18 +251,15 @@ function fireEmail(
         patch.clientApprovedAt = serverTimestamp();
         patch.clientApprovedBy = user.uid;
       }
-      // ✅ NEW: capture ops owner the first time Ops touches the request
-const currentOpsOwner = pickEmail((data as any)?.opsOwnerEmail);
-if (canOps && !currentOpsOwner) {
-  patch.opsOwnerUid = user.uid;
-  patch.opsOwnerEmail = (user as any)?.email || "";
-}
 
+      const currentOpsOwner = pickEmail((data as any)?.opsOwnerEmail);
+      if (canOps && !currentOpsOwner) {
+        patch.opsOwnerUid = user.uid;
+        patch.opsOwnerEmail = (user as any)?.email || "";
+      }
 
-      // ✅ 1) Update DB first
       await updateDoc(ref, patch);
 
-      // ✅ 2) Build a SAFE request object for email (avoid serverTimestamp values)
       const reqForEmail: any = {
         ...data,
         status: next,
@@ -210,60 +274,49 @@ if (canOps && !currentOpsOwner) {
         if (current === "ops_available") reqForEmail.salesRejectNote = note || "";
       }
 
-      // ✅ 3) Send email AFTER success (exact mapping)
       if (next === "ops_available") {
-        // Ops -> Sales
-     const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+        const salesTo = pickEmail((data as any)?.salesOwnerEmail);
 
-fireEmail(
-  "SALES",
-  { type: "OPS_AVAILABLE", req: reqForEmail, id: requestId },
-  salesTo
-);
-
+        fireEmail(
+          "SALES",
+          { type: "OPS_AVAILABLE", req: reqForEmail, id: requestId },
+          salesTo
+        );
       }
 
       if (next === "rejected") {
         if (current === "new") {
-          // Ops Reject -> Sales
-         const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+          const salesTo = pickEmail((data as any)?.salesOwnerEmail);
 
-fireEmail(
-  "SALES",
-  { type: "OPS_REJECT", req: reqForEmail, id: requestId, note },
-  salesTo
-);
-
+          fireEmail(
+            "SALES",
+            { type: "OPS_REJECT", req: reqForEmail, id: requestId, note },
+            salesTo
+          );
         }
 
         if (current === "ops_available") {
-          // Sales Reject -> Ops
-         const opsTo = pickEmail((data as any)?.opsOwnerEmail);
+          const opsTo = pickEmail((data as any)?.opsOwnerEmail);
 
-fireEmail(
-  "OPS",
-  { type: "CLIENT_REJECT", req: reqForEmail, id: requestId, note },
-  opsTo
-);
-
+          fireEmail(
+            "OPS",
+            { type: "CLIENT_REJECT", req: reqForEmail, id: requestId, note },
+            opsTo
+          );
         }
       }
 
       if (next === "client_approved") {
-        // Sales Approve -> Ops
-     const opsTo = pickEmail((data as any)?.opsOwnerEmail);
+        const opsTo = pickEmail((data as any)?.opsOwnerEmail);
 
-fireEmail(
-  "OPS",
-  { type: "CLIENT_APPROVED", req: reqForEmail, id: requestId },
-  opsTo
-);
-
+        fireEmail(
+          "OPS",
+          { type: "CLIENT_APPROVED", req: reqForEmail, id: requestId },
+          opsTo
+        );
       }
 
-      // local UI update
       setData((prev) => (prev ? { ...prev, status: next } : prev));
-
       setRejectNote("");
     } catch (e: any) {
       setError(e?.message || "Failed to update status.");
@@ -309,7 +362,6 @@ fireEmail(
         updatedBy: user.uid,
       });
 
-      // ✅ Assign -> Sales (safe req object)
       const reqForEmail: any = {
         ...data,
         status: "assigned",
@@ -318,14 +370,13 @@ fireEmail(
         assignedCrew: crewArr,
       };
 
-    const salesTo = pickEmail((data as any)?.salesOwnerEmail);
+      const salesTo = pickEmail((data as any)?.salesOwnerEmail);
 
-fireEmail(
-  "SALES",
-  { type: "ASSIGNED", req: reqForEmail, id: requestId },
-  salesTo
-);
-
+      fireEmail(
+        "SALES",
+        { type: "ASSIGNED", req: reqForEmail, id: requestId },
+        salesTo
+      );
 
       setAssignOpen(false);
     } catch (e: any) {
@@ -389,10 +440,8 @@ fireEmail(
 
   const status = data.status;
 
-  // =========================
-  // NEW: computed display helpers
-  // =========================
-  const startDT = safeDate((data as any).serviceStartTime) || safeDate(data.serviceTime);
+  const startDT =
+    safeDate((data as any).serviceStartTime) || safeDate(data.serviceTime);
   const endDT = safeDate((data as any).serviceEndTime);
 
   const projectTypeLabel =
@@ -408,10 +457,9 @@ fireEmail(
   const teamNeeded =
     typeof data.teamNeeded === "boolean" ? data.teamNeeded : hasTeams;
 
-  const totalTeamsQty =
-    hasTeams
-      ? teamsArr.reduce((sum, t) => sum + (Number(t.qty) || 0), 0)
-      : Number((data as any).teamCount || 0);
+  const totalTeamsQty = hasTeams
+    ? teamsArr.reduce((sum, t) => sum + (Number(t.qty) || 0), 0)
+    : Number((data as any).teamCount || 0);
 
   const roamingNeeded = Boolean((data as any).roamingNeeded);
   const roamingCount = Number((data as any).roamingCount || 0);
@@ -453,19 +501,16 @@ fireEmail(
           </h2>
 
           <div className="grid gap-2 text-sm">
-            {/* NEW: Project Type */}
             <div className="flex justify-between gap-3">
               <span className="text-white/70">Project Type</span>
               <span className="font-medium">{projectTypeLabel}</span>
             </div>
 
-            {/* Service Type (ALS/BLS) */}
             <div className="flex justify-between gap-3">
               <span className="text-white/70">Service Type</span>
               <span className="font-medium">{(data as any).serviceType || "—"}</span>
             </div>
 
-            {/* NEW: Start/End time */}
             <div className="flex justify-between gap-3">
               <span className="text-white/70">Start</span>
               <span className="font-medium">
@@ -506,7 +551,6 @@ fireEmail(
           </h2>
 
           <div className="grid gap-2 text-sm">
-            {/* Teams (new multi rows) */}
             <div className="flex justify-between gap-3">
               <span className="text-white/70">Team required</span>
               <span className="font-medium">{teamNeeded ? "Yes" : "No"}</span>
@@ -517,7 +561,6 @@ fireEmail(
               <span className="font-medium">{totalTeamsQty}</span>
             </div>
 
-            {/* NEW: show teams breakdown if exists, otherwise show legacy */}
             {hasTeams ? (
               <div className="mt-2 rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
                 <div className="text-xs text-white/70">Teams breakdown</div>
@@ -540,7 +583,6 @@ fireEmail(
               </div>
             )}
 
-            {/* Ambulance */}
             <div className="mt-2 flex justify-between gap-3">
               <span className="text-white/70">Ambulance required</span>
               <span className="font-medium">
@@ -553,7 +595,6 @@ fireEmail(
               <span className="font-medium">{data.ambulanceCount ?? 0}</span>
             </div>
 
-            {/* NEW: Roaming */}
             <div className="mt-2 flex justify-between gap-3">
               <span className="text-white/70">Roaming required</span>
               <span className="font-medium">{roamingNeeded ? "Yes" : "No"}</span>
@@ -564,7 +605,6 @@ fireEmail(
               <span className="font-medium">{roamingNeeded ? roamingCount : 0}</span>
             </div>
 
-            {/* Days / Hours */}
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
                 <div className="text-xs text-white/70">Days</div>
@@ -577,6 +617,101 @@ fireEmail(
                 <div className="mt-1 text-sm font-medium">
                   {data.hoursCount ?? 0}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Request Activity */}
+        <div className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10 lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold text-white/80">
+            Request Activity
+          </h2>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Sent by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser(
+                  (data as any).createdBy ||
+                    (data as any).submittedBy ||
+                    (data as any).userId,
+                  (data as any).createdByEmail ||
+                    (data as any).submittedByEmail
+                )}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).createdAt)}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Sales owner</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser(
+                  (data as any).salesOwnerUid,
+                  (data as any).salesOwnerEmail
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Ops owner</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser(
+                  (data as any).opsOwnerUid,
+                  (data as any).opsOwnerEmail
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Ops responded by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser((data as any).opsDecidedBy)}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).opsDecidedAt)}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Sales responded by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser((data as any).salesRejectedBy)}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).salesRejectedAt)}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Approved by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser((data as any).clientApprovedBy)}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).clientApprovedAt)}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Assigned by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser((data as any).assignedBy)}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).assignedAt)}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
+              <div className="text-xs text-white/70">Last updated by</div>
+              <div className="mt-1 text-sm font-medium">
+                {resolveUser((data as any).updatedBy)}
+              </div>
+              <div className="mt-1 text-xs text-white/50">
+                {safeTime((data as any).updatedAt)}
               </div>
             </div>
           </div>
@@ -666,7 +801,9 @@ fireEmail(
                 <button
                   disabled={busy}
                   onClick={() => {
-                    setAssignedAmbulanceId((data as any).assignedAmbulanceId || "");
+                    setAssignedAmbulanceId(
+                      (data as any).assignedAmbulanceId || ""
+                    );
                     setAssignedTeamName((data as any).assignedTeamName || "");
                     setAssignedCrew(((data as any).assignedCrew || []).join(", "));
                     setAssignOpen(true);
