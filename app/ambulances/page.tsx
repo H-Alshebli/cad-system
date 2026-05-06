@@ -32,8 +32,14 @@ type Ambulance = {
   crew?: string[];
   status?: string;
   currentCase?: string | null;
+
   assignedProjectId?: string | null;
   assignedProjectName?: string | null;
+
+  // compatibility with other pages
+  projectId?: string | null;
+  projectName?: string | null;
+
   lat?: number | null;
   lng?: number | null;
   archived?: boolean;
@@ -108,34 +114,65 @@ export default function AmbulancesPage() {
       getProjectDisplayName(a).localeCompare(getProjectDisplayName(b))
     );
   }, [projects]);
+  const getAmbulanceProjectName = (amb: Ambulance) => {
+  if (amb.assignedProjectName && amb.assignedProjectName !== "Unknown Project") {
+    return amb.assignedProjectName;
+  }
 
-  const addAmbulance = async () => {
-    if (!code || !crew1 || !location) return;
+  if (amb.projectName && amb.projectName !== "Unknown Project") {
+    return amb.projectName;
+  }
 
-    await addDoc(collection(db, "ambulances"), {
-      code,
-      location,
-      crew: [crew1, crew2].filter(Boolean),
-      status,
-      currentCase: null,
-      assignedProjectId: assignedProjectId || null,
-      assignedProjectName: assignedProjectName || null,
-      lat: lat ? Number(lat) : null,
-      lng: lng ? Number(lng) : null,
-      archived: false,
-      createdAt: serverTimestamp(),
-    });
+  const projectId = amb.assignedProjectId || amb.projectId;
 
-    setCode("");
-    setLocation("");
-    setCrew1("");
-    setCrew2("");
-    setStatus("available");
-    setLat("");
-    setLng("");
-    setAssignedProjectId("");
-    setAssignedProjectName("");
-  };
+  if (!projectId) return "None";
+
+  const project = projects.find((p) => p.id === projectId);
+
+  return project ? getProjectDisplayName(project) : "Unknown Project";
+};
+
+const addAmbulance = async () => {
+  if (!code || !crew1 || !location) return;
+
+  const selectedProject = sortedProjects.find(
+    (p) => p.id === assignedProjectId
+  );
+
+  const selectedProjectName = selectedProject
+    ? getProjectDisplayName(selectedProject)
+    : "";
+
+  await addDoc(collection(db, "ambulances"), {
+    code,
+    location,
+    crew: [crew1, crew2].filter(Boolean),
+    status,
+    currentCase: null,
+
+    assignedProjectId: assignedProjectId || null,
+    assignedProjectName: selectedProjectName || null,
+
+    // compatibility fields
+    projectId: assignedProjectId || null,
+    projectName: selectedProjectName || null,
+
+    lat: lat ? Number(lat) : null,
+    lng: lng ? Number(lng) : null,
+    archived: false,
+    createdAt: serverTimestamp(),
+  });
+
+  setCode("");
+  setLocation("");
+  setCrew1("");
+  setCrew2("");
+  setStatus("available");
+  setLat("");
+  setLng("");
+  setAssignedProjectId("");
+  setAssignedProjectName("");
+};
 
   const archiveAmbulance = async (id: string) => {
     const confirmArchive = window.confirm(
@@ -160,29 +197,50 @@ export default function AmbulancesPage() {
     setEditStatus(amb.status ?? "available");
     setEditLat(amb.lat != null ? String(amb.lat) : "");
     setEditLng(amb.lng != null ? String(amb.lng) : "");
-    setEditAssignedProjectId(amb.assignedProjectId ?? "");
-    setEditAssignedProjectName(amb.assignedProjectName ?? "");
+    const existingProjectId = amb.assignedProjectId || amb.projectId || "";
+const existingProject = sortedProjects.find((p) => p.id === existingProjectId);
+
+setEditAssignedProjectId(existingProjectId);
+setEditAssignedProjectName(
+  amb.assignedProjectName ||
+    amb.projectName ||
+    (existingProject ? getProjectDisplayName(existingProject) : "")
+);
     setOpenMenuId(null);
   };
 
-  const saveEditAmbulance = async () => {
-    if (!editingAmbulance) return;
-    if (!editCode || !editCrew1 || !editLocation) return;
+const saveEditAmbulance = async () => {
+  if (!editingAmbulance) return;
+  if (!editCode || !editCrew1 || !editLocation) return;
 
-    await updateDoc(doc(db, "ambulances", editingAmbulance.id), {
-      code: editCode,
-      location: editLocation,
-      crew: [editCrew1, editCrew2].filter(Boolean),
-      status: editStatus,
-      lat: editLat ? Number(editLat) : null,
-      lng: editLng ? Number(editLng) : null,
-      assignedProjectId: editAssignedProjectId || null,
-      assignedProjectName: editAssignedProjectName || null,
-      updatedAt: serverTimestamp(),
-    });
+  const selectedProject = sortedProjects.find(
+    (p) => p.id === editAssignedProjectId
+  );
 
-    setEditingAmbulance(null);
-  };
+  const selectedProjectName = selectedProject
+    ? getProjectDisplayName(selectedProject)
+    : "";
+
+  await updateDoc(doc(db, "ambulances", editingAmbulance.id), {
+    code: editCode,
+    location: editLocation,
+    crew: [editCrew1, editCrew2].filter(Boolean),
+    status: editStatus,
+    lat: editLat ? Number(editLat) : null,
+    lng: editLng ? Number(editLng) : null,
+
+    assignedProjectId: editAssignedProjectId || null,
+    assignedProjectName: selectedProjectName || null,
+
+    // compatibility fields
+    projectId: editAssignedProjectId || null,
+    projectName: selectedProjectName || null,
+
+    updatedAt: serverTimestamp(),
+  });
+
+  setEditingAmbulance(null);
+};
 
   return (
     <div className="p-6 bg-[#020817] min-h-screen text-white">
@@ -345,7 +403,7 @@ export default function AmbulancesPage() {
               </p>
               <p>
                 <span className="text-slate-400">Project:</span>{" "}
-                {amb.assignedProjectName || "None"}
+                {getAmbulanceProjectName(amb)}
               </p>
               <p>
                 <span className="text-slate-400">Current Case:</span>{" "}

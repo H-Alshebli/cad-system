@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  addDoc,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   updateDoc,
@@ -60,10 +60,26 @@ type Hospital = {
   name?: string;
   address?: string;
   type?: string;
-  lat?: number;
-  lng?: number;
+  lat?: number | null;
+  lng?: number | null;
   archived?: boolean;
 };
+
+function ambulanceIsSelectableForProject(amb: Ambulance, projectId: string) {
+  if (amb.archived) return false;
+
+  const assignedProjectId = amb.assignedProjectId || amb.projectId || null;
+  const status = String(amb.status || "").toLowerCase();
+
+  if (assignedProjectId === projectId) return true;
+
+  return (
+    status === "available" &&
+    !amb.currentCase &&
+    !amb.currentCaseId &&
+    !assignedProjectId
+  );
+}
 
 function ambulanceIsFree(amb: Ambulance) {
   const status = String(amb.status || "").toLowerCase();
@@ -94,8 +110,15 @@ function getUserRole(user: User) {
   return user.role || "No role";
 }
 
-export default function NewProjectPage() {
+export default function EditProjectPage({
+  params,
+}: {
+  params: { projectId: string };
+}) {
   const router = useRouter();
+  const projectId = params.projectId;
+
+  const [loading, setLoading] = useState(true);
 
   const [projectName, setProjectName] = useState("");
   const [client, setClient] = useState("");
@@ -122,6 +145,10 @@ export default function NewProjectPage() {
     []
   );
 
+  const [originalAmbulanceIds, setOriginalAmbulanceIds] = useState<string[]>(
+    []
+  );
+
   const [selectedHospitalIds, setSelectedHospitalIds] = useState<string[]>([]);
 
   const [teamDropdownOpen, setTeamDropdownOpen] = useState(false);
@@ -132,6 +159,56 @@ export default function NewProjectPage() {
 
   const [hospitalDropdownOpen, setHospitalDropdownOpen] = useState(false);
   const [hospitalSearch, setHospitalSearch] = useState("");
+
+  useEffect(() => {
+    const loadProject = async () => {
+      const snap = await getDoc(doc(db, "projects", projectId));
+
+      if (!snap.exists()) {
+        setLoading(false);
+        return;
+      }
+
+      const data: any = snap.data();
+      const details = data.projectDetails || {};
+
+      setProjectName(data.projectName || "");
+      setClient(data.client || "");
+      setAssignedUsers(data.assignedUsers || {});
+
+      const ambIds = Array.isArray(data.assignedAmbulanceIds)
+        ? data.assignedAmbulanceIds
+        : Array.isArray(data.assignedAmbulances)
+        ? data.assignedAmbulances.map((a: any) => a?.id).filter(Boolean)
+        : [];
+
+      setSelectedAmbulanceIds(ambIds);
+      setOriginalAmbulanceIds(ambIds);
+
+      setSelectedHospitalIds(
+        Array.isArray(data.projectHospitalIds)
+          ? data.projectHospitalIds
+          : Array.isArray(data.projectHospitals)
+          ? data.projectHospitals.map((h: any) => h?.id).filter(Boolean)
+          : []
+      );
+
+      setSiteDetails(details.siteDetails || "");
+      setRequestType(details.requestType || "");
+      setServiceType(details.serviceType || "");
+      setEventType(details.eventType || "");
+      setEquipment(details.equipment || "");
+      setMedicalBagNumber(details.medicalBagNumber || "");
+      setMedicationBagNumber(details.medicationBagNumber || "");
+      setOrganizerName(details.organizerName || "");
+      setOrganizerMobile(details.organizerMobile || "");
+      setEventLocation(details.eventLocation || "");
+
+      setLoading(false);
+    };
+
+    loadProject();
+  }, [projectId]);
 
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
@@ -290,7 +367,7 @@ export default function NewProjectPage() {
   };
 
   const toggleAmbulance = (amb: Ambulance) => {
-    if (!ambulanceIsFree(amb)) return;
+    if (!ambulanceIsSelectableForProject(amb, projectId)) return;
 
     setSelectedAmbulanceIds((prev) =>
       prev.includes(amb.id)
@@ -303,11 +380,9 @@ export default function NewProjectPage() {
     setSelectedAmbulanceIds((prev) => prev.filter((id) => id !== ambId));
   };
 
-  const toggleHospital = (hospitalId: string) => {
+  const toggleHospital = (id: string) => {
     setSelectedHospitalIds((prev) =>
-      prev.includes(hospitalId)
-        ? prev.filter((id) => id !== hospitalId)
-        : [...prev, hospitalId]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
@@ -315,7 +390,7 @@ export default function NewProjectPage() {
     setSelectedHospitalIds((prev) => prev.filter((id) => id !== hospitalId));
   };
 
-  const createProject = async () => {
+  const saveProject = async () => {
     if (!projectName.trim()) {
       alert("Project name is required.");
       return;
@@ -325,11 +400,9 @@ export default function NewProjectPage() {
       Object.entries(assignedUsers).filter(([, v]) => v)
     );
 
-    const docRef = await addDoc(collection(db, "projects"), {
+    await updateDoc(doc(db, "projects", projectId), {
       projectName: projectName.trim(),
       client: client.trim(),
-      status: "Active",
-      isArchived: false,
 
       assignedUsers: cleanAssignedUsers,
 
@@ -365,26 +438,46 @@ export default function NewProjectPage() {
         eventLocation: eventLocation.trim(),
       },
 
-      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
-    await Promise.all(
-      selectedAmbulances.map((amb) =>
-        updateDoc(doc(db, "ambulances", amb.id), {
-          assignedProjectId: docRef.id,
+    const newlySelected = selectedAmbulanceIds.filter(
+      (id) => !originalAmbulanceIds.includes(id)
+    );
+
+    const removed = originalAmbulanceIds.filter(
+      (id) => !selectedAmbulanceIds.includes(id)
+    );
+
+    await Promise.all([
+      ...newlySelected.map((id) =>
+        updateDoc(doc(db, "ambulances", id), {
+          assignedProjectId: projectId,
           assignedProjectName: projectName.trim(),
 
           // compatibility fields
-          projectId: docRef.id,
+          projectId,
           projectName: projectName.trim(),
 
           updatedAt: serverTimestamp(),
         })
-      )
-    );
+      ),
 
-    router.push(`/projects/${docRef.id}`);
+      ...removed.map((id) =>
+        updateDoc(doc(db, "ambulances", id), {
+          assignedProjectId: null,
+          assignedProjectName: null,
+
+          // compatibility fields
+          projectId: null,
+          projectName: null,
+
+          updatedAt: serverTimestamp(),
+        })
+      ),
+    ]);
+
+    router.push(`/projects/${projectId}`);
   };
 
   const inputClass =
@@ -406,14 +499,17 @@ export default function NewProjectPage() {
   const dropdownPanelClass =
     "absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-700 bg-[#0b1220] shadow-2xl";
 
+  if (loading) {
+    return <div className="p-6 text-slate-400">Loading project...</div>;
+  }
+
   return (
     <div className="min-h-screen bg-[#030712] p-6">
       <div className="w-full max-w-none space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">New Project</h1>
+          <h1 className="text-3xl font-bold text-white">Edit Project</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Create the project, assign team, assign free ambulances, and
-            register allowed hospitals.
+            Update project details, team, ambulances, and hospitals.
           </p>
         </div>
 
@@ -649,8 +745,8 @@ export default function NewProjectPage() {
                   Project Ambulances
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  All ambulances are visible. Only free ambulances can be
-                  selected.
+                  You can select free ambulances or ambulances already assigned
+                  to this project.
                 </p>
               </div>
 
@@ -715,19 +811,26 @@ export default function NewProjectPage() {
                       </div>
                     ) : (
                       filteredAmbulances.map((amb) => {
-                        const free = ambulanceIsFree(amb);
+                        const selectable = ambulanceIsSelectableForProject(
+                          amb,
+                          projectId
+                        );
                         const selected = selectedAmbulanceIds.includes(amb.id);
+                        const assignedToThisProject =
+                          (amb.assignedProjectId || amb.projectId) ===
+                          projectId;
+                        const free = ambulanceIsFree(amb);
 
                         return (
                           <button
                             key={amb.id}
                             type="button"
-                            disabled={!free}
+                            disabled={!selectable}
                             onClick={() => toggleAmbulance(amb)}
                             className={`flex w-full items-start gap-3 border-b border-slate-800 p-3 text-left transition last:border-b-0 ${
                               selected
                                 ? "bg-blue-500/10"
-                                : free
+                                : selectable
                                 ? "hover:bg-slate-800/70"
                                 : "bg-red-950/20 cursor-not-allowed opacity-80"
                             }`}
@@ -735,7 +838,7 @@ export default function NewProjectPage() {
                             <input
                               type="checkbox"
                               checked={selected}
-                              disabled={!free}
+                              disabled={!selectable}
                               readOnly
                               className="mt-1"
                             />
@@ -748,12 +851,16 @@ export default function NewProjectPage() {
 
                                 <span
                                   className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
-                                    free
+                                    assignedToThisProject || free
                                       ? "bg-green-500/15 text-green-400"
                                       : "bg-red-500/15 text-red-300"
                                   }`}
                                 >
-                                  {free ? "Free" : amb.status || "Unavailable"}
+                                  {assignedToThisProject
+                                    ? "This project"
+                                    : free
+                                    ? "Free"
+                                    : amb.status || "Unavailable"}
                                 </span>
                               </div>
 
@@ -761,7 +868,7 @@ export default function NewProjectPage() {
                                 {amb.location || "No location"}
                               </p>
 
-                              {!free && (
+                              {!selectable && (
                                 <p className="mt-1 text-xs text-red-300">
                                   {amb.currentCase || amb.currentCaseId
                                     ? "Busy on active case"
@@ -1008,10 +1115,10 @@ export default function NewProjectPage() {
         <div className={cardClass}>
           <div className="flex items-center gap-3">
             <button
-              onClick={createProject}
+              onClick={saveProject}
               className="rounded-lg bg-[#2f3d59] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b4c6d]"
             >
-              Save Project
+              Save Changes
             </button>
 
             <button

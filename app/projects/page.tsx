@@ -341,14 +341,25 @@ export default function ProjectsPage() {
                   </h2>
                 </Link>
 
-                <Can permission="projects.edit">
-                  <ActionMenu
-                    isArchived={isArchived}
-                    loading={isProcessing}
-                    onArchive={() => handleArchive(p.id, p.projectName)}
-                    onRestore={() => handleRestore(p.id, p.projectName)}
-                  />
-                </Can>
+                <div className="flex items-center gap-2">
+                  <Can permission="projects.edit">
+                    <Link
+                      href={`/projects/${p.id}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded-lg border border-blue-500/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10 transition"
+                    >
+                      Edit
+                    </Link>
+                  </Can>
+                  <Can permission="projects.edit">
+                    <ActionMenu
+                      isArchived={isArchived}
+                      loading={isProcessing}
+                      onArchive={() => handleArchive(p.id, p.projectName)}
+                      onRestore={() => handleRestore(p.id, p.projectName)}
+                    />
+                  </Can>
+                </div>
               </div>
 
               <Link href={`/projects/${p.id}`} className="block space-y-2">
@@ -370,6 +381,18 @@ export default function ProjectsPage() {
                   </p>
                   <p className="truncate">
                     <span className="text-gray-500">Project ID:</span> {p.id}
+                  </p>
+                  <p className="truncate">
+                    <span className="text-gray-500">Ambulances:</span>{" "}
+                    {Array.isArray(p.assignedAmbulances) && p.assignedAmbulances.length > 0
+                      ? p.assignedAmbulances.map((a: any) => a.code || a.id).join(", ")
+                      : "—"}
+                  </p>
+                  <p className="truncate">
+                    <span className="text-gray-500">Hospitals:</span>{" "}
+                    {Array.isArray(p.projectHospitals) && p.projectHospitals.length > 0
+                      ? p.projectHospitals.map((h: any) => h.name || h.id).join(", ")
+                      : "—"}
                   </p>
                 </div>
               </Link>

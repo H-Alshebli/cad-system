@@ -33,7 +33,6 @@ export default function ProjectLayout({
 
   const tabs = [
     { label: "Dashboard", href: `/projects/${params.projectId}` },
-    { label: "Assigned", href: `/projects/${params.projectId}/assigned` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
   ];

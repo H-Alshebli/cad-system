@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -36,6 +36,7 @@ export default function RootLayout({
       </head>
 
       <body
+        suppressHydrationWarning
         className={`
           ${inter.variable}
           ${mono.variable}

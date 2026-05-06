@@ -59,6 +59,15 @@ type CaseType = {
     address?: string;
   };
 
+  projectHospitals?: Array<{
+    id: string;
+    name: string;
+    type: "hospital" | "clinic";
+    lat?: number | null;
+    lng?: number | null;
+    address?: string;
+  }>;
+
   // legacy
   patientName?: string;
   contactNumber?: string;
@@ -223,6 +232,7 @@ export default function CaseDetailsPage({
   caseId={caseData.id}
   currentStatus={caseData.status}
   caseLocation={caseData.location}
+  projectHospitals={caseData.projectHospitals || []}
   onDestinationSelected={(destination) => {
     setCaseData((prev) =>
       prev ? { ...prev, destination } : prev
