@@ -9,7 +9,6 @@ import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { can } from "@/lib/can";
-import Can from "./Can";
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
@@ -20,6 +19,8 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { permissions, loading: permLoading } = usePermissions(role);
 
   const isAdmin = role === "admin";
+  const isClientPortalUser = can(permissions, "client_portal", "view");
+
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     const saved = localStorage.getItem("theme");
+
     if (saved === "dark") {
       document.documentElement.classList.add("dark");
       setDark(true);
@@ -85,24 +87,22 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   return (
     <aside className="h-screen w-64 bg-white dark:bg-gray-900 border-r dark:border-gray-700 flex flex-col">
-    {/* HEADER */}
-<div className="p-4 border-b dark:border-gray-700 flex flex-col items-center text-center gap-2 relative">
+      {/* HEADER */}
+      <div className="p-4 border-b dark:border-gray-700 flex flex-col items-center text-center gap-2 relative">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 lg:hidden bg-gray-200 dark:bg-gray-700 px-2 rounded"
+          >
+            ✕
+          </button>
+        )}
 
-  {/* CLOSE BUTTON (Mobile only) */}
-  {onClose && (
-    <button
-      onClick={onClose}
-      className="absolute right-3 top-3 lg:hidden bg-gray-200 dark:bg-gray-700 px-2 rounded"
-    >
-      ✕
-    </button>
-  )}
-
-  <img
-    src="/icons/icon-512.png"
-    alt="Lazem Logo"
-    className="w-16 h-16 object-contain"
-  />
+        <img
+          src="/icons/icon-512.png"
+          alt="Lazem Logo"
+          className="w-16 h-16 object-contain"
+        />
 
         <div className="text-lg font-bold text-gray-900 dark:text-white">
           Lazem HCAD
@@ -117,7 +117,66 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
       {/* NAVIGATION */}
       <nav className="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
-        {(isAdmin || can(permissions, "dashboards", "view")) && (
+        {/* CLIENT PORTAL MENU */}
+        {isClientPortalUser && (
+          <>
+            <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              Client Portal
+            </div>
+
+            <Link
+              className={linkClass("/client")}
+              href="/client"
+              onClick={onClose}
+            >
+              Client Home
+            </Link>
+
+            {can(permissions, "client_cases", "create") && (
+              <Link
+                className={linkClass("/client/cases/new")}
+                href="/client/cases/new"
+                onClick={onClose}
+              >
+                Create Case
+              </Link>
+            )}
+
+            {(can(permissions, "client_cases", "view") ||
+              can(permissions, "client_cases", "view_own")) && (
+              <Link
+                className={linkClass("/client/cases")}
+                href="/client/cases"
+                onClick={onClose}
+              >
+                My Cases
+              </Link>
+            )}
+
+            {can(permissions, "client_dashboards", "timeline") && (
+              <Link
+                className={linkClass("/client/dashboard/timeline")}
+                href="/client/dashboard/timeline"
+                onClick={onClose}
+              >
+                Timeline Dashboard
+              </Link>
+            )}
+
+            {can(permissions, "client_dashboards", "epcr") && (
+              <Link
+                className={linkClass("/client/dashboard/epcr")}
+                href="/client/dashboard/epcr"
+                onClick={onClose}
+              >
+                ePCR Dashboard
+              </Link>
+            )}
+          </>
+        )}
+
+        {/* INTERNAL MENU */}
+        {(isAdmin || can(permissions, "dashboards", "timeline")) && (
           <Link
             className={linkClass("/dashboard")}
             href="/dashboard"
@@ -127,7 +186,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </Link>
         )}
 
-        {(isAdmin || can(permissions, "dashboards", "view")) && (
+        {(isAdmin || can(permissions, "dashboards", "epcr")) && (
           <Link
             className={linkClass("/dashboard/epcr")}
             href="/dashboard/epcr"
@@ -177,7 +236,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </Link>
         )}
 
-        {(isAdmin || can(permissions, "users", "view")) && (
+        {(isAdmin || can(permissions, "roles", "view")) && (
           <Link
             className={linkClass("/admin/roles")}
             href="/admin/roles"
@@ -187,7 +246,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </Link>
         )}
 
-        {(isAdmin || can(permissions, "users", "view")) && (
+        {(isAdmin || can(permissions, "location_picker", "view")) && (
           <Link
             className={linkClass("/location-picker")}
             href="/location-picker"
@@ -206,12 +265,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         >
           {dark ? "☀️ Light Mode" : "🌙 Dark Mode"}
         </button>
-
-        <Can permission="projects.view">
-          <div className="text-green-400 text-xs text-center">
-            ✅ projects.view granted
-          </div>
-        </Can>
 
         <button
           onClick={logout}

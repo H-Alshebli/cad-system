@@ -8,6 +8,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 /* =========================
    TYPES
@@ -104,7 +105,8 @@ export default function UsersPage() {
     return <div className="p-6 text-gray-400">Loading users...</div>;
   }
 
-  return (
+return (
+  <PermissionGuard module="users" action="view" showMessage={true}>
     <div className="p-6 space-y-6">
       <h1 className="text-xl font-semibold text-white">
         Users Management
@@ -178,5 +180,6 @@ export default function UsersPage() {
         </table>
       </div>
     </div>
-  );
+  </PermissionGuard>
+);
 }

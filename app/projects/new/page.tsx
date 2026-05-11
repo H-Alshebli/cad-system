@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 const REQUEST_TYPES = [
   "Clinic",
@@ -406,7 +407,8 @@ export default function NewProjectPage() {
   const dropdownPanelClass =
     "absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-700 bg-[#0b1220] shadow-2xl";
 
-  return (
+return (
+  <PermissionGuard module="projects" action="create" showMessage={true}>
     <div className="min-h-screen bg-[#030712] p-6">
       <div className="w-full max-w-none space-y-4">
         <div>
@@ -1025,5 +1027,6 @@ export default function NewProjectPage() {
         </div>
       </div>
     </div>
-  );
+  </PermissionGuard>
+);
 }

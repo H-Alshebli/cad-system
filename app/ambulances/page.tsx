@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 function getProjectDisplayName(project: any) {
   return (
@@ -242,7 +243,8 @@ const saveEditAmbulance = async () => {
   setEditingAmbulance(null);
 };
 
-  return (
+return (
+  <PermissionGuard module="ambulances" action="view" showMessage={true}>
     <div className="p-6 bg-[#020817] min-h-screen text-white">
       <h1 className="text-3xl font-bold mb-6">Ambulances</h1>
 
@@ -528,5 +530,6 @@ const saveEditAmbulance = async () => {
         </div>
       )}
     </div>
-  );
+  </PermissionGuard>
+);
 }

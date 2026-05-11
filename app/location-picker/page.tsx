@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 /* -----------------------------
    TYPES
@@ -121,7 +122,8 @@ export default function LocationPickerPage() {
     };
   }, []);
 
-  return (
+return (
+  <PermissionGuard module="location_picker" action="view" showMessage={true}>
     <div className="p-6 min-h-screen bg-gray-900 text-white flex flex-col gap-4 max-w-md">
       <h1 className="text-2xl font-bold">
         Location 
@@ -180,5 +182,6 @@ export default function LocationPickerPage() {
 
       {error && <p className="text-red-400">{error}</p>}
     </div>
-  );
+  </PermissionGuard>
+);
 }

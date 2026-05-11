@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 type ProjectsMap = Record<string, number>;
 type GenericMap = Record<string, number>;
@@ -154,7 +155,8 @@ export default function EpcrDashboardPage() {
     return <div className="p-6 text-white">Loading...</div>;
   }
 
-  return (
+ return (
+  <PermissionGuard module="dashboards" action="epcr" showMessage={true}>
     <div className="min-h-screen bg-[#020817] p-6 text-white">
       <div className="w-full space-y-6">
         {/* HEADER */}
@@ -431,7 +433,8 @@ export default function EpcrDashboardPage() {
         </DarkCard>
       </div>
     </div>
-  );
+  </PermissionGuard>
+);
 }
 
 /* ================= UI ================= */

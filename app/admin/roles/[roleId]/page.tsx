@@ -1,38 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-
-/* =============================
-   MODULES & ACTIONS
-============================= */
-
-const MODULES = [
-  { key: "projects", label: "Projects" },
-  { key: "dashboards", label: "Dashboards" },
-  { key: "cases", label: "Cases" },
-  { key: "epcr", label: "ePCR" },
-  { key: "ambulances", label: "Ambulances" },
-  { key: "roaming", label: "Roaming" },
-  { key: "clinics", label: "Clinics" },
-  { key: "users", label: "Users" },
-  { key: "reports", label: "Reports" },
-];
-
-const ACTIONS = [
-  "view",
-  "create",
-  "edit",
-  "delete",
-  "export",
-  "import",
-  "mark_complete",
-];
-
-/* =============================
-   PAGE
-============================= */
+import {
+  ACTION_LABELS,
+  MODULE_DESCRIPTIONS,
+  MODULE_LABELS,
+  PERMISSION_GROUPS,
+  PERMISSION_MATRIX,
+  PermissionsMap,
+  normalizePermissions,
+} from "@/lib/permissionsMatrix";
 
 export default function RolePermissionsPage({
   params,
@@ -41,120 +20,281 @@ export default function RolePermissionsPage({
 }) {
   const { roleId } = params;
 
-  const [permissions, setPermissions] = useState<any>({});
+  const [permissions, setPermissions] = useState<PermissionsMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  /* =============================
-     LOAD ROLE
-  ============================= */
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function loadRole() {
       const snap = await getDoc(doc(db, "roles", roleId));
+
       if (snap.exists()) {
-        setPermissions(snap.data().permissions || {});
+        setPermissions(normalizePermissions(snap.data().permissions || {}));
+      } else {
+        setPermissions(normalizePermissions({}));
       }
+
       setLoading(false);
     }
+
     loadRole();
   }, [roleId]);
 
-  /* =============================
-     TOGGLE PERMISSION
-  ============================= */
-
-  function togglePermission(moduleKey: string, action: string) {
-    setPermissions((prev: any) => ({
+  const togglePermission = (moduleKey: string, action: string) => {
+    setPermissions((prev) => ({
       ...prev,
       [moduleKey]: {
-        ...prev[moduleKey],
+        ...(prev[moduleKey] || {}),
         [action]: !prev?.[moduleKey]?.[action],
       },
     }));
-  }
+  };
 
-  /* =============================
-     SAVE
-  ============================= */
+  const setModulePermissions = (moduleKey: string, value: boolean) => {
+    const actions = PERMISSION_MATRIX[moduleKey] || [];
 
-  async function savePermissions() {
-    setSaving(true);
-    await updateDoc(doc(db, "roles", roleId), {
-      permissions,
+    setPermissions((prev) => ({
+      ...prev,
+      [moduleKey]: actions.reduce<Record<string, boolean>>((acc, action) => {
+        acc[action] = value;
+        return acc;
+      }, {}),
+    }));
+  };
+
+  const applyClientPreset = () => {
+    const next = normalizePermissions({});
+
+    next.client_portal.view = true;
+    next.client_cases.view = true;
+    next.client_cases.view_own = true;
+    next.client_cases.create = true;
+    next.client_cases.track = true;
+    next.client_dashboards.timeline = true;
+    next.client_dashboards.epcr = true;
+
+    setPermissions(next);
+  };
+
+  const enableCommonViewPermissions = () => {
+    const next = normalizePermissions(permissions);
+
+    Object.keys(PERMISSION_MATRIX).forEach((moduleKey) => {
+      if (PERMISSION_MATRIX[moduleKey].includes("view")) {
+        next[moduleKey].view = true;
+      }
     });
+
+    setPermissions(next);
+  };
+
+  const savePermissions = async () => {
+    setSaving(true);
+
+    await updateDoc(doc(db, "roles", roleId), {
+      permissions: normalizePermissions(permissions),
+      updatedAt: serverTimestamp(),
+    });
+
     setSaving(false);
     alert("Permissions saved successfully");
-  }
+  };
+
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return PERMISSION_GROUPS;
+
+    return PERMISSION_GROUPS.map((group) => ({
+      ...group,
+      modules: group.modules.filter((moduleKey) => {
+        const label = MODULE_LABELS[moduleKey] || moduleKey;
+        const description = MODULE_DESCRIPTIONS[moduleKey] || "";
+        const actions = PERMISSION_MATRIX[moduleKey] || [];
+
+        return (
+          moduleKey.toLowerCase().includes(q) ||
+          label.toLowerCase().includes(q) ||
+          description.toLowerCase().includes(q) ||
+          actions.some((action) =>
+            `${action} ${ACTION_LABELS[action] || ""}`.toLowerCase().includes(q)
+          )
+        );
+      }),
+    })).filter((group) => group.modules.length > 0);
+  }, [search]);
+
+  const enabledCount = useMemo(() => {
+    return Object.values(permissions).reduce((sum, modulePerms) => {
+      return sum + Object.values(modulePerms || {}).filter(Boolean).length;
+    }, 0);
+  }, [permissions]);
+
+  const totalCount = useMemo(() => {
+    return Object.values(PERMISSION_MATRIX).reduce(
+      (sum, actions) => sum + actions.length,
+      0
+    );
+  }, []);
 
   if (loading) {
-    return <div className="p-6">Loading permissions...</div>;
+    return <div className="p-6 text-slate-400">Loading permissions...</div>;
   }
 
-  /* =============================
-     UI
-  ============================= */
-
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">
-        Assign Permissions – <span className="capitalize">{roleId}</span>
-      </h1>
+    <div className="min-h-screen bg-[#030712] p-6 text-white">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Assign Permissions – <span className="capitalize">{roleId}</span>
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Control what this role can access across operations, resources,
+              client access, reports, and administration.
+            </p>
+          </div>
 
-      <div className="overflow-auto border rounded">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 dark:bg-gray-800">
-            <tr>
-              <th className="p-3 text-left border-r">Module</th>
-              {ACTIONS.map((action) => (
-                <th key={action} className="p-3 text-center capitalize">
-                  {action.replace("_", " ")}
-                </th>
-              ))}
-            </tr>
-          </thead>
+          <div className="rounded-full border border-slate-700 bg-[#111827] px-4 py-2 text-sm text-slate-300">
+            Enabled: <span className="font-semibold text-blue-300">{enabledCount}</span> / {totalCount}
+          </div>
+        </div>
 
-          <tbody>
-            {MODULES.map((module) => (
-              <tr key={module.key} className="border-t">
-                <td className="p-3 font-medium border-r">
-                  {module.label}
-                </td>
+        <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search modules or actions..."
+              className="h-11 w-full rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500 lg:max-w-lg"
+            />
 
-                {ACTIONS.map((action) => {
-                  const enabled = !!permissions?.[module.key]?.[action];
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={enableCommonViewPermissions}
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/5"
+              >
+                Enable all View permissions
+              </button>
+
+              <button
+                type="button"
+                onClick={applyClientPreset}
+                className="rounded-full border border-blue-700 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-200 hover:bg-blue-500/20"
+              >
+                Apply Client Preset
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPermissions(normalizePermissions({}))}
+                className="rounded-full border border-red-800 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {filteredGroups.map((group) => (
+            <section key={group.title} className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                {group.title}
+              </h2>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {group.modules.map((moduleKey) => {
+                  const actions = PERMISSION_MATRIX[moduleKey] || [];
+                  const modulePerms = permissions[moduleKey] || {};
+                  const selectedCount = actions.filter(
+                    (action) => modulePerms[action]
+                  ).length;
 
                   return (
-                    <td key={action} className="p-3 text-center">
-                      <button
-                        onClick={() =>
-                          togglePermission(module.key, action)
-                        }
-                        className={`h-4 w-4 rounded-full border transition
-                          ${
-                            enabled
-                              ? "bg-green-500 border-green-500"
-                              : "bg-transparent border-gray-400"
-                          }
-                        `}
-                        title={enabled ? "Enabled" : "Disabled"}
-                      />
-                    </td>
+                    <div
+                      key={moduleKey}
+                      className="rounded-2xl border border-slate-800 bg-[#111827] p-4 shadow-sm"
+                    >
+                      <div className="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="font-semibold text-white">
+                            {MODULE_LABELS[moduleKey] || moduleKey}
+                          </h3>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">
+                            {MODULE_DESCRIPTIONS[moduleKey] || ""}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                          {selectedCount}/{actions.length}
+                        </div>
+                      </div>
+
+                      <div className="mb-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setModulePermissions(moduleKey, true)}
+                          className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModulePermissions(moduleKey, false)}
+                          className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {actions.map((action) => {
+                          const enabled = Boolean(modulePerms[action]);
+
+                          return (
+                            <button
+                              key={action}
+                              type="button"
+                              onClick={() => togglePermission(moduleKey, action)}
+                              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition ${
+                                enabled
+                                  ? "border-green-600 bg-green-500/10 text-green-200"
+                                  : "border-slate-700 bg-[#0b1220] text-slate-300 hover:border-blue-600"
+                              }`}
+                            >
+                              <span>{ACTION_LABELS[action] || action}</span>
+                              <span
+                                className={`h-4 w-4 rounded-full border ${
+                                  enabled
+                                    ? "border-green-500 bg-green-500"
+                                    : "border-slate-500"
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </section>
+          ))}
+        </div>
 
-      <button
-        onClick={savePermissions}
-        disabled={saving}
-        className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-      >
-        {saving ? "Saving..." : "Save Permissions"}
-      </button>
+        <div className="sticky bottom-4 flex justify-end">
+          <button
+            onClick={savePermissions}
+            disabled={saving}
+            className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-xl hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save Permissions"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

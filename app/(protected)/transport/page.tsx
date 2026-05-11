@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import type { TransportRequest, TransportStatus } from "./types";
 import { STATUS_LABEL } from "./constants";
 import { selectClass } from "./ui";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 function getRejectedLabel(x: TransportRequest): string {
   const status = x.status as TransportStatus;
@@ -56,7 +57,8 @@ export default function TransportListPage() {
     return items.filter((x) => x.status === statusFilter);
   }, [items, statusFilter]);
 
-  return (
+ return (
+  <PermissionGuard module="transport" action="view" showMessage={true}>
     <div className="p-6 text-white">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
@@ -135,5 +137,6 @@ export default function TransportListPage() {
         )}
       </div>
     </div>
-  );
+  </PermissionGuard>
+);
 }

@@ -747,5 +747,5 @@ export default function CaseEpcrSubmissionsTable({
         </div>
       </div>
     </div>
-  );
+  ); 
 }

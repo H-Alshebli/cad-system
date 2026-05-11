@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
@@ -262,7 +263,8 @@ export default function Dashboard() {
     );
   }
 
-  return (
+return (
+  <PermissionGuard module="dashboards" action="timeline" showMessage={true}>
     <div className="p-6 dark:bg-gray-900 min-h-screen">
       <h1 className="text-3xl font-bold mb-6 dark:text-white">
         Dispatch Dashboard
@@ -423,6 +425,7 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
-    </div>
+      </div>
+    </PermissionGuard>
   );
 }

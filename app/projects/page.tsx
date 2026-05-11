@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Can from "../components/Can";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
 const ARCHIVE_PASSWORD = "727978";
 
@@ -285,7 +286,8 @@ export default function ProjectsPage() {
     return <div className="p-6 text-gray-400">Loading projects...</div>;
   }
 
-  return (
+ return (
+  <PermissionGuard module="projects" action="view" showMessage={true}>
     <div className="p-6 space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -401,5 +403,6 @@ export default function ProjectsPage() {
         })}
       </div>
     </div>
-  );
+  </PermissionGuard>
+);
 }
