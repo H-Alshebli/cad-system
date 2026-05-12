@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Sidebar from "./Sidebar";
+import CaseAlertListener from "./CaseAlertListener";
 
 export default function AppShell({
   children,
@@ -51,6 +52,7 @@ export default function AppShell({
         </div>
 
         {children}
+        <CaseAlertListener />
       </main>
     </div>
   );

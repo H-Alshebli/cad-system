@@ -357,6 +357,12 @@ setLoadingProjects(false);
           wasBusyWhenSelected: selectedAmbulanceBusy,
         },
 
+        // Legacy fields kept because older dashboards/alerts read these directly.
+        ambulanceCode:
+          unitType === "ambulance" ? selectedUnit?.code || selectedUnit?.name || null : null,
+        clinicId: unitType === "clinic" ? selectedUnitId : null,
+        roaming: unitType === "roaming" ? selectedUnit?.code || selectedUnit?.name || null : null,
+
         clientSelectedUnit: {
           type: unitType,
           id: selectedUnitId,
