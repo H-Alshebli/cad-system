@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -45,6 +47,14 @@ type Ambulance = {
   assignedProjectName?: string | null;
   projectId?: string | null;
   projectName?: string | null;
+  crew?: string[];
+  crewUserIds?: string[];
+  crewMembers?: Array<{
+    userId?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  }>;
   archived?: boolean;
 };
 
@@ -111,6 +121,20 @@ function getUserRole(user: User) {
   return user.role || "No role";
 }
 
+function getAmbulanceCrewUserIds(amb: Ambulance) {
+  if (Array.isArray(amb.crewUserIds)) {
+    return amb.crewUserIds.filter(Boolean);
+  }
+
+  if (Array.isArray(amb.crewMembers)) {
+    return amb.crewMembers.map((m) => m?.userId).filter(Boolean) as string[];
+  }
+
+  return [];
+}
+
+type AmbulanceCrewAssignment = Record<string, string[]>;
+
 export default function EditProjectPage({
   params,
 }: {
@@ -160,6 +184,9 @@ export default function EditProjectPage({
 
   const [hospitalDropdownOpen, setHospitalDropdownOpen] = useState(false);
   const [hospitalSearch, setHospitalSearch] = useState("");
+
+  const [ambulanceCrewAssignments, setAmbulanceCrewAssignments] =
+    useState<AmbulanceCrewAssignment>({});
 
   useEffect(() => {
     const loadProject = async () => {
@@ -252,6 +279,33 @@ export default function EditProjectPage({
       unsubHospitals();
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedAmbulanceIds.length) {
+      setAmbulanceCrewAssignments({});
+      return;
+    }
+
+    setAmbulanceCrewAssignments((prev) => {
+      const next: AmbulanceCrewAssignment = {};
+
+      selectedAmbulanceIds.forEach((ambId) => {
+        const existing = prev[ambId];
+
+        if (existing) {
+          next[ambId] = existing;
+          return;
+        }
+
+        const ambulance = ambulances.find((a) => a.id === ambId);
+        next[ambId] = getAmbulanceCrewUserIds(
+          ambulance || ({ id: ambId } as Ambulance)
+        );
+      });
+
+      return next;
+    });
+  }, [selectedAmbulanceIds.join("|"), ambulances]);
 
   const selectedAmbulances = useMemo(
     () => ambulances.filter((a) => selectedAmbulanceIds.includes(a.id)),
@@ -379,6 +433,87 @@ export default function EditProjectPage({
 
   const removeSelectedAmbulance = (ambId: string) => {
     setSelectedAmbulanceIds((prev) => prev.filter((id) => id !== ambId));
+    setAmbulanceCrewAssignments((prev) => {
+      const next = { ...prev };
+      delete next[ambId];
+      return next;
+    });
+  };
+
+  const updateAmbulanceCrewAssignment = (
+    ambulanceId: string,
+    index: number,
+    userId: string
+  ) => {
+    setAmbulanceCrewAssignments((prev) => {
+      const current = [...(prev[ambulanceId] || [])];
+
+      if (userId && current.some((id, i) => id === userId && i !== index)) {
+        alert("This team member is already assigned to this ambulance.");
+        return prev;
+      }
+
+      current[index] = userId;
+
+      return {
+        ...prev,
+        [ambulanceId]: current,
+      };
+    });
+  };
+
+  const addAmbulanceCrewSlot = (ambulanceId: string) => {
+    setAmbulanceCrewAssignments((prev) => {
+      const current = [...(prev[ambulanceId] || [])];
+
+      if (current.length >= selectedUsers.length) return prev;
+
+      return {
+        ...prev,
+        [ambulanceId]: [...current, ""],
+      };
+    });
+  };
+
+  const removeAmbulanceCrewSlot = (ambulanceId: string, index: number) => {
+    setAmbulanceCrewAssignments((prev) => {
+      const current = [...(prev[ambulanceId] || [])];
+      current.splice(index, 1);
+
+      return {
+        ...prev,
+        [ambulanceId]: current,
+      };
+    });
+  };
+
+  const getCrewMembersForAmbulance = (ambulanceId: string) => {
+    const selectedCrewUserIds = Array.from(
+      new Set(
+        (ambulanceCrewAssignments[ambulanceId] || []).filter(
+          (uid) => uid && assignedUsers[uid]
+        )
+      )
+    );
+
+    return selectedCrewUserIds
+      .map((uid) => {
+        const user = users.find((u) => u.id === uid);
+        if (!user) return null;
+
+        return {
+          userId: user.id,
+          name: getUserName(user),
+          email: user.email || "",
+          role: user.role || "team",
+        };
+      })
+      .filter(Boolean) as Array<{
+      userId: string;
+      name: string;
+      email: string;
+      role: string;
+    }>;
   };
 
   const toggleHospital = (id: string) => {
@@ -401,19 +536,29 @@ export default function EditProjectPage({
       Object.entries(assignedUsers).filter(([, v]) => v)
     );
 
+    const selectedProjectName = projectName.trim();
+
+    const selectedAmbulancesWithCrew = selectedAmbulances.map((a) => {
+      const crewMembers = getCrewMembersForAmbulance(a.id);
+
+      return {
+        id: a.id,
+        code: a.code || "",
+        location: a.location || "",
+        status: a.status || "",
+        crewUserIds: crewMembers.map((m) => m.userId),
+        crewMembers,
+      };
+    });
+
     await updateDoc(doc(db, "projects", projectId), {
-      projectName: projectName.trim(),
+      projectName: selectedProjectName,
       client: client.trim(),
 
       assignedUsers: cleanAssignedUsers,
 
       assignedAmbulanceIds: selectedAmbulanceIds,
-      assignedAmbulances: selectedAmbulances.map((a) => ({
-        id: a.id,
-        code: a.code || "",
-        location: a.location || "",
-        status: a.status || "",
-      })),
+      assignedAmbulances: selectedAmbulancesWithCrew,
 
       projectHospitalIds: selectedHospitalIds,
       projectHospitals: selectedHospitals.map((h) => ({
@@ -442,30 +587,49 @@ export default function EditProjectPage({
       updatedAt: serverTimestamp(),
     });
 
-    const newlySelected = selectedAmbulanceIds.filter(
-      (id) => !originalAmbulanceIds.includes(id)
-    );
-
     const removed = originalAmbulanceIds.filter(
       (id) => !selectedAmbulanceIds.includes(id)
     );
 
+    const ambulanceUpdates = selectedAmbulances.map((amb) => {
+      const crewMembers = getCrewMembersForAmbulance(amb.id);
+      const crewUserIds = crewMembers.map((m) => m.userId);
+      const oldCrewUserIds = getAmbulanceCrewUserIds(amb);
+      const usersToRemove = oldCrewUserIds.filter(
+        (uid) => !crewUserIds.includes(uid)
+      );
+
+      return {
+        ambulanceId: amb.id,
+        crewMembers,
+        crewUserIds,
+        usersToRemove,
+      };
+    });
+
+    const removedAmbulances = ambulances.filter((a) => removed.includes(a.id));
+
     await Promise.all([
-      ...newlySelected.map((id) =>
-        updateDoc(doc(db, "ambulances", id), {
+      ...ambulanceUpdates.map((item) =>
+        updateDoc(doc(db, "ambulances", item.ambulanceId), {
           assignedProjectId: projectId,
-          assignedProjectName: projectName.trim(),
+          assignedProjectName: selectedProjectName,
 
           // compatibility fields
           projectId,
-          projectName: projectName.trim(),
+          projectName: selectedProjectName,
+
+          // crew assignment for alert listener
+          crewMembers: item.crewMembers,
+          crewUserIds: item.crewUserIds,
+          crew: item.crewMembers.map((m) => m.name),
 
           updatedAt: serverTimestamp(),
         })
       ),
 
-      ...removed.map((id) =>
-        updateDoc(doc(db, "ambulances", id), {
+      ...removedAmbulances.map((amb) =>
+        updateDoc(doc(db, "ambulances", amb.id), {
           assignedProjectId: null,
           assignedProjectName: null,
 
@@ -473,8 +637,37 @@ export default function EditProjectPage({
           projectId: null,
           projectName: null,
 
+          // remove crew when ambulance is removed from this project
+          crewMembers: [],
+          crewUserIds: [],
+          crew: [],
+
           updatedAt: serverTimestamp(),
         })
+      ),
+
+      ...ambulanceUpdates.flatMap((item) => [
+        ...item.crewUserIds.map((uid) =>
+          updateDoc(doc(db, "users", uid), {
+            ambulanceIds: arrayUnion(item.ambulanceId),
+            updatedAt: serverTimestamp(),
+          })
+        ),
+        ...item.usersToRemove.map((uid) =>
+          updateDoc(doc(db, "users", uid), {
+            ambulanceIds: arrayRemove(item.ambulanceId),
+            updatedAt: serverTimestamp(),
+          })
+        ),
+      ]),
+
+      ...removedAmbulances.flatMap((amb) =>
+        getAmbulanceCrewUserIds(amb).map((uid) =>
+          updateDoc(doc(db, "users", uid), {
+            ambulanceIds: arrayRemove(amb.id),
+            updatedAt: serverTimestamp(),
+          })
+        )
       ),
     ]);
 
@@ -908,6 +1101,124 @@ return (
                 </div>
               )}
             </div>
+
+            {selectedAmbulances.length > 0 && (
+              <div className="mt-4 rounded-xl border border-slate-700 bg-[#0b1220] p-3">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    Ambulance Crew Assignment
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Assign crew members from the selected project team. This will
+                    update the ambulance crew and team alert automatically.
+                  </p>
+                </div>
+
+                {selectedUsers.length === 0 ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    Select project team members first, then assign them to each
+                    ambulance.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedAmbulances.map((amb) => {
+                      const crewIds = ambulanceCrewAssignments[amb.id] || [];
+
+                      return (
+                        <div
+                          key={amb.id}
+                          className="rounded-lg border border-slate-700 bg-[#111827] p-3"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">
+                                {getAmbulanceLabel(amb)}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {amb.location || "No location"}
+                              </p>
+                            </div>
+
+                            <span className="rounded-full bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300">
+                              {(crewIds || []).filter(Boolean).length} crew
+                            </span>
+                          </div>
+
+                          <div className="space-y-3">
+                            {(crewIds.length > 0 ? crewIds : [""]).map(
+                              (crewUserId, index) => {
+                                const usedByOtherSlots = crewIds.filter(
+                                  (id, i) => id && i !== index
+                                );
+
+                                return (
+                                  <div
+                                    key={`${amb.id}-crew-${index}`}
+                                    className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto]"
+                                  >
+                                    <div>
+                                      <label className={labelClass}>
+                                        Crew Member {index + 1}
+                                      </label>
+                                      <select
+                                        className={selectClass}
+                                        value={crewUserId || ""}
+                                        onChange={(e) =>
+                                          updateAmbulanceCrewAssignment(
+                                            amb.id,
+                                            index,
+                                            e.target.value
+                                          )
+                                        }
+                                      >
+                                        <option value="">Select crew member</option>
+                                        {selectedUsers
+                                          .filter(
+                                            (u) =>
+                                              !usedByOtherSlots.includes(u.id)
+                                          )
+                                          .map((u) => (
+                                            <option key={u.id} value={u.id}>
+                                              {getUserName(u)} - {getUserRole(u)}
+                                            </option>
+                                          ))}
+                                      </select>
+                                    </div>
+
+                                    <div className="flex items-end">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeAmbulanceCrewSlot(amb.id, index)
+                                        }
+                                        className="h-11 rounded-lg border border-red-500/40 px-3 text-xs font-medium text-red-200 transition hover:bg-red-500/10"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => addAmbulanceCrewSlot(amb.id)}
+                              disabled={
+                                (crewIds || []).length >= selectedUsers.length
+                              }
+                              className="rounded-lg border border-blue-500/40 px-3 py-2 text-xs font-medium text-blue-200 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              + Add Crew Member
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
