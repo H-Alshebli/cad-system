@@ -123,15 +123,20 @@ export function useEpcrDashboard(
           complaints[c] = (complaints[c] || 0) + 1;
         });
 
-        const movingMin = hhmmToMinutes(epcr.time?.movingTime?.timeHHMM);
-        const arrivalMin = hhmmToMinutes(epcr.time?.arrivalToPTTime?.timeHHMM);
+        // Average Response Time Calculation
+        // Response Time = Arrival To Patient Time - Received Time
+        const receivedMin = hhmmToMinutes(epcr.time?.Received?.timeHHMM);
+        const arrivalMin = hhmmToMinutes(
+          epcr.time?.arrivalToPTTime?.timeHHMM
+        );
 
         if (
-          movingMin !== null &&
+          receivedMin !== null &&
           arrivalMin !== null &&
-          arrivalMin > movingMin
+          arrivalMin > receivedMin
         ) {
-          const minutes = arrivalMin - movingMin;
+          const minutes = arrivalMin - receivedMin;
+
           responseSum += minutes;
           responseMin = Math.min(responseMin, minutes);
           responseMax = Math.max(responseMax, minutes);
@@ -152,10 +157,8 @@ export function useEpcrDashboard(
             responseCount > 0
               ? Number((responseSum / responseCount).toFixed(1))
               : 0,
-          minMinutes:
-            responseMin === Infinity ? 0 : Math.round(responseMin),
-          maxMinutes:
-            responseCount > 0 ? Math.round(responseMax) : 0,
+          minMinutes: responseMin === Infinity ? 0 : Math.round(responseMin),
+          maxMinutes: responseCount > 0 ? Math.round(responseMax) : 0,
         },
       });
 
