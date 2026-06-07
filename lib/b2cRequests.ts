@@ -5,6 +5,7 @@ import {
   getDoc,
   serverTimestamp,
   updateDoc,
+  type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -17,27 +18,181 @@ export type B2CRequestStatus =
   | "Rejected"
   | "Cancelled";
 
-export function getAutoCadActivationAt(requestedTransportAt?: string) {
-  if (!requestedTransportAt) return null;
+export type PaymentStatus = "Pending" | "Paid";
 
-  const tripTime = new Date(requestedTransportAt).getTime();
-  if (Number.isNaN(tripTime)) return null;
+export type PlannedAssignment = {
+  unitType?: string;
+  unitId?: string;
+  unitCode?: string;
+  unitName?: string;
+  unitTypeName?: string;
+  assignedTeamGroup?: string;
+  assignedUserIds?: string[];
+};
 
-  return new Date(tripTime - 60 * 60 * 1000).toISOString();
+export type B2CRequest = {
+  id: string;
+
+  sourceType?: string;
+  requestStatus?: B2CRequestStatus;
+  paymentStatus?: PaymentStatus;
+
+  requestType?: string;
+  serviceScope?: string;
+
+  callNumber?: string;
+  callDateTime?: string;
+  coordinatorName?: string;
+
+  customerName?: string;
+  customerMobile?: string;
+
+  patientName?: string;
+  patientAge?: string;
+  patientGender?: string;
+  patientIdOrIqama?: string;
+  approximateWeight?: string;
+
+  tripType?: string;
+  requestedTransportAt?: string;
+  requestedAt?: string;
+
+  pickupText?: string;
+  pickupMapLink?: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  pickupFloor?: string;
+
+  destinationText?: string;
+  destinationMapLink?: string;
+  destinationLat?: number | null;
+  destinationLng?: number | null;
+  destinationFloor?: string;
+
+  patientStability?: string;
+  transportLevel?: string;
+  mobility?: string;
+  specialRequirements?: string[];
+  diagnosisOrReason?: string;
+  chiefComplaint?: string;
+  serviceType?: string;
+  hasMedicalReport?: string;
+
+  operationalDecision?: string;
+  rejectionReason?: string;
+  operationalNotes?: string;
+
+  price?: string;
+  payer?: string;
+  paymentLinkSentAt?: string;
+  bookingConfirmationNumber?: string;
+
+  plannedAssignment?: PlannedAssignment;
+
+  cadCaseId?: string | null;
+  cadCreatedAt?: any;
+  cadCreatedBy?: string | null;
+  autoCadActivationAt?: string | null;
+
+  createdAt?: any;
+  updatedAt?: any;
+
+  [key: string]: any;
+};
+
+function toDateValue(value: any): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date) return value;
+
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value?.toDate === "function") {
+    return value.toDate();
+  }
+
+  return null;
 }
 
-export async function createB2CRequest(form: any) {
+export function getAutoCadActivationAt(requestedTransportAt?: string) {
+  const tripDate = toDateValue(requestedTransportAt);
+
+  if (!tripDate) return null;
+
+  return new Date(tripDate.getTime() - 60 * 60 * 1000).toISOString();
+}
+
+export function isWithinOneHour(request: B2CRequest | null) {
+  const tripDate = toDateValue(request?.requestedTransportAt);
+
+  if (!tripDate) return false;
+
+  const now = Date.now();
+  const tripTime = tripDate.getTime();
+
+  return tripTime - now <= 60 * 60 * 1000;
+}
+
+function getRequestStatus(form: any): B2CRequestStatus {
   const paymentStatus = form.paymentStatus || "Pending";
   const operationalDecision =
     form.operationalDecision || "Approved - Proceed to Pricing";
 
-  let requestStatus: B2CRequestStatus = "PendingPayment";
-
   if (operationalDecision.startsWith("Rejected")) {
-    requestStatus = "Rejected";
-  } else if (paymentStatus === "Paid") {
-    requestStatus = "Confirmed";
+    return "Rejected";
   }
+
+  if (paymentStatus !== "Paid") {
+    return "PendingPayment";
+  }
+
+  if (form.requestType === "Immediate") {
+    return "ReadyToActivate";
+  }
+
+  if (form.requestType === "Scheduled") {
+    const autoAt = getAutoCadActivationAt(form.requestedTransportAt);
+    const now = Date.now();
+
+    if (autoAt && new Date(autoAt).getTime() <= now) {
+      return "ReadyToActivate";
+    }
+
+    return "Confirmed";
+  }
+
+  return "Confirmed";
+}
+
+function normalizePlannedAssignment(form: any): PlannedAssignment {
+  const plannedAssignment = form.plannedAssignment || {};
+
+  return {
+    unitType: plannedAssignment.unitType || "ambulance",
+    unitId: plannedAssignment.unitId || "",
+    unitCode: plannedAssignment.unitCode || "",
+    unitName: plannedAssignment.unitName || "",
+    unitTypeName: plannedAssignment.unitTypeName || "Ambulance",
+    assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
+    assignedUserIds: Array.isArray(plannedAssignment.assignedUserIds)
+      ? plannedAssignment.assignedUserIds
+      : [],
+  };
+}
+
+export async function createB2CRequest(form: any) {
+  const paymentStatus: PaymentStatus =
+    form.paymentStatus === "Paid" ? "Paid" : "Pending";
+
+  const requestStatus = getRequestStatus({
+    ...form,
+    paymentStatus,
+  });
+
+  const plannedAssignment = normalizePlannedAssignment(form);
 
   const ref = await addDoc(collection(db, "b2cRequests"), {
     ...form,
@@ -46,6 +201,8 @@ export async function createB2CRequest(form: any) {
 
     requestStatus,
     paymentStatus,
+
+    plannedAssignment,
 
     cadCaseId: null,
     cadCreatedAt: null,
@@ -60,15 +217,19 @@ export async function createB2CRequest(form: any) {
   return ref.id;
 }
 
-export async function getB2CRequestById(requestId: string) {
+export async function getB2CRequestById(
+  requestId: string
+): Promise<B2CRequest | null> {
   const snap = await getDoc(doc(db, "b2cRequests", requestId));
 
   if (!snap.exists()) return null;
 
+  const data = snap.data() as DocumentData;
+
   return {
     id: snap.id,
-    ...snap.data(),
-  };
+    ...data,
+  } as B2CRequest;
 }
 
 export async function updateB2CRequest(requestId: string, data: any) {
@@ -78,30 +239,30 @@ export async function updateB2CRequest(requestId: string, data: any) {
   });
 }
 
-export function canCreateCadCase(request: any) {
+export function canCreateCadCase(request: B2CRequest | null) {
   if (!request) return false;
 
   const alreadyCreated = !!request.cadCaseId;
+
   const isPaid = request.paymentStatus === "Paid";
+
   const isApproved =
     request.operationalDecision === "Approved - Proceed to Pricing" ||
     request.operationalDecision?.startsWith("Approved");
 
   const isRejectedOrCancelled =
-    request.requestStatus === "Rejected" || request.requestStatus === "Cancelled";
+    request.requestStatus === "Rejected" ||
+    request.requestStatus === "Cancelled";
 
   return !alreadyCreated && isPaid && isApproved && !isRejectedOrCancelled;
 }
 
-export function isWithinOneHour(request: any) {
-  if (!request?.requestedTransportAt) return false;
+export function canAutoCreateCadCase(request: B2CRequest | null) {
+  if (!canCreateCadCase(request)) return false;
 
-  const now = Date.now();
-  const tripTime = new Date(request.requestedTransportAt).getTime();
+  if (request?.requestType === "Immediate") return true;
 
-  if (Number.isNaN(tripTime)) return false;
-
-  return tripTime - now <= 60 * 60 * 1000;
+  return isWithinOneHour(request);
 }
 
 export async function createCadCaseFromB2CRequest(
@@ -114,17 +275,25 @@ export async function createCadCaseFromB2CRequest(
     throw new Error("B2C request not found.");
   }
 
+  if (request.cadCaseId) {
+    return request.cadCaseId;
+  }
+
   if (!canCreateCadCase(request)) {
-    throw new Error("This request is not ready to create CAD case.");
+    throw new Error(
+      "This request is not ready to create CAD case. Payment must be Paid and operational decision must be Approved."
+    );
   }
 
   const timestamp = new Date().toISOString();
-
-  const plannedAssignment = request.plannedAssignment || {};
+  const plannedAssignment = normalizePlannedAssignment(request);
 
   const caseRef = await addDoc(collection(db, "cases"), {
     sourceType: "B2C",
     sourceRequestId: requestId,
+
+    caseType: "B2C",
+    requestType: request.requestType || "Immediate",
 
     status: "Assigned",
     dispatchStatus: "Assigned",
@@ -136,6 +305,7 @@ export async function createCadCaseFromB2CRequest(
     patientAge: request.patientAge || "",
     patientGender: request.patientGender || "",
     patientIdOrIqama: request.patientIdOrIqama || "",
+    approximateWeight: request.approximateWeight || "",
 
     chiefComplaint:
       request.diagnosisOrReason ||
@@ -143,7 +313,14 @@ export async function createCadCaseFromB2CRequest(
       request.serviceType ||
       "",
 
+    diagnosisOrReason: request.diagnosisOrReason || "",
     serviceType: request.serviceType || "Ambulance Transportation",
+
+    patientStability: request.patientStability || "",
+    transportLevel: request.transportLevel || "",
+    mobility: request.mobility || "",
+    specialRequirements: request.specialRequirements || [],
+    hasMedicalReport: request.hasMedicalReport || "No",
 
     pickupText: request.pickupText || "",
     pickupMapLink: request.pickupMapLink || "",
@@ -158,19 +335,26 @@ export async function createCadCaseFromB2CRequest(
     destinationFloor: request.destinationFloor || "",
 
     requestedTransportAt: request.requestedTransportAt || "",
+    requestedAt: request.requestedTransportAt || request.requestedAt || "",
 
     paymentStatus: request.paymentStatus || "Paid",
     price: request.price || "",
     payer: request.payer || "",
+    paymentLinkSentAt: request.paymentLinkSentAt || "",
+    bookingConfirmationNumber: request.bookingConfirmationNumber || "",
 
     assignedUnit: plannedAssignment.unitId
       ? {
           type: plannedAssignment.unitType || "ambulance",
           id: plannedAssignment.unitId,
           code: plannedAssignment.unitCode || "",
+          name: plannedAssignment.unitName || "",
+          unitTypeName: plannedAssignment.unitTypeName || "Ambulance",
         }
       : null,
 
+    assignedAmbulanceId: plannedAssignment.unitId || "",
+    assignedAmbulanceCode: plannedAssignment.unitCode || "",
     assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
     assignedUserIds: plannedAssignment.assignedUserIds || [],
 
