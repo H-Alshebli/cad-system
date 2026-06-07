@@ -1,58 +1,90 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
+
+const PUBLIC_ROUTES = ["/login", "/register"];
 
 export default function AppShell({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  const isPublicRoute = PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+
+  if (isPublicRoute) {
+    return <>{children}</>;
+  }
+
   return (
-    <div className="flex min-h-screen">
+    <div className="fixed inset-0 flex overflow-hidden bg-slate-50 text-slate-950 dark:bg-[#07111f] dark:text-slate-100">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
-  <Sidebar />
-</div>
+      <aside className="relative z-30 hidden h-screen w-[288px] min-w-[288px] shrink-0 overflow-hidden lg:block">
+        <Sidebar />
+      </aside>
 
       {/* Mobile Overlay */}
-    {mobileSidebarOpen && (
-  <div
-    className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-    onClick={() => setMobileSidebarOpen(false)}
-  />
-)}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
 
-      {/* Mobile Sidebar Drawer */}
-    <div
-  className={`fixed top-0 left-0 z-50 lg:hidden transition-transform duration-300 ${
-    mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-  }`}
->
+      {/* Mobile Sidebar */}
+      <div
+        className={`fixed left-0 top-0 z-50 h-screen w-[288px] min-w-[288px] transition-transform duration-300 lg:hidden ${
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <Sidebar onClose={() => setMobileSidebarOpen(false)} />
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 p-3 lg:p-4 overflow-auto">
-        {/* Mobile Top Bar */}
-        <div className="lg:hidden flex items-center justify-between mb-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-3">
-          <button
-            onClick={() => setMobileSidebarOpen(true)}
-            className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            ☰
-          </button>
+      <main className="relative z-10 h-screen min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 text-slate-950 dark:bg-[#07111f] dark:text-slate-100">
+        <div
+          className="pointer-events-none fixed inset-0 hidden dark:block"
+          style={{
+            background:
+              "radial-gradient(circle at top left, rgba(37,99,235,0.16), transparent 34rem), radial-gradient(circle at top right, rgba(14,165,233,0.08), transparent 30rem), #07111f",
+          }}
+        />
 
-          <div className="font-semibold text-sm">Lazem HCAD</div>
+        <div className="relative z-10">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-[#07111f]/95">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
 
-          <div className="w-10" />
+            <div className="text-center">
+              <div className="text-sm font-bold text-slate-900 dark:text-white">
+                Lazem HCAD
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                Command Center
+              </div>
+            </div>
+
+            <div className="w-10" />
+          </div>
+
+          <div className="w-full px-4 py-4 lg:px-6 lg:py-5">
+            {children}
+          </div>
+
+          <CaseAlertListener />
         </div>
-
-        {children}
-        <CaseAlertListener />
       </main>
     </div>
   );

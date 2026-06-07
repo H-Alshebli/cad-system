@@ -24,8 +24,32 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var theme = localStorage.getItem('theme');
+                  if (!theme) {
+                    localStorage.setItem('theme', 'dark');
+                    document.documentElement.classList.add('dark');
+                    return;
+                  }
+                  if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
+
         <link
           rel="stylesheet"
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -37,12 +61,7 @@ export default function RootLayout({
 
       <body
         suppressHydrationWarning
-        className={`
-          ${inter.variable}
-          ${mono.variable}
-          bg-gray-100 text-gray-900
-          dark:bg-[#050814] dark:text-gray-100
-        `}
+        className={`${inter.variable} ${mono.variable}`}
       >
         <AppShell>{children}</AppShell>
       </body>

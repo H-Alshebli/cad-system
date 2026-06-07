@@ -186,6 +186,8 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
     const project = projectSnap.exists() ? projectSnap.data() : projectData;
 
     const caseRef = await addDoc(collection(db, "cases"), {
+      sourceType: "PROJECT",
+      sourceId: params.projectId,
       projectId: params.projectId,
       projectName: project?.projectName ?? project?.name ?? project?.title ?? "Unknown Project",
       projectHospitals: Array.isArray(project?.projectHospitals) ? project.projectHospitals : [],
@@ -196,6 +198,13 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       level: triageLevel,
       patientName,
       location: { text: locationText, lat, lng, googleMapLink, source: isFromMapLink ? "google_link" : "manual" },
+      locationText,
+      paymentStatus: "NotRequired",
+      dispatchStatus: "Assigned",
+      assignedUserIds: [],
+      acknowledged: false,
+      acknowledgedBy: null,
+      acknowledgedAt: null,
       assignedUnit: {
         type: unitType,
         id: selectedUnitId,
@@ -239,15 +248,15 @@ if (unitType === "ambulance") {
   });
 }
 
-    router.push(`/projects/${params.projectId}/cad`);
+    router.push(`/cases/${caseRef.id}`);
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold text-white">New Case (Project)</h1>
+    <div className="page-shell">
+      <div className="page-header"><div><h1 className="page-title">New Case (Project)</h1><p className="page-subtitle">Project case form launched from Call Intake. The case will open directly after creation.</p></div></div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#1c2333] border border-gray-700 rounded-lg p-4 space-y-5">
+        <div className="card-modern space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><FieldLabel text="Caller Name" /><input className={inputClass} value={callerName} onChange={(e) => setCallerName(e.target.value)} /></div>
             <div><FieldLabel text="Contact Number" /><input className={inputClass} value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} /></div>

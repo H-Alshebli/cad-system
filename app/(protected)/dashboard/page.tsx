@@ -6,6 +6,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import Link from "next/link";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
@@ -257,21 +258,17 @@ export default function Dashboard() {
 
   if (loading || !user || user.role === "none") {
     return (
-      <div className="p-6 dark:bg-gray-900 min-h-screen text-white">
-        Loading dashboard…
-      </div>
+      <div className="page-shell"><div className="card-modern">Loading dashboard…</div></div>
     );
   }
 
 return (
   <PermissionGuard module="dashboards" action="timeline" showMessage={true}>
-    <div className="p-6 dark:bg-gray-900 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 dark:text-white">
-        Dispatch Dashboard
-      </h1>
+    <div className="page-shell">
+      <div className="page-header"><div><h1 className="page-title">Dispatch Dashboard</h1><p className="page-subtitle">Live operational dashboard. Click any case card to open the unified case page directly.</p></div><Link className="btn-primary" href="/call-intake">New Case / Call Intake</Link></div>
 
       {/* FILTERS */}
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800">
+      <div className="card-modern">
         <div className="mb-3">
           <h2 className="text-lg font-bold dark:text-white">Filters</h2>
           <p className="text-sm text-gray-400">
@@ -287,7 +284,7 @@ return (
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
-              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+              className="select"
             >
               <option value="">All Projects</option>
               {projectOptions.map((project) => (
@@ -306,7 +303,7 @@ return (
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+              className="select"
             />
           </div>
 
@@ -318,14 +315,14 @@ return (
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+              className="select"
             />
           </div>
 
           <div className="flex items-end">
             <button
               onClick={clearFilters}
-              className="w-full rounded border px-3 py-2 text-sm bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+              className="btn-secondary w-full"
             >
               Clear Filters
             </button>
@@ -334,33 +331,33 @@ return (
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="card-modern">
           <h3 className="text-lg font-bold">Total Cases</h3>
           <p className="text-4xl font-extrabold">{totalCases}</p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">Active</h3>
           <p className="text-2xl font-bold text-blue-600">{activeCases}</p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">Unreceived from team</h3>
           <p className="text-2xl font-bold text-blue-600">{unreceivedCases}</p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">EnRoute</h3>
           <p className="text-2xl font-bold text-blue-600">{enRouteCases}</p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">OnScene</h3>
           <p className="text-2xl font-bold text-blue-600">{onSceneCases}</p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">Transporting</h3>
           <p className="text-2xl font-bold text-orange-600">
             {transportingCases}
@@ -370,7 +367,7 @@ return (
           </p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">Treated</h3>
           <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
           <p className="text-gray-400">
@@ -378,7 +375,7 @@ return (
           </p>
         </div>
 
-        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+        <div className="card-modern">
           <h3 className="text-sm text-gray-400">Ambulances</h3>
           <p className="text-2xl font-bold text-purple-600">
             {totalAmbulances}
@@ -389,7 +386,7 @@ return (
       {/* TIMELINE HEADER */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold dark:text-white">Cases Timeline</h2>
+          <h2 className="text-xl font-bold text-white">Cases Timeline</h2>
           <p className="text-sm text-gray-400">
             Showing {visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""}
             {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
@@ -398,7 +395,7 @@ return (
 
         <button
           onClick={() => setShowAllCases((prev) => !prev)}
-          className="px-4 py-2 rounded border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+          className="btn-secondary"
         >
           {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
         </button>
@@ -407,9 +404,10 @@ return (
       {/* TIMELINE CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {visibleCases.map((c) => (
-          <div
+          <Link
+            href={`/cases/${c.id}`}
             key={c.id}
-            className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
+            className="card-modern block transition hover:border-blue-400/60"
           >
             <div className="mb-3">
               <h2 className="text-xl font-bold">
@@ -422,7 +420,7 @@ return (
             </div>
 
             <CaseTimeline timeline={c.timeline || {}} />
-          </div>
+          </Link>
         ))}
       </div>
       </div>

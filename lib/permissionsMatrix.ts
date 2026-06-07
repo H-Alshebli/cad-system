@@ -35,6 +35,10 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "internal_chat",
   ],
 
+  call_intake: ["view", "create", "project_case", "b2c_case"],
+  b2c_cases: ["view", "create", "confirm_payment", "assign", "cancel"],
+  missions: ["view", "view_assigned", "acknowledge", "update_status", "report"],
+
   epcr: [
     "view",
     "view_dashboard",
@@ -77,6 +81,9 @@ export const MODULE_LABELS: Record<string, string> = {
   projects: "Projects",
   cases: "Cases",
   cad: "CAD / Dispatch",
+  call_intake: "Call Intake",
+  b2c_cases: "B2C Cases",
+  missions: "My Missions",
   epcr: "ePCR",
   ambulances: "Ambulances",
   destinations: "Hospitals / Destinations",
@@ -98,6 +105,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   projects: "Project list, project creation, editing, assignment, and archiving.",
   cases: "Case records, case creation, case assignment, status updates, and closure.",
   cad: "Internal dispatch workspace, status control, timeline, and internal case chat.",
+  call_intake: "Dispatcher intake screen for project and B2C calls.",
+  b2c_cases: "Individual customer requests, payment confirmation, and dispatch readiness.",
+  missions: "Assigned cases for paramedics and field teams.",
   epcr: "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
   ambulances: "Ambulance list, creation, editing, project assignment, and archiving.",
   destinations: "Hospitals and destination locations used during Transporting.",
@@ -145,12 +155,19 @@ export const ACTION_LABELS: Record<string, string> = {
   epcr: "ePCR",
   executive: "Executive",
   all_data: "All Data",
+  project_case: "Project Case",
+  b2c_case: "B2C Case",
+  confirm_payment: "Confirm Payment",
+  cancel: "Cancel",
+  view_assigned: "View Assigned",
+  acknowledge: "Acknowledge",
+  report: "Report",
 };
 
 export const PERMISSION_GROUPS = [
   {
     title: "Operations",
-    modules: ["dashboards", "projects", "cases", "cad", "epcr"],
+    modules: ["dashboards", "call_intake", "projects", "cases", "cad", "b2c_cases", "missions", "epcr"],
   },
   {
     title: "Resources",

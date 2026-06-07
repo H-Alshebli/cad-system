@@ -2,29 +2,132 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Colors */
+/* Default Light Theme */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Default Dark Theme */
+html.dark {
+  --background: #07111f;
+  --foreground: #f8fafc;
 }
 
-/* Page Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  background: var(--background);
+}
+
 body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-.input {
-  @apply w-full p-2 rounded
-         bg-slate-800 text-white
-         border border-slate-700
-         focus:outline-none focus:ring-2
-         focus:ring-blue-600;
+
+#__next {
+  min-height: 100%;
+}
+
+@layer components {
+  .page-shell {
+    @apply w-full space-y-6 text-slate-950 dark:text-slate-100;
+  }
+
+  .page-header {
+    @apply flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between
+    dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-xl dark:shadow-black/20;
+  }
+
+  .page-title {
+    @apply text-2xl font-black tracking-tight text-slate-950 dark:text-white;
+  }
+
+  .page-subtitle {
+    @apply max-w-4xl text-sm leading-6 text-slate-500 dark:text-slate-400;
+  }
+
+  .card-modern {
+    @apply rounded-3xl border border-slate-200 bg-white p-5 shadow-sm
+    dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-xl dark:shadow-black/20;
+  }
+
+  .card-soft {
+    @apply rounded-3xl border border-slate-200 bg-slate-50 p-5
+    dark:border-slate-800 dark:bg-[#111827];
+  }
+
+  .input,
+  .select,
+  .textarea {
+    @apply w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition
+    focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10
+    dark:border-slate-700 dark:bg-[#020817] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:focus:ring-blue-500/20;
+  }
+
+  .textarea {
+    @apply min-h-[100px];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-950/20 transition
+    hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50
+    dark:bg-blue-600 dark:hover:bg-blue-500;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 transition
+    hover:bg-slate-100
+    dark:border-slate-700 dark:bg-[#111827] dark:text-slate-100 dark:hover:bg-slate-800;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-red-700;
+  }
+
+  .table-modern {
+    @apply w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-sm shadow-sm
+    dark:border-slate-800 dark:bg-[#0b1220];
+  }
+
+  .badge {
+    @apply inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-slate-600
+    dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200;
+  }
+
+  .section-title {
+    @apply text-lg font-black text-slate-950 dark:text-white;
+  }
+
+  .section-subtitle {
+    @apply text-sm leading-6 text-slate-500 dark:text-slate-400;
+  }
+
+  .field-label {
+    @apply mb-2 block text-sm font-bold text-slate-600 dark:text-slate-300;
+  }
+
+  .notice-warning {
+    @apply rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800
+    dark:text-amber-200;
+  }
+
+  .notice-danger {
+    @apply rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-800
+    dark:text-red-200;
+  }
 }
