@@ -44,20 +44,26 @@ export default function RolesPage() {
   const loadRole = async (roleId: string) => {
     setLoading(true);
 
-    const snap = await getDoc(doc(db, "roles", roleId));
+    try {
+      const snap = await getDoc(doc(db, "roles", roleId));
 
-    if (!snap.exists()) {
-      alert("Role not found");
+      if (!snap.exists()) {
+        alert("Role not found");
+        setLoading(false);
+        return;
+      }
+
+      const data = snap.data();
+
+      setSelectedRoleId(roleId);
+      setRoleName(roleId);
+      setPermissions(normalizePermissions(data.permissions || {}));
+    } catch (error) {
+      console.error(error);
+      alert("Failed to load role.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const data = snap.data();
-
-    setSelectedRoleId(roleId);
-    setRoleName(roleId);
-    setPermissions(normalizePermissions(data.permissions || {}));
-    setLoading(false);
   };
 
   const startNew = () => {
@@ -131,25 +137,59 @@ export default function RolesPage() {
   const applyDispatchPreset = () => {
     const next = normalizePermissions({});
 
+    // Call Intake
     setPermissionSafe(next, "call_intake", "view", true);
     setPermissionSafe(next, "call_intake", "create", true);
+    setPermissionSafe(next, "call_intake", "project_case", true);
+    setPermissionSafe(next, "call_intake", "b2c_case", true);
 
+    // B2C Requests
     setPermissionSafe(next, "b2c_requests", "view", true);
+    setPermissionSafe(next, "b2c_requests", "view_all", true);
+    setPermissionSafe(next, "b2c_requests", "view_assigned", true);
     setPermissionSafe(next, "b2c_requests", "create", true);
+    setPermissionSafe(next, "b2c_requests", "edit", true);
     setPermissionSafe(next, "b2c_requests", "update", true);
+    setPermissionSafe(next, "b2c_requests", "confirm_payment", true);
+    setPermissionSafe(next, "b2c_requests", "change_team", true);
     setPermissionSafe(next, "b2c_requests", "activate_cad", true);
+    setPermissionSafe(next, "b2c_requests", "cancel", true);
 
+    // Old B2C compatibility
+    setPermissionSafe(next, "b2c_cases", "view", true);
+    setPermissionSafe(next, "b2c_cases", "create", true);
+    setPermissionSafe(next, "b2c_cases", "confirm_payment", true);
+    setPermissionSafe(next, "b2c_cases", "assign", true);
+
+    // CAD Cases
     setPermissionSafe(next, "cases", "view", true);
+    setPermissionSafe(next, "cases", "view_all", true);
     setPermissionSafe(next, "cases", "create", true);
-    setPermissionSafe(next, "cases", "update", true);
+    setPermissionSafe(next, "cases", "edit", true);
+    setPermissionSafe(next, "cases", "assign", true);
+    setPermissionSafe(next, "cases", "update_status", true);
+    setPermissionSafe(next, "cases", "close", true);
 
+    // CAD workspace
+    setPermissionSafe(next, "cad", "view", true);
+    setPermissionSafe(next, "cad", "dispatch", true);
+    setPermissionSafe(next, "cad", "manage_status", true);
+    setPermissionSafe(next, "cad", "view_timeline", true);
+    setPermissionSafe(next, "cad", "internal_chat", true);
+
+    // Missions
     setPermissionSafe(next, "missions", "view", true);
+    setPermissionSafe(next, "missions", "view_assigned", true);
 
+    // Dashboards
+    setPermissionSafe(next, "dashboards", "view", true);
     setPermissionSafe(next, "dashboards", "timeline", true);
     setPermissionSafe(next, "dashboards", "epcr", true);
 
+    // Resources needed by dispatcher
     setPermissionSafe(next, "ambulances", "view", true);
     setPermissionSafe(next, "projects", "view", true);
+    setPermissionSafe(next, "destinations", "view", true);
     setPermissionSafe(next, "location_picker", "view", true);
 
     setPermissions(next);
@@ -158,17 +198,27 @@ export default function RolesPage() {
   const applyParamedicPreset = () => {
     const next = normalizePermissions({});
 
+    // Paramedic should see assigned missions and update mission status
     setPermissionSafe(next, "missions", "view", true);
-    setPermissionSafe(next, "missions", "update", true);
+    setPermissionSafe(next, "missions", "view_assigned", true);
+    setPermissionSafe(next, "missions", "acknowledge", true);
+    setPermissionSafe(next, "missions", "update_status", true);
+    setPermissionSafe(next, "missions", "report", true);
 
+    // Paramedic can view upcoming assigned B2C requests only
     setPermissionSafe(next, "b2c_requests", "view", true);
+    setPermissionSafe(next, "b2c_requests", "view_assigned", true);
 
+    // Paramedic can view/update own CAD cases
     setPermissionSafe(next, "cases", "view", true);
-    setPermissionSafe(next, "cases", "update", true);
+    setPermissionSafe(next, "cases", "view_own", true);
+    setPermissionSafe(next, "cases", "update_status", true);
 
+    // ePCR
     setPermissionSafe(next, "epcr", "view", true);
     setPermissionSafe(next, "epcr", "create", true);
-    setPermissionSafe(next, "epcr", "update", true);
+    setPermissionSafe(next, "epcr", "edit", true);
+    setPermissionSafe(next, "epcr", "finalize", true);
 
     setPermissionSafe(next, "location_picker", "view", true);
 
@@ -185,30 +235,36 @@ export default function RolesPage() {
 
     setSaving(true);
 
-    const ref = doc(db, "roles", cleanRoleName);
-    const exists = (await getDoc(ref)).exists();
+    try {
+      const ref = doc(db, "roles", cleanRoleName);
+      const exists = (await getDoc(ref)).exists();
 
-    const payload = {
-      name: cleanRoleName,
-      permissions: normalizePermissions(permissions),
-      updatedAt: serverTimestamp(),
-    };
+      const payload = {
+        name: cleanRoleName,
+        permissions: normalizePermissions(permissions),
+        updatedAt: serverTimestamp(),
+      };
 
-    if (exists) {
-      await updateDoc(ref, payload);
-      alert("Role updated!");
-    } else {
-      await setDoc(ref, {
-        ...payload,
-        createdAt: serverTimestamp(),
-      });
-      alert("Role created!");
+      if (exists) {
+        await updateDoc(ref, payload);
+        alert("Role updated!");
+      } else {
+        await setDoc(ref, {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        alert("Role created!");
+      }
+
+      setSelectedRoleId(cleanRoleName);
+      setRoleName(cleanRoleName);
+      await loadRoles();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save role.");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    setSelectedRoleId(cleanRoleName);
-    setRoleName(cleanRoleName);
-    await loadRoles();
   };
 
   const deleteRoleHandler = async () => {
@@ -216,11 +272,16 @@ export default function RolesPage() {
 
     if (!confirm(`Delete role "${selectedRoleId}"?`)) return;
 
-    await deleteDoc(doc(db, "roles", selectedRoleId));
-    alert("Role deleted!");
+    try {
+      await deleteDoc(doc(db, "roles", selectedRoleId));
+      alert("Role deleted!");
 
-    startNew();
-    await loadRoles();
+      startNew();
+      await loadRoles();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete role.");
+    }
   };
 
   const filteredGroups = useMemo(() => {
@@ -431,7 +492,9 @@ export default function RolesPage() {
                         <div className="mb-3 flex gap-2">
                           <button
                             type="button"
-                            onClick={() => setModulePermissions(moduleKey, true)}
+                            onClick={() =>
+                              setModulePermissions(moduleKey, true)
+                            }
                             className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             Select all

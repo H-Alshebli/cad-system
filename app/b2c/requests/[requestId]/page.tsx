@@ -18,6 +18,8 @@ import {
 
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import { can } from "@/lib/can";
 import {
   canCreateCadCase,
   createCadCaseFromB2CRequest,
@@ -33,7 +35,52 @@ export default function B2CRequestDetailsPage({
   const router = useRouter();
   const requestId = params.requestId;
 
-  const { user } = useCurrentUser();
+  const { user, loading: userLoading } = useCurrentUser();
+
+  const roleRaw = String(user?.role || "").trim();
+  const role = roleRaw.toLowerCase();
+
+  // IMPORTANT:
+  // Use roleRaw here because Firestore role document is "Dispatcher",
+  // not "dispatcher".
+  const { permissions, loading: permissionsLoading } = usePermissions(roleRaw);
+
+  const isAdmin =
+    role === "admin" || role === "super_admin" || role === "superadmin";
+
+  const canViewB2CRequest =
+    isAdmin ||
+    can(permissions, "b2c_requests", "view") ||
+    can(permissions, "b2c_requests", "view_all") ||
+    can(permissions, "b2c_requests", "view_assigned");
+
+  const canEditB2CRequest =
+    isAdmin ||
+    can(permissions, "b2c_requests", "edit") ||
+    can(permissions, "b2c_requests", "update");
+
+  const canConfirmB2CPayment =
+    isAdmin || can(permissions, "b2c_requests", "confirm_payment");
+
+  const canChangeB2CTeam =
+    isAdmin || can(permissions, "b2c_requests", "change_team");
+
+  const canActivateB2CCad =
+    isAdmin || can(permissions, "b2c_requests", "activate_cad");
+
+  const isDispatch =
+    isAdmin ||
+    canEditB2CRequest ||
+    canConfirmB2CPayment ||
+    canChangeB2CTeam ||
+    canActivateB2CCad;
+
+  const isParamedic =
+    role === "paramedic" ||
+    role === "emt" ||
+    role === "medical" ||
+    role === "crew" ||
+    can(permissions, "missions", "view_assigned");
 
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +92,7 @@ export default function B2CRequestDetailsPage({
   const [users, setUsers] = useState<any[]>([]);
 
   const [editForm, setEditForm] = useState<any>({
+    requestType: "",
     customerName: "",
     customerMobile: "",
     patientName: "",
@@ -82,22 +130,6 @@ export default function B2CRequestDetailsPage({
     assignedTeamGroup: "",
     assignedUserIds: [] as string[],
   });
-
-  const role = user?.role || "";
-
-  const isAdmin = role === "admin";
-  const isDispatch =
-    isAdmin ||
-    role === "dispatch" ||
-    role === "dispatcher" ||
-    role === "control_room" ||
-    role === "operations";
-
-  const isParamedic =
-    role === "paramedic" ||
-    role === "emt" ||
-    role === "medical" ||
-    role === "crew";
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "b2cRequests", requestId), (snap) => {
@@ -142,6 +174,7 @@ export default function B2CRequestDetailsPage({
     if (!request) return;
 
     setEditForm({
+      requestType: request.requestType || "",
       customerName: request.customerName || "",
       customerMobile: request.customerMobile || "",
       patientName: request.patientName || "",
@@ -178,9 +211,7 @@ export default function B2CRequestDetailsPage({
       unitName: request.plannedAssignment?.unitName || "",
       unitTypeName: request.plannedAssignment?.unitTypeName || "",
       assignedTeamGroup: request.plannedAssignment?.assignedTeamGroup || "",
-      assignedUserIds: Array.isArray(
-        request.plannedAssignment?.assignedUserIds
-      )
+      assignedUserIds: Array.isArray(request.plannedAssignment?.assignedUserIds)
         ? request.plannedAssignment.assignedUserIds
         : [],
     });
@@ -190,6 +221,22 @@ export default function B2CRequestDetailsPage({
     () => ambulances.find((a) => a.id === assignment.unitId),
     [ambulances, assignment.unitId]
   );
+
+  const cadReady = request ? canCreateCadCase(request) : false;
+  const withinOneHour = request ? isWithinOneHour(request) : false;
+
+  const canEditRequest =
+    Boolean(request) &&
+    !request?.cadCaseId &&
+    (canEditB2CRequest || canConfirmB2CPayment || canChangeB2CTeam);
+
+  const canCreateCad =
+    Boolean(request) &&
+    !request?.cadCaseId &&
+    cadReady &&
+    canActivateB2CCad;
+
+  const canOpenCad = Boolean(request?.cadCaseId);
 
   function getAmbulanceTeamIds(ambulance: any): string[] {
     if (!ambulance) return [];
@@ -232,9 +279,7 @@ export default function B2CRequestDetailsPage({
   }
 
   function getUserDisplayName(userId: string) {
-    const matchedUser = users.find(
-      (u) => u.uid === userId || u.id === userId
-    );
+    const matchedUser = users.find((u) => u.uid === userId || u.id === userId);
 
     if (matchedUser) {
       return (
@@ -276,7 +321,12 @@ export default function B2CRequestDetailsPage({
   }
 
   async function handleSaveEdit() {
-    if (!request || !isDispatch) return;
+    if (!request) return;
+
+    if (!canEditRequest) {
+      alert("You do not have permission to edit this B2C request.");
+      return;
+    }
 
     if (
       !editForm.customerName ||
@@ -335,7 +385,12 @@ export default function B2CRequestDetailsPage({
   }
 
   async function handleCreateCad() {
-    if (!request || !isDispatch) return;
+    if (!request) return;
+
+    if (!canActivateB2CCad) {
+      alert("You do not have permission to create CAD case.");
+      return;
+    }
 
     setCreatingCad(true);
 
@@ -354,10 +409,32 @@ export default function B2CRequestDetailsPage({
     }
   }
 
-  if (loading) {
+  console.log("B2C Permission Debug:", {
+    userRoleFromUserDocument: user?.role,
+    roleRawUsedForFirestoreRoleDoc: roleRaw,
+    normalizedRoleForChecks: role,
+    permissionsLoading,
+    b2cPermissions: permissions?.b2c_requests,
+    canViewB2CRequest,
+    canEditB2CRequest,
+    canConfirmB2CPayment,
+    canChangeB2CTeam,
+    canActivateB2CCad,
+    isDispatch,
+  });
+
+  if (userLoading || loading) {
     return (
       <div className="page-shell">
         <div className="card-modern">Loading request...</div>
+      </div>
+    );
+  }
+
+  if (permissionsLoading) {
+    return (
+      <div className="page-shell">
+        <div className="card-modern">Loading permissions...</div>
       </div>
     );
   }
@@ -370,12 +447,15 @@ export default function B2CRequestDetailsPage({
     );
   }
 
-  const cadReady = canCreateCadCase(request);
-  const withinOneHour = isWithinOneHour(request);
-
-  const canEditRequest = isDispatch && !request.cadCaseId;
-  const canCreateCad = isDispatch && !request.cadCaseId && cadReady;
-  const canOpenCad = !!request.cadCaseId;
+  if (!canViewB2CRequest) {
+    return (
+      <div className="page-shell">
+        <div className="card-modern text-red-500">
+          You do not have permission to view this B2C request.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell">
@@ -507,6 +587,12 @@ export default function B2CRequestDetailsPage({
           <Section title="Trip Details" icon={<MapPin size={18} />}>
             {editMode ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditSelect
+                  label="Request Type"
+                  value={editForm.requestType}
+                  onChange={(v) => updateEditField("requestType", v)}
+                  options={["Scheduled", "Immediate"]}
+                />
                 <EditInput
                   label="Transport Date / Time"
                   type="datetime-local"
@@ -587,10 +673,7 @@ export default function B2CRequestDetailsPage({
                   label="Transport Level"
                   value={editForm.transportLevel}
                   onChange={(v) => updateEditField("transportLevel", v)}
-                  options={[
-                    "BLS - Stable",
-                    "ALS - Advanced Medical Support",
-                  ]}
+                  options={["BLS - Stable", "ALS - Advanced Medical Support"]}
                 />
                 <EditSelect
                   label="Mobility"
@@ -708,9 +791,7 @@ export default function B2CRequestDetailsPage({
                 <EditSelect
                   label="Customer Approved Price"
                   value={editForm.customerApprovedPrice}
-                  onChange={(v) =>
-                    updateEditField("customerApprovedPrice", v)
-                  }
+                  onChange={(v) => updateEditField("customerApprovedPrice", v)}
                   options={["No", "Yes - Send Payment Link"]}
                 />
                 <EditInput
@@ -829,7 +910,7 @@ export default function B2CRequestDetailsPage({
                 Open CAD Case
                 <ArrowRight size={16} />
               </button>
-            ) : isDispatch ? (
+            ) : canCreateCad ? (
               <button
                 className="btn-primary mt-4 w-full"
                 disabled={!cadReady || creatingCad || editMode}
@@ -839,8 +920,8 @@ export default function B2CRequestDetailsPage({
               </button>
             ) : (
               <div className="notice-warning mt-4">
-                CAD is not active yet. Dispatch must create CAD before you can
-                start the mission.
+                CAD is not active yet or you do not have permission to create
+                CAD.
               </div>
             )}
           </Section>
