@@ -69,7 +69,6 @@ export default function NewB2CCasePage() {
   const [users, setUsers] = useState<any[]>([]);
 
   const [form, setForm] = useState({
-    // Call intake and eligibility
     callNumber: "",
     callDateTime: new Date().toISOString(),
     coordinatorName: "",
@@ -78,7 +77,6 @@ export default function NewB2CCasePage() {
     requestType: "Immediate",
     requestedTransportAt: "",
 
-    // Patient and trip details
     customerName: "",
     customerMobile: "",
     patientName: "",
@@ -96,7 +94,6 @@ export default function NewB2CCasePage() {
     destinationMapLink: "",
     destinationFloor: "Ground Floor",
 
-    // Clinical screening
     patientStability: "Conscious and Stable",
     transportLevel: "BLS - Stable",
     mobility: "Walking",
@@ -104,12 +101,10 @@ export default function NewB2CCasePage() {
     diagnosisOrReason: "",
     hasMedicalReport: "No",
 
-    // Operational screening
     operationalDecision: "Approved - Proceed to Pricing",
     rejectionReason: "",
     operationalNotes: "",
 
-    // Pricing and payment
     price: "",
     customerApprovedPrice: "No",
     hasWaitingHours: "No",
@@ -118,7 +113,6 @@ export default function NewB2CCasePage() {
     paymentLinkSentAt: "",
     paymentStatus: "Pending",
 
-    // Booking confirmation
     bookingConfirmationNumber: "",
     customerContactBeforeTrip: "",
     contactPersonName: "",
@@ -126,7 +120,6 @@ export default function NewB2CCasePage() {
     relationToPatient: "",
     notes: "",
 
-    // Compatibility with existing case structure
     serviceType: "Ambulance Transportation",
     chiefComplaint: "",
     requestedAt: "",
@@ -166,6 +159,83 @@ export default function NewB2CCasePage() {
 
   const isRejected = form.operationalDecision.startsWith("Rejected");
   const isEmergencyRefer997 = form.isEmergency === "Yes - Refer to 997";
+
+function getAmbulanceTeamIds(ambulance: any): string[] {
+  if (!ambulance) return [];
+
+  if (Array.isArray(ambulance.assignedUserIds)) {
+    return ambulance.assignedUserIds.filter(Boolean);
+  }
+
+  if (Array.isArray(ambulance.crewUserIds)) {
+    return ambulance.crewUserIds.filter(Boolean);
+  }
+
+  if (Array.isArray(ambulance.teamUserIds)) {
+    return ambulance.teamUserIds.filter(Boolean);
+  }
+
+  if (Array.isArray(ambulance.crewMembers)) {
+    return ambulance.crewMembers
+      .map((member: any) =>
+        typeof member === "string"
+          ? member
+          : member.userId || member.uid || member.id
+      )
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(ambulance.teamMembers)) {
+    return ambulance.teamMembers
+      .map((member: any) =>
+        typeof member === "string"
+          ? member
+          : member.userId || member.uid || member.id
+      )
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getAmbulanceTeamGroup(ambulance: any): string {
+  if (!ambulance) return "";
+
+  return (
+    ambulance.assignedTeamGroup ||
+    ambulance.teamGroup ||
+    ambulance.teamName ||
+    ambulance.groupName ||
+    `${ambulance.code || ambulance.name || "Ambulance"} Team`
+  );
+}
+function getUserDisplayName(userId: string) {
+  const user = users.find((u) => u.uid === userId || u.id === userId);
+
+  if (user) {
+    return user.name || user.displayName || user.fullName || user.email || userId;
+  }
+
+  const crewMember = selectedAmbulance?.crewMembers?.find(
+    (member: any) => member.userId === userId || member.uid === userId || member.id === userId
+  );
+
+  return crewMember?.name || crewMember?.email || userId;
+}
+
+  function handleAmbulanceChange(unitId: string) {
+    const ambulance = ambulances.find((a) => a.id === unitId);
+
+    const assignedUserIds = getAmbulanceTeamIds(ambulance);
+    const assignedTeamGroup = getAmbulanceTeamGroup(ambulance);
+
+    setAssignment({
+      unitType: "ambulance",
+      unitId,
+      assignedTeamGroup,
+      assignedUserIds,
+    });
+  }
 
   function updateField(name: string, value: string) {
     setForm((prev) => {
@@ -223,6 +293,18 @@ export default function NewB2CCasePage() {
       return;
     }
 
+    if (!assignment.unitId) {
+      alert("Please select the planned ambulance/unit.");
+      return;
+    }
+
+    if (assignment.assignedUserIds.length === 0) {
+      alert(
+        "The selected ambulance has no team linked to it. Please update the ambulance profile or select another ambulance."
+      );
+      return;
+    }
+
     if (isEmergencyRefer997) {
       alert(
         "This request is marked as emergency. The instruction is to refer the caller to 997 and close the request."
@@ -251,6 +333,11 @@ export default function NewB2CCasePage() {
             selectedAmbulance?.name ||
             assignment.unitId ||
             "",
+          unitName: selectedAmbulance?.name || "",
+          unitTypeName:
+            selectedAmbulance?.type ||
+            selectedAmbulance?.vehicleType ||
+            "Ambulance",
         },
       });
 
@@ -265,7 +352,6 @@ export default function NewB2CCasePage() {
 
   return (
     <div className="page-shell">
-      {/* Header */}
       <div className="page-header">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-950/20">
@@ -289,9 +375,7 @@ export default function NewB2CCasePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-        {/* Main Form */}
         <div className="space-y-5">
-          {/* Section 1 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<ClipboardCheck size={20} />}
@@ -371,7 +455,6 @@ export default function NewB2CCasePage() {
             )}
           </section>
 
-          {/* Section 2 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<UserRound size={20} />}
@@ -556,7 +639,6 @@ export default function NewB2CCasePage() {
             </div>
           </section>
 
-          {/* Section 3 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<Activity size={20} />}
@@ -655,7 +737,6 @@ export default function NewB2CCasePage() {
             </Field>
           </section>
 
-          {/* Section 4 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<ClipboardCheck size={20} />}
@@ -702,7 +783,6 @@ export default function NewB2CCasePage() {
             </Field>
           </section>
 
-          {/* Section 5 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<CreditCard size={20} />}
@@ -816,7 +896,6 @@ export default function NewB2CCasePage() {
             </div>
           </section>
 
-          {/* Section 6 */}
           <section className="card-modern space-y-5">
             <SectionTitle
               icon={<CheckCircle2 size={20} />}
@@ -897,13 +976,12 @@ export default function NewB2CCasePage() {
           </section>
         </div>
 
-        {/* Right Panel */}
         <aside className="space-y-5">
           <div className="card-modern sticky top-5">
             <SectionTitle
               icon={<Ambulance size={20} />}
-              title="Planned Team Assignment"
-              subtitle="This is a pre-assignment for the request. It will be copied to the CAD case when CAD is created."
+              title="Planned Ambulance & Team"
+              subtitle="Select the ambulance. The assigned team will be loaded automatically from the ambulance profile."
             />
 
             <div className="mt-5 space-y-4">
@@ -911,9 +989,7 @@ export default function NewB2CCasePage() {
                 <select
                   className="select"
                   value={assignment.unitId}
-                  onChange={(e) =>
-                    setAssignment((p) => ({ ...p, unitId: e.target.value }))
-                  }
+                  onChange={(e) => handleAmbulanceChange(e.target.value)}
                 >
                   <option value="">Select ambulance</option>
 
@@ -925,50 +1001,82 @@ export default function NewB2CCasePage() {
                 </select>
               </Field>
 
-              <Field label="Teams Group / Team Name">
-                <input
-                  className="input"
-                  value={assignment.assignedTeamGroup}
-                  onChange={(e) =>
-                    setAssignment((p) => ({
-                      ...p,
-                      assignedTeamGroup: e.target.value,
-                    }))
-                  }
-                  placeholder="Example: BLS 140 Team"
+              {selectedAmbulance ? (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
+                    Selected Ambulance
+                  </div>
+
+                  <div className="text-lg font-black text-slate-950 dark:text-white">
+                    {selectedAmbulance.code ||
+                      selectedAmbulance.name ||
+                      selectedAmbulance.id}
+                  </div>
+
+                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {selectedAmbulance.type ||
+                      selectedAmbulance.vehicleType ||
+                      "Ambulance"}
+                  </div>
+                </div>
+              ) : (
+                <Notice
+                  type="warning"
+                  title="No ambulance selected"
+                  message="Select an ambulance to load the assigned team."
                 />
-              </Field>
+              )}
 
-              <Field label="Assigned Paramedics">
-                <select
-                  className="select min-h-[150px]"
-                  multiple
-                  value={assignment.assignedUserIds}
-                  onChange={(e) =>
-                    setAssignment((p) => ({
-                      ...p,
-                      assignedUserIds: Array.from(
-                        e.target.selectedOptions
-                      ).map((o) => o.value),
-                    }))
-                  }
-                >
-                  {users.map((u) => (
-                    <option key={u.uid} value={u.uid}>
-                      {u.name || u.email || u.uid}
-                    </option>
-                  ))}
-                </select>
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
+                  Team Assigned to Ambulance
+                </div>
 
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Hold Ctrl to select multiple users.
-                </p>
-              </Field>
+                {assignment.assignedTeamGroup ? (
+                  <div className="mb-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-700 dark:text-blue-300">
+                    {assignment.assignedTeamGroup}
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-200">
+                    No team group is linked to this ambulance.
+                  </div>
+                )}
+
+                {assignment.assignedUserIds.length > 0 ? (
+                  <div className="space-y-2">
+                    {assignment.assignedUserIds.map((userId) => (
+                      <div
+                        key={userId}
+                        className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#0b1220]"
+                      >
+                        <div>
+                          <div className="text-sm font-black text-slate-950 dark:text-white">
+                            {getUserDisplayName(userId)}
+                          </div>
+
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {userId}
+                          </div>
+                        </div>
+
+                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300">
+                          Assigned
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-200">
+                    No paramedics are linked to this ambulance. Please update
+                    the ambulance profile or select another unit.
+                  </div>
+                )}
+              </div>
 
               <Notice
                 type="warning"
                 title="This does not create CAD yet"
-                message="The team assignment is saved inside the B2C request. When CAD is created from the request page, this assignment will be copied to the CAD case."
+                message="This request will be visible as an upcoming request for the planned team. When CAD is created, the same ambulance and team will be copied to the CAD case."
               />
             </div>
           </div>
@@ -982,12 +1090,12 @@ export default function NewB2CCasePage() {
 
             <ol className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
               <li>1. Dispatcher creates B2C request.</li>
-              <li>2. Request opens in B2C Request Details page.</li>
-              <li>3. Payment and approval are confirmed.</li>
-              <li>4. Dispatcher manually clicks Create CAD Case.</li>
-              <li>5. If not done manually, CAD will be created before trip time.</li>
-              <li>6. Planned team is copied to the CAD case.</li>
-              <li>7. Paramedic opens the active CAD mission.</li>
+              <li>2. Dispatcher selects the planned ambulance.</li>
+              <li>3. System loads the ambulance team automatically.</li>
+              <li>4. Request appears to the assigned team as Upcoming Request.</li>
+              <li>5. Dispatcher manually clicks Create CAD Case.</li>
+              <li>6. If not done manually, CAD will be created before trip time.</li>
+              <li>7. Team opens the active CAD mission.</li>
             </ol>
           </div>
         </aside>
