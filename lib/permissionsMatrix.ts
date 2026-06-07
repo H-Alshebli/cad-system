@@ -36,8 +36,33 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   ],
 
   call_intake: ["view", "create", "project_case", "b2c_case"],
+
+  // Old compatibility module.
+  // Keep it for now so old roles do not break.
   b2c_cases: ["view", "create", "confirm_payment", "assign", "cancel"],
-  missions: ["view", "view_assigned", "acknowledge", "update_status", "report"],
+
+  // New B2C Request workflow module.
+  // This is the correct module for the new request-before-CAD flow.
+  b2c_requests: [
+    "view",
+    "view_all",
+    "view_assigned",
+    "create",
+    "edit",
+    "update",
+    "confirm_payment",
+    "change_team",
+    "activate_cad",
+    "cancel",
+  ],
+
+  missions: [
+    "view",
+    "view_assigned",
+    "acknowledge",
+    "update_status",
+    "report",
+  ],
 
   epcr: [
     "view",
@@ -79,10 +104,13 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
 export const MODULE_LABELS: Record<string, string> = {
   dashboards: "Dashboards",
   projects: "Projects",
-  cases: "Cases",
+  cases: "CAD Cases",
   cad: "CAD / Dispatch",
   call_intake: "Call Intake",
+
   b2c_cases: "B2C Cases",
+  b2c_requests: "B2C Requests",
+
   missions: "My Missions",
   epcr: "ePCR",
   ambulances: "Ambulances",
@@ -101,26 +129,61 @@ export const MODULE_LABELS: Record<string, string> = {
 };
 
 export const MODULE_DESCRIPTIONS: Record<string, string> = {
-  dashboards: "Main operational, timeline, ePCR, executive, and all-data dashboards.",
-  projects: "Project list, project creation, editing, assignment, and archiving.",
-  cases: "Case records, case creation, case assignment, status updates, and closure.",
-  cad: "Internal dispatch workspace, status control, timeline, and internal case chat.",
-  call_intake: "Dispatcher intake screen for project and B2C calls.",
-  b2c_cases: "Individual customer requests, payment confirmation, and dispatch readiness.",
-  missions: "Assigned cases for paramedics and field teams.",
-  epcr: "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
-  ambulances: "Ambulance list, creation, editing, project assignment, and archiving.",
-  destinations: "Hospitals and destination locations used during Transporting.",
+  dashboards:
+    "Main operational, timeline, ePCR, executive, and all-data dashboards.",
+
+  projects:
+    "Project list, project creation, editing, assignment, and archiving.",
+
+  cases:
+    "Active CAD case records, case assignment, status updates, and closure.",
+
+  cad:
+    "Internal dispatch workspace, status control, timeline, and internal case chat.",
+
+  call_intake:
+    "Dispatcher intake screen for project calls and B2C customer calls.",
+
+  b2c_cases:
+    "Old B2C case permissions kept for compatibility with earlier system logic.",
+
+  b2c_requests:
+    "B2C request workflow before CAD activation, including payment confirmation, request editing, planned ambulance/team changes, and CAD creation.",
+
+  missions:
+    "Assigned missions for paramedics and field teams, including acknowledgement and status updates.",
+
+  epcr:
+    "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
+
+  ambulances:
+    "Ambulance list, creation, editing, project assignment, team assignment, GPS, and archiving.",
+
+  destinations:
+    "Hospitals and destination locations used during patient transportation.",
+
   clinics: "Clinic module access and management.",
+
   roaming: "Roaming units access and assignment.",
-  transport: "Transport and coverage request workflow approvals and operations.",
+
+  transport:
+    "Transport and coverage request workflow approvals and operations.",
+
   client_portal: "External client portal shell and home page.",
-  client_cases: "Client case request creation, own-case viewing, and tracking.",
+
+  client_cases:
+    "Client case request creation, own-case viewing, and tracking.",
+
   client_dashboards: "Client-safe timeline and ePCR dashboards.",
+
   reports: "Operational reports and export capabilities.",
+
   users: "User management and account activation.",
+
   roles: "Role and permission management.",
+
   settings: "System settings.",
+
   location_picker: "Location picker utility page.",
 };
 
@@ -128,38 +191,52 @@ export const ACTION_LABELS: Record<string, string> = {
   view: "View",
   view_all: "View All",
   view_own: "View Own",
+  view_assigned: "View Assigned",
+
   create: "Create",
   edit: "Edit",
+  update: "Update",
   delete: "Delete",
   archive: "Archive",
+
   assign: "Assign",
   update_status: "Update Status",
   close: "Close",
+
   dispatch: "Dispatch",
   manage_status: "Manage Status",
   view_timeline: "View Timeline",
   internal_chat: "Internal Chat",
+
   view_dashboard: "View Dashboard",
   finalize: "Finalize",
   export_pdf: "Export PDF",
   view_sensitive: "Sensitive Data",
+
   approve: "Approve",
   ops: "Operations",
   reject: "Reject",
   export: "Export",
   import: "Import",
+
   activate: "Activate",
   deactivate: "Deactivate",
+
   track: "Track",
   timeline: "Timeline",
   epcr: "ePCR",
   executive: "Executive",
   all_data: "All Data",
+
   project_case: "Project Case",
   b2c_case: "B2C Case",
+
   confirm_payment: "Confirm Payment",
+  change_team: "Change Team",
+  activate_cad: "Create / Activate CAD",
+
   cancel: "Cancel",
-  view_assigned: "View Assigned",
+
   acknowledge: "Acknowledge",
   report: "Report",
 };
@@ -167,7 +244,17 @@ export const ACTION_LABELS: Record<string, string> = {
 export const PERMISSION_GROUPS = [
   {
     title: "Operations",
-    modules: ["dashboards", "call_intake", "projects", "cases", "cad", "b2c_cases", "missions", "epcr"],
+    modules: [
+      "dashboards",
+      "call_intake",
+      "b2c_requests",
+      "projects",
+      "cases",
+      "cad",
+      "b2c_cases",
+      "missions",
+      "epcr",
+    ],
   },
   {
     title: "Resources",
@@ -188,6 +275,7 @@ export function normalizePermissions(permissions: PermissionsMap = {}) {
 
   Object.entries(PERMISSION_MATRIX).forEach(([moduleKey, actions]) => {
     normalized[moduleKey] = {};
+
     actions.forEach((action) => {
       normalized[moduleKey][action] = Boolean(
         permissions?.[moduleKey]?.[action]

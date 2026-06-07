@@ -44,6 +44,20 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { permissions, loading: permLoading } = usePermissions(role);
 
   const isAdmin = role === "admin";
+  const isDispatcher =
+    isAdmin ||
+    role === "dispatcher" ||
+    role === "dispatch" ||
+    can(permissions, "call_intake", "view") ||
+    can(permissions, "cases", "create") ||
+    can(permissions, "cases", "view");
+
+  const isParamedic =
+    role === "paramedic" ||
+    role === "emt" ||
+    role === "medical" ||
+    can(permissions, "missions", "view");
+
   const isClientPortalUser = can(permissions, "client_portal", "view");
 
   const [dark, setDark] = useState(true);
@@ -51,7 +65,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     const saved = localStorage.getItem("theme");
 
-    // Default theme is dark
     const shouldUseDark = !saved || saved === "dark";
 
     if (shouldUseDark) {
@@ -85,6 +98,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   function isActive(path: string) {
     if (path === "/dashboard") return pathname === "/dashboard";
     if (path === "/client") return pathname === "/client";
+    if (path === "/b2c/requests") {
+      return pathname === "/b2c/requests" || pathname.startsWith("/b2c/requests/");
+    }
 
     return pathname === path || pathname.startsWith(`${path}/`);
   }
@@ -137,6 +153,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   const operationsItems: NavItem[] = [
     {
+      href: "/dashboard",
+      label: "Dispatch Dashboard",
+      icon: <LayoutDashboard size={18} />,
+      visible: isAdmin || can(permissions, "dashboards", "timeline"),
+    },
+    {
       href: "/call-intake",
       label: "New Case / Call Intake",
       icon: <ClipboardPlus size={18} />,
@@ -147,10 +169,15 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         can(permissions, "client_cases", "create"),
     },
     {
-      href: "/missions",
-      label: "My Missions",
-      icon: <Stethoscope size={18} />,
-      visible: isAdmin || can(permissions, "missions", "view"),
+      href: "/b2c/requests",
+      label: "B2C Requests",
+      icon: <ClipboardList size={18} />,
+      visible:
+        isDispatcher ||
+        isAdmin ||
+        can(permissions, "b2c_requests", "view") ||
+        can(permissions, "call_intake", "view") ||
+        can(permissions, "cases", "view"),
     },
     {
       href: "/cases",
@@ -162,10 +189,10 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         can(permissions, "dashboards", "timeline"),
     },
     {
-      href: "/dashboard",
-      label: "Dispatch Dashboard",
-      icon: <LayoutDashboard size={18} />,
-      visible: isAdmin || can(permissions, "dashboards", "timeline"),
+      href: "/missions",
+      label: "My Missions",
+      icon: <Stethoscope size={18} />,
+      visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
     },
     {
       href: "/dashboard/epcr",
@@ -216,7 +243,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   if (userLoading || permLoading) {
     return (
-      <aside className="h-screen w-72 shrink-0 border-r border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-800 dark:bg-[#020817] dark:text-white">
+      <aside className="h-screen w-[288px] min-w-[288px] shrink-0 border-r border-slate-200 bg-white p-4 text-slate-900 dark:border-slate-800 dark:bg-[#020817] dark:text-white">
         <div className="h-full animate-pulse rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400">
           Loading sidebar...
         </div>
@@ -229,8 +256,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <aside className="flex h-screen w-72 shrink-0 flex-col border-r border-slate-200/70 bg-white/90 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-[#020817]/95">
-      {/* Header */}
+    <aside className="flex h-screen w-[288px] min-w-[288px] shrink-0 flex-col border-r border-slate-200/70 bg-white/90 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-[#020817]/95">
       <div className="border-b border-slate-200/70 p-4 dark:border-slate-800">
         {onClose && (
           <button
@@ -242,7 +268,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </button>
         )}
 
-        {/* Brand Box */}
         <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-slate-950">
             <img
@@ -262,7 +287,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
 
-        {/* User Box */}
         <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 text-sm font-black uppercase text-blue-700 dark:text-blue-300">
@@ -291,7 +315,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 space-y-6 overflow-y-auto p-3">
         {isClientPortalUser && (
           <div>
@@ -356,7 +379,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </nav>
 
-      {/* Footer */}
       <div className="space-y-2 border-t border-slate-200/70 p-4 dark:border-slate-800">
         <button
           onClick={toggleTheme}

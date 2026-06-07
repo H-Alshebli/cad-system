@@ -89,6 +89,19 @@ export default function RolesPage() {
     }));
   };
 
+  const setPermissionSafe = (
+    target: PermissionsMap,
+    moduleKey: string,
+    action: string,
+    value: boolean
+  ) => {
+    if (!target[moduleKey]) {
+      target[moduleKey] = {};
+    }
+
+    target[moduleKey][action] = value;
+  };
+
   const enableCommonViewPermissions = () => {
     const next = normalizePermissions(permissions);
 
@@ -104,13 +117,60 @@ export default function RolesPage() {
   const applyClientPreset = () => {
     const next = normalizePermissions({});
 
-    next.client_portal.view = true;
-    next.client_cases.view = true;
-    next.client_cases.view_own = true;
-    next.client_cases.create = true;
-    next.client_cases.track = true;
-    next.client_dashboards.timeline = true;
-    next.client_dashboards.epcr = true;
+    setPermissionSafe(next, "client_portal", "view", true);
+    setPermissionSafe(next, "client_cases", "view", true);
+    setPermissionSafe(next, "client_cases", "view_own", true);
+    setPermissionSafe(next, "client_cases", "create", true);
+    setPermissionSafe(next, "client_cases", "track", true);
+    setPermissionSafe(next, "client_dashboards", "timeline", true);
+    setPermissionSafe(next, "client_dashboards", "epcr", true);
+
+    setPermissions(next);
+  };
+
+  const applyDispatchPreset = () => {
+    const next = normalizePermissions({});
+
+    setPermissionSafe(next, "call_intake", "view", true);
+    setPermissionSafe(next, "call_intake", "create", true);
+
+    setPermissionSafe(next, "b2c_requests", "view", true);
+    setPermissionSafe(next, "b2c_requests", "create", true);
+    setPermissionSafe(next, "b2c_requests", "update", true);
+    setPermissionSafe(next, "b2c_requests", "activate_cad", true);
+
+    setPermissionSafe(next, "cases", "view", true);
+    setPermissionSafe(next, "cases", "create", true);
+    setPermissionSafe(next, "cases", "update", true);
+
+    setPermissionSafe(next, "missions", "view", true);
+
+    setPermissionSafe(next, "dashboards", "timeline", true);
+    setPermissionSafe(next, "dashboards", "epcr", true);
+
+    setPermissionSafe(next, "ambulances", "view", true);
+    setPermissionSafe(next, "projects", "view", true);
+    setPermissionSafe(next, "location_picker", "view", true);
+
+    setPermissions(next);
+  };
+
+  const applyParamedicPreset = () => {
+    const next = normalizePermissions({});
+
+    setPermissionSafe(next, "missions", "view", true);
+    setPermissionSafe(next, "missions", "update", true);
+
+    setPermissionSafe(next, "b2c_requests", "view", true);
+
+    setPermissionSafe(next, "cases", "view", true);
+    setPermissionSafe(next, "cases", "update", true);
+
+    setPermissionSafe(next, "epcr", "view", true);
+    setPermissionSafe(next, "epcr", "create", true);
+    setPermissionSafe(next, "epcr", "update", true);
+
+    setPermissionSafe(next, "location_picker", "view", true);
 
     setPermissions(next);
   };
@@ -180,7 +240,9 @@ export default function RolesPage() {
           label.toLowerCase().includes(q) ||
           description.toLowerCase().includes(q) ||
           actions.some((action) =>
-            `${action} ${ACTION_LABELS[action] || ""}`.toLowerCase().includes(q)
+            `${action} ${ACTION_LABELS[action] || ""}`
+              .toLowerCase()
+              .includes(q)
           )
         );
       }),
@@ -200,34 +262,41 @@ export default function RolesPage() {
     );
   }, []);
 
-return (
-  <PermissionGuard module="roles" action="view" showMessage={true}>
-    <div className="min-h-screen bg-[#030712] p-6 text-white">
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+  return (
+    <PermissionGuard module="roles" action="view" showMessage={true}>
+      <div className="page-shell">
+        <div className="page-header">
           <div>
-            <h1 className="text-2xl font-bold">Roles & Permissions</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Manage what each role can see and do across HCAD, CAD, ePCR,
-              resources, dashboards, and client access.
+            <div className="badge mb-3">Access Control</div>
+
+            <h1 className="page-title">Roles & Permissions</h1>
+
+            <p className="page-subtitle">
+              Manage what each role can see and do across HCAD, B2C requests,
+              CAD cases, ePCR, resources, dashboards, and client access.
             </p>
           </div>
 
-          <div className="rounded-full border border-slate-700 bg-[#111827] px-4 py-2 text-sm text-slate-300">
-            Enabled: <span className="font-semibold text-blue-300">{enabledCount}</span> / {totalCount}
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+            Enabled:{" "}
+            <span className="font-black text-blue-600 dark:text-blue-300">
+              {enabledCount}
+            </span>{" "}
+            / {totalCount}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4 shadow-sm">
+        <div className="card-modern">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[260px_1fr_auto]">
             <select
               value={selectedRoleId}
               onChange={(e) =>
                 e.target.value ? loadRole(e.target.value) : startNew()
               }
-              className="h-11 rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+              className="select"
             >
               <option value="">+ New Role</option>
+
               {roles.map((role) => (
                 <option key={role} value={role}>
                   {role}
@@ -238,32 +307,30 @@ return (
             <input
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
-              placeholder="role name, example: dispatcher / client / quality"
-              className="h-11 rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="role name, example: dispatcher / paramedic / client"
+              className="input"
             />
 
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={saveRole}
                 disabled={saving || loading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="btn-primary"
               >
-                {saving ? "Saving..." : selectedRoleId ? "Save Changes" : "Create Role"}
+                {saving
+                  ? "Saving..."
+                  : selectedRoleId
+                  ? "Save Changes"
+                  : "Create Role"}
               </button>
 
               {selectedRoleId && (
                 <>
-                  <button
-                    onClick={startNew}
-                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-                  >
+                  <button onClick={startNew} className="btn-secondary">
                     New
                   </button>
 
-                  <button
-                    onClick={deleteRoleHandler}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                  >
+                  <button onClick={deleteRoleHandler} className="btn-danger">
                     Delete
                   </button>
                 </>
@@ -275,15 +342,31 @@ return (
             <button
               type="button"
               onClick={enableCommonViewPermissions}
-              className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/5"
+              className="btn-secondary"
             >
-              Enable all View permissions
+              Enable All View
+            </button>
+
+            <button
+              type="button"
+              onClick={applyDispatchPreset}
+              className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-500/20 dark:text-blue-200"
+            >
+              Apply Dispatch Preset
+            </button>
+
+            <button
+              type="button"
+              onClick={applyParamedicPreset}
+              className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-200"
+            >
+              Apply Paramedic Preset
             </button>
 
             <button
               type="button"
               onClick={applyClientPreset}
-              className="rounded-full border border-blue-700 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-200 hover:bg-blue-500/20"
+              className="rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-2.5 text-sm font-bold text-purple-700 transition hover:bg-purple-500/20 dark:text-purple-200"
             >
               Apply Client Preset
             </button>
@@ -291,31 +374,31 @@ return (
             <button
               type="button"
               onClick={() => setPermissions(normalizePermissions({}))}
-              className="rounded-full border border-red-800 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20"
+              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-500/20 dark:text-red-200"
             >
-              Clear All Permissions
+              Clear All
             </button>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-[#111827] p-4 shadow-sm">
+        <div className="card-modern">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search modules or actions..."
-            className="h-11 w-full rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-blue-500"
+            className="input"
           />
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-slate-800 bg-[#111827] p-6 text-slate-400">
+          <div className="card-modern text-slate-500 dark:text-slate-400">
             Loading role permissions...
           </div>
         ) : (
           <div className="space-y-6">
             {filteredGroups.map((group) => (
               <section key={group.title} className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                <h2 className="text-sm font-black uppercase tracking-wide text-slate-400">
                   {group.title}
                 </h2>
 
@@ -328,21 +411,19 @@ return (
                     ).length;
 
                     return (
-                      <div
-                        key={moduleKey}
-                        className="rounded-2xl border border-slate-800 bg-[#111827] p-4 shadow-sm"
-                      >
+                      <div key={moduleKey} className="card-modern">
                         <div className="mb-4 flex items-start justify-between gap-4">
                           <div>
-                            <h3 className="font-semibold text-white">
+                            <h3 className="font-black text-slate-950 dark:text-white">
                               {MODULE_LABELS[moduleKey] || moduleKey}
                             </h3>
-                            <p className="mt-1 text-xs leading-5 text-slate-400">
+
+                            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                               {MODULE_DESCRIPTIONS[moduleKey] || ""}
                             </p>
                           </div>
 
-                          <div className="shrink-0 rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
+                          <div className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
                             {selectedCount}/{actions.length}
                           </div>
                         </div>
@@ -351,14 +432,17 @@ return (
                           <button
                             type="button"
                             onClick={() => setModulePermissions(moduleKey, true)}
-                            className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             Select all
                           </button>
+
                           <button
                             type="button"
-                            onClick={() => setModulePermissions(moduleKey, false)}
-                            className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-white/5"
+                            onClick={() =>
+                              setModulePermissions(moduleKey, false)
+                            }
+                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             Clear
                           </button>
@@ -372,19 +456,22 @@ return (
                               <button
                                 key={action}
                                 type="button"
-                                onClick={() => togglePermission(moduleKey, action)}
+                                onClick={() =>
+                                  togglePermission(moduleKey, action)
+                                }
                                 className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition ${
                                   enabled
-                                    ? "border-green-600 bg-green-500/10 text-green-200"
-                                    : "border-slate-700 bg-[#0b1220] text-slate-300 hover:border-blue-600"
+                                    ? "border-green-600 bg-green-500/10 text-green-700 dark:text-green-200"
+                                    : "border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-500 dark:border-slate-700 dark:bg-[#0b1220] dark:text-slate-300"
                                 }`}
                               >
                                 <span>{ACTION_LABELS[action] || action}</span>
+
                                 <span
                                   className={`h-4 w-4 rounded-full border ${
                                     enabled
                                       ? "border-green-500 bg-green-500"
-                                      : "border-slate-500"
+                                      : "border-slate-400"
                                   }`}
                                 />
                               </button>
@@ -400,7 +487,6 @@ return (
           </div>
         )}
       </div>
-    </div>
-  </PermissionGuard>
-);
+    </PermissionGuard>
+  );
 }

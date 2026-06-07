@@ -51,11 +51,12 @@ type Ambulance = {
   code?: string;
   location?: string;
 
-  // old compatibility
   crew?: any[];
-
-  // new recommended structure
+  crewUserIds?: string[];
   crewMembers?: CrewMember[];
+
+  assignedUserIds?: string[];
+  assignedTeamGroup?: string;
 
   status?: string;
   currentCase?: string | null;
@@ -147,6 +148,7 @@ export default function AmbulancesPage() {
         id: d.id,
         ...d.data(),
       }));
+
       setProjects(list);
     });
 
@@ -173,6 +175,7 @@ export default function AmbulancesPage() {
     };
 
     document.addEventListener("mousedown", handleClickOutside);
+
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
@@ -229,7 +232,10 @@ export default function AmbulancesPage() {
   };
 
   const addAmbulance = async () => {
-    if (!code || !location || !crewUserId1) return;
+    if (!code || !location || !crewUserId1) {
+      alert("Please enter ambulance code, location, and at least one crew member.");
+      return;
+    }
 
     const selectedProject = sortedProjects.find(
       (p) => p.id === assignedProjectId
@@ -240,17 +246,19 @@ export default function AmbulancesPage() {
       : "";
 
     const crewMembers = getSelectedCrewMembers(crewUserId1, crewUserId2);
+    const crewUserIds = crewMembers.map((m) => m.userId);
+    const assignedTeamGroup = `${code} Team`;
 
     const ambulanceRef = await addDoc(collection(db, "ambulances"), {
       code,
       location,
 
-      // new structure
       crewMembers,
-
-      // compatibility with old display/pages
       crew: crewMembers.map((m) => m.name),
-      crewUserIds: crewMembers.map((m) => m.userId),
+      crewUserIds,
+
+      assignedUserIds: crewUserIds,
+      assignedTeamGroup,
 
       status,
       currentCase: null,
@@ -264,7 +272,9 @@ export default function AmbulancesPage() {
       lat: lat ? Number(lat) : null,
       lng: lng ? Number(lng) : null,
       archived: false,
+
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
 
     await Promise.all(
@@ -290,11 +300,13 @@ export default function AmbulancesPage() {
     const confirmArchive = window.confirm(
       "Are you sure you want to archive this ambulance?"
     );
+
     if (!confirmArchive) return;
 
     await updateDoc(doc(db, "ambulances", id), {
       archived: true,
       archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
 
     setOpenMenuId(null);
@@ -306,8 +318,10 @@ export default function AmbulancesPage() {
     setEditLocation(amb.location ?? "");
 
     const oldCrewUserIds =
-      Array.isArray((amb as any).crewUserIds) && (amb as any).crewUserIds.length
-        ? (amb as any).crewUserIds
+      Array.isArray(amb.crewUserIds) && amb.crewUserIds.length
+        ? amb.crewUserIds
+        : Array.isArray(amb.assignedUserIds) && amb.assignedUserIds.length
+        ? amb.assignedUserIds
         : Array.isArray(amb.crewMembers)
         ? amb.crewMembers.map((m) => m.userId)
         : [];
@@ -327,7 +341,11 @@ export default function AmbulancesPage() {
 
   const saveEditAmbulance = async () => {
     if (!editingAmbulance) return;
-    if (!editCode || !editLocation || !editCrewUserId1) return;
+
+    if (!editCode || !editLocation || !editCrewUserId1) {
+      alert("Please enter ambulance code, location, and at least one crew member.");
+      return;
+    }
 
     const selectedProject = sortedProjects.find(
       (p) => p.id === editAssignedProjectId
@@ -342,16 +360,19 @@ export default function AmbulancesPage() {
       editCrewUserId2
     );
 
+    const crewUserIds = crewMembers.map((m) => m.userId);
+    const assignedTeamGroup = `${editCode} Team`;
+
     await updateDoc(doc(db, "ambulances", editingAmbulance.id), {
       code: editCode,
       location: editLocation,
 
-      // new structure
       crewMembers,
-
-      // compatibility fields
       crew: crewMembers.map((m) => m.name),
-      crewUserIds: crewMembers.map((m) => m.userId),
+      crewUserIds,
+
+      assignedUserIds: crewUserIds,
+      assignedTeamGroup,
 
       status: editStatus,
       lat: editLat ? Number(editLat) : null,
@@ -380,17 +401,25 @@ export default function AmbulancesPage() {
 
   return (
     <PermissionGuard module="ambulances" action="view" showMessage={true}>
-      <div className="p-6 bg-[#020817] min-h-screen text-white">
-        <h1 className="text-3xl font-bold mb-6">Ambulances</h1>
+      <div className="page-shell">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Ambulances</h1>
+            <p className="page-subtitle">
+              Manage ambulances, assigned projects, GPS information, and linked
+              ambulance teams.
+            </p>
+          </div>
+        </div>
 
-        <div className="mb-6 rounded-2xl border border-slate-700 bg-[#162033] p-4 shadow-lg">
-          <h2 className="text-xl font-semibold mb-4">Add New Ambulance</h2>
+        <div className="card-modern">
+          <h2 className="section-title mb-4">Add New Ambulance</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input
               type="text"
-              placeholder="Ambulance Code (e.g. AMB-003)"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              placeholder="Ambulance Code, e.g. BLS 143"
+              className="input"
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
@@ -398,13 +427,13 @@ export default function AmbulancesPage() {
             <input
               type="text"
               placeholder="Zone / Location"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="input"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
             />
 
             <select
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="select"
               value={crewUserId1}
               onChange={(e) => setCrewUserId1(e.target.value)}
             >
@@ -418,11 +447,11 @@ export default function AmbulancesPage() {
             </select>
 
             <select
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="select"
               value={crewUserId2}
               onChange={(e) => setCrewUserId2(e.target.value)}
             >
-              <option value="">Select Crew Member 2 (optional)</option>
+              <option value="">Select Crew Member 2 optional</option>
               {selectableCrewUsers
                 .filter((user) => user.id !== crewUserId1)
                 .map((user) => (
@@ -435,26 +464,26 @@ export default function AmbulancesPage() {
 
             <input
               type="number"
-              placeholder="Latitude (optional)"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              placeholder="Latitude optional"
+              className="input"
               value={lat}
               onChange={(e) => setLat(e.target.value)}
             />
 
             <input
               type="number"
-              placeholder="Longitude (optional)"
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              placeholder="Longitude optional"
+              className="input"
               value={lng}
               onChange={(e) => setLng(e.target.value)}
             />
 
             <select
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="select"
               value={assignedProjectId}
               onChange={(e) => setAssignedProjectId(e.target.value)}
             >
-              <option value="">Select Project (optional)</option>
+              <option value="">Select Project optional</option>
               {sortedProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {getProjectDisplayName(project)}
@@ -463,7 +492,7 @@ export default function AmbulancesPage() {
             </select>
 
             <select
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+              className="select"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
@@ -473,24 +502,21 @@ export default function AmbulancesPage() {
             </select>
           </div>
 
-          <button
-            onClick={addAmbulance}
-            className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 font-medium transition hover:bg-blue-700"
-          >
+          <button onClick={addAmbulance} className="btn-primary mt-4 w-full">
             Add Ambulance
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {ambulances.map((amb) => (
-            <div
-              key={amb.id}
-              className="relative rounded-2xl border border-slate-700 bg-[#0f172a] p-5 shadow-lg"
-            >
+            <div key={amb.id} className="card-modern relative">
               <div className="mb-4 flex items-start justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-white">{amb.code}</h2>
-                  <div className="mt-2 inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400">
+                  <h2 className="text-xl font-black text-slate-950 dark:text-white">
+                    {amb.code}
+                  </h2>
+
+                  <div className="mt-2 inline-flex rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-400">
                     {amb.status ?? "unknown"}
                   </div>
                 </div>
@@ -525,6 +551,7 @@ export default function AmbulancesPage() {
                               "_blank"
                             );
                           }
+
                           setOpenMenuId(null);
                         }}
                         className="mb-1 w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-800"
@@ -543,19 +570,27 @@ export default function AmbulancesPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 text-sm text-slate-300">
+              <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
                 <p>
                   <span className="text-slate-400">Zone:</span>{" "}
                   {amb.location || "—"}
                 </p>
+
                 <p>
                   <span className="text-slate-400">Crew:</span>{" "}
                   {getAmbulanceCrewDisplay(amb)}
                 </p>
+
+                <p>
+                  <span className="text-slate-400">Team Group:</span>{" "}
+                  {amb.assignedTeamGroup || "—"}
+                </p>
+
                 <p>
                   <span className="text-slate-400">Project:</span>{" "}
                   {getAmbulanceProjectName(amb)}
                 </p>
+
                 <p>
                   <span className="text-slate-400">Current Case:</span>{" "}
                   {amb.currentCase || "None"}
@@ -563,9 +598,8 @@ export default function AmbulancesPage() {
               </div>
 
               <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-                <span>
-                  {amb.lat && amb.lng ? "GPS attached" : "No GPS attached"}
-                </span>
+                <span>{amb.lat && amb.lng ? "GPS attached" : "No GPS attached"}</span>
+
                 <button
                   onClick={() => openEditModal(amb)}
                   className="rounded-lg border border-slate-600 px-3 py-1.5 text-slate-200 hover:bg-slate-800"
@@ -580,13 +614,15 @@ export default function AmbulancesPage() {
         {editingAmbulance && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-[#0f172a] p-6 shadow-2xl">
-              <h3 className="mb-4 text-2xl font-bold">Edit Ambulance</h3>
+              <h3 className="mb-4 text-2xl font-bold text-white">
+                Edit Ambulance
+              </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <input
                   type="text"
                   placeholder="Ambulance Code"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="input"
                   value={editCode}
                   onChange={(e) => setEditCode(e.target.value)}
                 />
@@ -594,13 +630,13 @@ export default function AmbulancesPage() {
                 <input
                   type="text"
                   placeholder="Zone / Location"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="input"
                   value={editLocation}
                   onChange={(e) => setEditLocation(e.target.value)}
                 />
 
                 <select
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="select"
                   value={editCrewUserId1}
                   onChange={(e) => setEditCrewUserId1(e.target.value)}
                 >
@@ -614,7 +650,7 @@ export default function AmbulancesPage() {
                 </select>
 
                 <select
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="select"
                   value={editCrewUserId2}
                   onChange={(e) => setEditCrewUserId2(e.target.value)}
                 >
@@ -632,7 +668,7 @@ export default function AmbulancesPage() {
                 <input
                   type="number"
                   placeholder="Latitude"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="input"
                   value={editLat}
                   onChange={(e) => setEditLat(e.target.value)}
                 />
@@ -640,13 +676,13 @@ export default function AmbulancesPage() {
                 <input
                   type="number"
                   placeholder="Longitude"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="input"
                   value={editLng}
                   onChange={(e) => setEditLng(e.target.value)}
                 />
 
                 <select
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="select"
                   value={editAssignedProjectId}
                   onChange={(e) => setEditAssignedProjectId(e.target.value)}
                 >
@@ -659,7 +695,7 @@ export default function AmbulancesPage() {
                 </select>
 
                 <select
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white"
+                  className="select"
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
                 >
@@ -672,14 +708,12 @@ export default function AmbulancesPage() {
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => setEditingAmbulance(null)}
-                  className="rounded-xl border border-slate-600 px-4 py-2 text-slate-200 hover:bg-slate-800"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={saveEditAmbulance}
-                  className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-                >
+
+                <button onClick={saveEditAmbulance} className="btn-primary">
                   Save Changes
                 </button>
               </div>

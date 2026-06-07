@@ -1,23 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import {
   Ambulance,
   ArrowRight,
   CalendarClock,
   CreditCard,
+  Edit3,
   MapPin,
+  Save,
   ShieldCheck,
   UserRound,
+  X,
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import {
   canCreateCadCase,
   createCadCaseFromB2CRequest,
   isWithinOneHour,
+  updateB2CRequest,
 } from "@/lib/b2cRequests";
 
 export default function B2CRequestDetailsPage({
@@ -28,9 +33,71 @@ export default function B2CRequestDetailsPage({
   const router = useRouter();
   const requestId = params.requestId;
 
+  const { user } = useCurrentUser();
+
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creatingCad, setCreatingCad] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+
+  const [editForm, setEditForm] = useState<any>({
+    customerName: "",
+    customerMobile: "",
+    patientName: "",
+    patientAge: "",
+    patientGender: "",
+    patientIdOrIqama: "",
+    requestedTransportAt: "",
+    pickupText: "",
+    pickupMapLink: "",
+    pickupFloor: "",
+    destinationText: "",
+    destinationMapLink: "",
+    destinationFloor: "",
+    patientStability: "",
+    transportLevel: "",
+    mobility: "",
+    diagnosisOrReason: "",
+    operationalDecision: "",
+    rejectionReason: "",
+    operationalNotes: "",
+    price: "",
+    payer: "",
+    paymentStatus: "Pending",
+    customerApprovedPrice: "",
+    paymentLinkSentAt: "",
+    bookingConfirmationNumber: "",
+  });
+
+  const [assignment, setAssignment] = useState({
+    unitType: "ambulance",
+    unitId: "",
+    unitCode: "",
+    unitName: "",
+    unitTypeName: "",
+    assignedTeamGroup: "",
+    assignedUserIds: [] as string[],
+  });
+
+  const role = user?.role || "";
+
+  const isAdmin = role === "admin";
+  const isDispatch =
+    isAdmin ||
+    role === "dispatch" ||
+    role === "dispatcher" ||
+    role === "control_room" ||
+    role === "operations";
+
+  const isParamedic =
+    role === "paramedic" ||
+    role === "emt" ||
+    role === "medical" ||
+    role === "crew";
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "b2cRequests", requestId), (snap) => {
@@ -40,20 +107,244 @@ export default function B2CRequestDetailsPage({
         return;
       }
 
-      setRequest({ id: snap.id, ...snap.data() });
+      const data = { id: snap.id, ...snap.data() };
+      setRequest(data);
       setLoading(false);
     });
 
     return () => unsub();
   }, [requestId]);
 
-  async function handleCreateCad() {
+  useEffect(() => {
+    const unsubAmb = onSnapshot(collection(db, "ambulances"), (snap) => {
+      setAmbulances(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((a: any) => a.archived !== true)
+      );
+    });
+
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+      setUsers(
+        snap.docs
+          .map((d) => ({ id: d.id, uid: d.id, ...d.data() }))
+          .filter((u: any) => u.active !== false && u.archived !== true)
+      );
+    });
+
+    return () => {
+      unsubAmb();
+      unsubUsers();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!request) return;
+
+    setEditForm({
+      customerName: request.customerName || "",
+      customerMobile: request.customerMobile || "",
+      patientName: request.patientName || "",
+      patientAge: request.patientAge || "",
+      patientGender: request.patientGender || "",
+      patientIdOrIqama: request.patientIdOrIqama || "",
+      requestedTransportAt: request.requestedTransportAt || "",
+      pickupText: request.pickupText || "",
+      pickupMapLink: request.pickupMapLink || "",
+      pickupFloor: request.pickupFloor || "",
+      destinationText: request.destinationText || "",
+      destinationMapLink: request.destinationMapLink || "",
+      destinationFloor: request.destinationFloor || "",
+      patientStability: request.patientStability || "",
+      transportLevel: request.transportLevel || "",
+      mobility: request.mobility || "",
+      diagnosisOrReason: request.diagnosisOrReason || "",
+      operationalDecision:
+        request.operationalDecision || "Approved - Proceed to Pricing",
+      rejectionReason: request.rejectionReason || "",
+      operationalNotes: request.operationalNotes || "",
+      price: request.price || "",
+      payer: request.payer || "",
+      paymentStatus: request.paymentStatus || "Pending",
+      customerApprovedPrice: request.customerApprovedPrice || "",
+      paymentLinkSentAt: request.paymentLinkSentAt || "",
+      bookingConfirmationNumber: request.bookingConfirmationNumber || "",
+    });
+
+    setAssignment({
+      unitType: request.plannedAssignment?.unitType || "ambulance",
+      unitId: request.plannedAssignment?.unitId || "",
+      unitCode: request.plannedAssignment?.unitCode || "",
+      unitName: request.plannedAssignment?.unitName || "",
+      unitTypeName: request.plannedAssignment?.unitTypeName || "",
+      assignedTeamGroup: request.plannedAssignment?.assignedTeamGroup || "",
+      assignedUserIds: Array.isArray(
+        request.plannedAssignment?.assignedUserIds
+      )
+        ? request.plannedAssignment.assignedUserIds
+        : [],
+    });
+  }, [request]);
+
+  const selectedAmbulance = useMemo(
+    () => ambulances.find((a) => a.id === assignment.unitId),
+    [ambulances, assignment.unitId]
+  );
+
+  function getAmbulanceTeamIds(ambulance: any): string[] {
+    if (!ambulance) return [];
+
+    if (Array.isArray(ambulance.assignedUserIds)) {
+      return ambulance.assignedUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.crewUserIds)) {
+      return ambulance.crewUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.teamUserIds)) {
+      return ambulance.teamUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.crewMembers)) {
+      return ambulance.crewMembers
+        .map((member: any) =>
+          typeof member === "string"
+            ? member
+            : member.userId || member.uid || member.id
+        )
+        .filter(Boolean);
+    }
+
+    return [];
+  }
+
+  function getAmbulanceTeamGroup(ambulance: any): string {
+    if (!ambulance) return "";
+
+    return (
+      ambulance.assignedTeamGroup ||
+      ambulance.teamGroup ||
+      ambulance.teamName ||
+      ambulance.groupName ||
+      `${ambulance.code || ambulance.name || "Ambulance"} Team`
+    );
+  }
+
+  function getUserDisplayName(userId: string) {
+    const matchedUser = users.find(
+      (u) => u.uid === userId || u.id === userId
+    );
+
+    if (matchedUser) {
+      return (
+        matchedUser.name ||
+        matchedUser.displayName ||
+        matchedUser.fullName ||
+        matchedUser.email ||
+        userId
+      );
+    }
+
+    const crewMember = selectedAmbulance?.crewMembers?.find(
+      (member: any) =>
+        member.userId === userId || member.uid === userId || member.id === userId
+    );
+
+    return crewMember?.name || crewMember?.email || userId;
+  }
+
+  function handleAmbulanceChange(unitId: string) {
+    const ambulance = ambulances.find((a) => a.id === unitId);
+
+    setAssignment({
+      unitType: "ambulance",
+      unitId,
+      unitCode: ambulance?.code || ambulance?.name || unitId || "",
+      unitName: ambulance?.name || "",
+      unitTypeName: ambulance?.type || ambulance?.vehicleType || "Ambulance",
+      assignedTeamGroup: getAmbulanceTeamGroup(ambulance),
+      assignedUserIds: getAmbulanceTeamIds(ambulance),
+    });
+  }
+
+  function updateEditField(name: string, value: string) {
+    setEditForm((prev: any) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
+
+  async function handleSaveEdit() {
+    if (!request || !isDispatch) return;
+
+    if (
+      !editForm.customerName ||
+      !editForm.customerMobile ||
+      !editForm.patientName ||
+      !editForm.pickupText ||
+      !editForm.destinationText
+    ) {
+      alert(
+        "Please complete customer name, mobile, patient name, pickup, and destination."
+      );
+      return;
+    }
+
+    if (!assignment.unitId) {
+      alert("Please select the planned ambulance.");
+      return;
+    }
+
+    if (assignment.assignedUserIds.length === 0) {
+      alert(
+        "The selected ambulance has no assigned team. Please update ambulance profile or select another ambulance."
+      );
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      let requestStatus = request.requestStatus || "PendingPayment";
+
+      if (editForm.operationalDecision?.startsWith("Rejected")) {
+        requestStatus = "Rejected";
+      } else if (request.cadCaseId) {
+        requestStatus = "CadCreated";
+      } else if (editForm.paymentStatus === "Paid") {
+        requestStatus =
+          editForm.requestType === "Immediate" ? "ReadyToActivate" : "Confirmed";
+      } else {
+        requestStatus = "PendingPayment";
+      }
+
+      await updateB2CRequest(request.id, {
+        ...editForm,
+        requestStatus,
+        plannedAssignment: assignment,
+      });
+
+      setEditMode(false);
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to update request.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateCad() {
+    if (!request || !isDispatch) return;
 
     setCreatingCad(true);
 
     try {
-      const caseId = await createCadCaseFromB2CRequest(request.id, "dispatch");
+      const caseId = await createCadCaseFromB2CRequest(
+        request.id,
+        user?.uid || user?.id || "dispatch"
+      );
+
       router.push(`/cases/${caseId}`);
     } catch (error: any) {
       console.error(error);
@@ -82,32 +373,70 @@ export default function B2CRequestDetailsPage({
   const cadReady = canCreateCadCase(request);
   const withinOneHour = isWithinOneHour(request);
 
+  const canEditRequest = isDispatch && !request.cadCaseId;
+  const canCreateCad = isDispatch && !request.cadCaseId && cadReady;
+  const canOpenCad = !!request.cadCaseId;
+
   return (
     <div className="page-shell">
       <div className="page-header">
         <div>
-          <div className="badge mb-3">B2C Request</div>
+          <div className="badge mb-3">
+            {isParamedic ? "Upcoming B2C Request" : "B2C Request"}
+          </div>
 
           <h1 className="page-title">
             Request #{request.bookingConfirmationNumber || request.id}
           </h1>
 
           <p className="page-subtitle">
-            This page is for request follow-up before the CAD case becomes active.
+            This page is for request follow-up before the CAD case becomes
+            active. Dispatch can edit, confirm payment, change ambulance/team,
+            and create CAD.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {request.cadCaseId && (
+          {canOpenCad && (
             <button
               className="btn-primary"
               onClick={() => router.push(`/cases/${request.cadCaseId}`)}
             >
               Open CAD Case
+              <ArrowRight size={16} />
             </button>
           )}
 
-          {!request.cadCaseId && cadReady && (
+          {canEditRequest && !editMode && (
+            <button className="btn-secondary" onClick={() => setEditMode(true)}>
+              <Edit3 size={16} />
+              Edit Request
+            </button>
+          )}
+
+          {editMode && (
+            <>
+              <button
+                className="btn-secondary"
+                disabled={saving}
+                onClick={() => setEditMode(false)}
+              >
+                <X size={16} />
+                Cancel
+              </button>
+
+              <button
+                className="btn-primary"
+                disabled={saving}
+                onClick={handleSaveEdit}
+              >
+                <Save size={16} />
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          )}
+
+          {canCreateCad && (
             <button
               className="btn-primary"
               disabled={creatingCad}
@@ -119,43 +448,217 @@ export default function B2CRequestDetailsPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_380px]">
+      {!isDispatch && !request.cadCaseId && (
+        <div className="notice-warning">
+          This is an upcoming request only. CAD is not active yet. Operational
+          buttons will appear after Dispatch creates the CAD case.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_390px]">
         <div className="space-y-5">
           <Section title="Customer & Patient" icon={<UserRound size={18} />}>
-            <Info label="Customer Name" value={request.customerName} />
-            <Info label="Customer Mobile" value={request.customerMobile} />
-            <Info label="Patient Name" value={request.patientName} />
-            <Info label="Age" value={request.patientAge} />
-            <Info label="Gender" value={request.patientGender} />
-            <Info label="ID / Iqama" value={request.patientIdOrIqama} />
+            {editMode ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditInput
+                  label="Customer Name"
+                  value={editForm.customerName}
+                  onChange={(v) => updateEditField("customerName", v)}
+                />
+                <EditInput
+                  label="Customer Mobile"
+                  value={editForm.customerMobile}
+                  onChange={(v) => updateEditField("customerMobile", v)}
+                />
+                <EditInput
+                  label="Patient Name"
+                  value={editForm.patientName}
+                  onChange={(v) => updateEditField("patientName", v)}
+                />
+                <EditInput
+                  label="Age"
+                  value={editForm.patientAge}
+                  onChange={(v) => updateEditField("patientAge", v)}
+                />
+                <EditSelect
+                  label="Gender"
+                  value={editForm.patientGender}
+                  onChange={(v) => updateEditField("patientGender", v)}
+                  options={["Male", "Female"]}
+                />
+                <EditInput
+                  label="ID / Iqama"
+                  value={editForm.patientIdOrIqama}
+                  onChange={(v) => updateEditField("patientIdOrIqama", v)}
+                />
+              </div>
+            ) : (
+              <>
+                <Info label="Customer Name" value={request.customerName} />
+                <Info label="Customer Mobile" value={request.customerMobile} />
+                <Info label="Patient Name" value={request.patientName} />
+                <Info label="Age" value={request.patientAge} />
+                <Info label="Gender" value={request.patientGender} />
+                <Info label="ID / Iqama" value={request.patientIdOrIqama} />
+              </>
+            )}
           </Section>
 
           <Section title="Trip Details" icon={<MapPin size={18} />}>
-            <Info label="Request Type" value={request.requestType} />
-            <Info label="Transport Date / Time" value={request.requestedTransportAt} />
-            <Info label="Pickup" value={request.pickupText} />
-            <Info label="Pickup Link" value={request.pickupMapLink} />
-            <Info label="Pickup Floor" value={request.pickupFloor} />
-            <Info label="Destination" value={request.destinationText} />
-            <Info label="Destination Link" value={request.destinationMapLink} />
-            <Info label="Destination Floor" value={request.destinationFloor} />
+            {editMode ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditInput
+                  label="Transport Date / Time"
+                  type="datetime-local"
+                  value={editForm.requestedTransportAt}
+                  onChange={(v) => updateEditField("requestedTransportAt", v)}
+                />
+                <EditInput
+                  label="Pickup"
+                  value={editForm.pickupText}
+                  onChange={(v) => updateEditField("pickupText", v)}
+                />
+                <EditInput
+                  label="Pickup Link"
+                  value={editForm.pickupMapLink}
+                  onChange={(v) => updateEditField("pickupMapLink", v)}
+                />
+                <EditInput
+                  label="Pickup Floor"
+                  value={editForm.pickupFloor}
+                  onChange={(v) => updateEditField("pickupFloor", v)}
+                />
+                <EditInput
+                  label="Destination"
+                  value={editForm.destinationText}
+                  onChange={(v) => updateEditField("destinationText", v)}
+                />
+                <EditInput
+                  label="Destination Link"
+                  value={editForm.destinationMapLink}
+                  onChange={(v) => updateEditField("destinationMapLink", v)}
+                />
+                <EditInput
+                  label="Destination Floor"
+                  value={editForm.destinationFloor}
+                  onChange={(v) => updateEditField("destinationFloor", v)}
+                />
+              </div>
+            ) : (
+              <>
+                <Info label="Request Type" value={request.requestType} />
+                <Info
+                  label="Transport Date / Time"
+                  value={request.requestedTransportAt}
+                />
+                <Info label="Pickup" value={request.pickupText} />
+                <Info label="Pickup Link" value={request.pickupMapLink} />
+                <Info label="Pickup Floor" value={request.pickupFloor} />
+                <Info label="Destination" value={request.destinationText} />
+                <Info
+                  label="Destination Link"
+                  value={request.destinationMapLink}
+                />
+                <Info
+                  label="Destination Floor"
+                  value={request.destinationFloor}
+                />
+              </>
+            )}
           </Section>
 
-          <Section title="Clinical & Operational Screening" icon={<ShieldCheck size={18} />}>
-            <Info label="Patient Stability" value={request.patientStability} />
-            <Info label="Transport Level" value={request.transportLevel} />
-            <Info label="Mobility" value={request.mobility} />
-            <Info
-              label="Special Requirements"
-              value={
-                Array.isArray(request.specialRequirements)
-                  ? request.specialRequirements.join(", ")
-                  : request.specialRequirements
-              }
-            />
-            <Info label="Diagnosis / Reason" value={request.diagnosisOrReason} />
-            <Info label="Operational Decision" value={request.operationalDecision} />
-            <Info label="Rejection Reason" value={request.rejectionReason} />
+          <Section
+            title="Clinical & Operational Screening"
+            icon={<ShieldCheck size={18} />}
+          >
+            {editMode ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditSelect
+                  label="Patient Stability"
+                  value={editForm.patientStability}
+                  onChange={(v) => updateEditField("patientStability", v)}
+                  options={[
+                    "Conscious and Stable",
+                    "Needs Monitoring",
+                    "Critical - Refer to 997",
+                  ]}
+                />
+                <EditSelect
+                  label="Transport Level"
+                  value={editForm.transportLevel}
+                  onChange={(v) => updateEditField("transportLevel", v)}
+                  options={[
+                    "BLS - Stable",
+                    "ALS - Advanced Medical Support",
+                  ]}
+                />
+                <EditSelect
+                  label="Mobility"
+                  value={editForm.mobility}
+                  onChange={(v) => updateEditField("mobility", v)}
+                  options={["Walking", "Wheelchair", "Bedridden"]}
+                />
+                <EditSelect
+                  label="Operational Decision"
+                  value={editForm.operationalDecision}
+                  onChange={(v) => updateEditField("operationalDecision", v)}
+                  options={[
+                    "Approved - Proceed to Pricing",
+                    "Escalate to Medical Director",
+                    "Rejected - Document Reason",
+                  ]}
+                />
+                <div className="md:col-span-2">
+                  <EditTextarea
+                    label="Diagnosis / Reason"
+                    value={editForm.diagnosisOrReason}
+                    onChange={(v) => updateEditField("diagnosisOrReason", v)}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <EditTextarea
+                    label="Operational Notes"
+                    value={editForm.operationalNotes}
+                    onChange={(v) => updateEditField("operationalNotes", v)}
+                  />
+                </div>
+                {editForm.operationalDecision?.startsWith("Rejected") && (
+                  <div className="md:col-span-2">
+                    <EditInput
+                      label="Rejection Reason"
+                      value={editForm.rejectionReason}
+                      onChange={(v) => updateEditField("rejectionReason", v)}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Info
+                  label="Patient Stability"
+                  value={request.patientStability}
+                />
+                <Info label="Transport Level" value={request.transportLevel} />
+                <Info label="Mobility" value={request.mobility} />
+                <Info
+                  label="Special Requirements"
+                  value={
+                    Array.isArray(request.specialRequirements)
+                      ? request.specialRequirements.join(", ")
+                      : request.specialRequirements
+                  }
+                />
+                <Info
+                  label="Diagnosis / Reason"
+                  value={request.diagnosisOrReason}
+                />
+                <Info
+                  label="Operational Decision"
+                  value={request.operationalDecision}
+                />
+                <Info label="Rejection Reason" value={request.rejectionReason} />
+              </>
+            )}
           </Section>
         </div>
 
@@ -184,33 +687,139 @@ export default function B2CRequestDetailsPage({
           </Section>
 
           <Section title="Payment" icon={<CreditCard size={18} />}>
-            <Info label="Price" value={request.price ? `${request.price} SAR` : "—"} />
-            <Info label="Payer" value={request.payer} />
-            <Info label="Payment Link Sent At" value={request.paymentLinkSentAt} />
-            <Info label="Customer Approved Price" value={request.customerApprovedPrice} />
+            {editMode ? (
+              <div className="space-y-4">
+                <EditInput
+                  label="Price"
+                  value={editForm.price}
+                  onChange={(v) => updateEditField("price", v)}
+                />
+                <EditInput
+                  label="Payer"
+                  value={editForm.payer}
+                  onChange={(v) => updateEditField("payer", v)}
+                />
+                <EditSelect
+                  label="Payment Status"
+                  value={editForm.paymentStatus}
+                  onChange={(v) => updateEditField("paymentStatus", v)}
+                  options={["Pending", "Paid"]}
+                />
+                <EditSelect
+                  label="Customer Approved Price"
+                  value={editForm.customerApprovedPrice}
+                  onChange={(v) =>
+                    updateEditField("customerApprovedPrice", v)
+                  }
+                  options={["No", "Yes - Send Payment Link"]}
+                />
+                <EditInput
+                  label="Payment Link Sent At"
+                  type="datetime-local"
+                  value={editForm.paymentLinkSentAt}
+                  onChange={(v) => updateEditField("paymentLinkSentAt", v)}
+                />
+                <EditInput
+                  label="Booking Confirmation Number"
+                  value={editForm.bookingConfirmationNumber}
+                  onChange={(v) =>
+                    updateEditField("bookingConfirmationNumber", v)
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                <Info
+                  label="Price"
+                  value={request.price ? `${request.price} SAR` : "—"}
+                />
+                <Info label="Payer" value={request.payer} />
+                <Info
+                  label="Payment Link Sent At"
+                  value={request.paymentLinkSentAt}
+                />
+                <Info
+                  label="Customer Approved Price"
+                  value={request.customerApprovedPrice}
+                />
+              </>
+            )}
           </Section>
 
           <Section title="Planned Assignment" icon={<Ambulance size={18} />}>
-            <Info
-              label="Unit"
-              value={
-                request.plannedAssignment?.unitCode ||
-                request.plannedAssignment?.unitId ||
-                "—"
-              }
-            />
-            <Info
-              label="Team Group"
-              value={request.plannedAssignment?.assignedTeamGroup || "—"}
-            />
-            <Info
-              label="Assigned Users"
-              value={
-                Array.isArray(request.plannedAssignment?.assignedUserIds)
-                  ? request.plannedAssignment.assignedUserIds.join(", ")
-                  : "—"
-              }
-            />
+            {editMode ? (
+              <div className="space-y-4">
+                <EditSelect
+                  label="Planned Ambulance / Unit"
+                  value={assignment.unitId}
+                  onChange={handleAmbulanceChange}
+                  options={[
+                    { label: "Select ambulance", value: "" },
+                    ...ambulances.map((a) => ({
+                      label: a.code || a.name || a.id,
+                      value: a.id,
+                    })),
+                  ]}
+                />
+
+                {assignment.unitId && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                      Team Group
+                    </div>
+                    <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+                      {assignment.assignedTeamGroup || "—"}
+                    </div>
+
+                    <div className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-400">
+                      Team Members
+                    </div>
+
+                    <div className="mt-2 space-y-2">
+                      {assignment.assignedUserIds.length > 0 ? (
+                        assignment.assignedUserIds.map((userId) => (
+                          <div
+                            key={userId}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:bg-[#0b1220] dark:text-white"
+                          >
+                            {getUserDisplayName(userId)}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-red-500">
+                          No team linked to this ambulance.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Info
+                  label="Unit"
+                  value={
+                    request.plannedAssignment?.unitCode ||
+                    request.plannedAssignment?.unitId ||
+                    "—"
+                  }
+                />
+                <Info
+                  label="Team Group"
+                  value={request.plannedAssignment?.assignedTeamGroup || "—"}
+                />
+                <Info
+                  label="Assigned Users"
+                  value={
+                    Array.isArray(request.plannedAssignment?.assignedUserIds)
+                      ? request.plannedAssignment.assignedUserIds
+                          .map((id: string) => getUserDisplayName(id))
+                          .join(", ")
+                      : "—"
+                  }
+                />
+              </>
+            )}
 
             {request.cadCaseId ? (
               <button
@@ -220,14 +829,19 @@ export default function B2CRequestDetailsPage({
                 Open CAD Case
                 <ArrowRight size={16} />
               </button>
-            ) : (
+            ) : isDispatch ? (
               <button
                 className="btn-primary mt-4 w-full"
-                disabled={!cadReady || creatingCad}
+                disabled={!cadReady || creatingCad || editMode}
                 onClick={handleCreateCad}
               >
                 {creatingCad ? "Creating CAD..." : "Create CAD Case"}
               </button>
+            ) : (
+              <div className="notice-warning mt-4">
+                CAD is not active yet. Dispatch must create CAD before you can
+                start the mission.
+              </div>
             )}
           </Section>
         </div>
@@ -264,7 +878,7 @@ function Info({ label, value }: { label: string; value: any }) {
         {label}
       </div>
 
-      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+      <div className="mt-1 break-words text-sm font-semibold text-slate-900 dark:text-white">
         {value || "—"}
       </div>
     </div>
@@ -281,6 +895,85 @@ function StatusBadge({ label, value }: { label: string; value: any }) {
       <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-black text-blue-700 dark:text-blue-300">
         {value || "—"}
       </span>
+    </div>
+  );
+}
+
+function EditInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="field-label">{label}</label>
+      <input
+        className="input"
+        type={type}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function EditTextarea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="field-label">{label}</label>
+      <textarea
+        className="textarea"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function EditSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[] | { label: string; value: string }[];
+}) {
+  return (
+    <div>
+      <label className="field-label">{label}</label>
+      <select
+        className="select"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((option: any) => {
+          const label = typeof option === "string" ? option : option.label;
+          const value = typeof option === "string" ? option : option.value;
+
+          return (
+            <option key={value || label} value={value}>
+              {label}
+            </option>
+          );
+        })}
+      </select>
     </div>
   );
 }
