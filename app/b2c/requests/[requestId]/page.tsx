@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import {
   Ambulance,
@@ -87,6 +87,7 @@ export default function B2CRequestDetailsPage({
   const [creatingCad, setCreatingCad] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [acknowledgingRequest, setAcknowledgingRequest] = useState(false);
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -237,6 +238,28 @@ export default function B2CRequestDetailsPage({
     canActivateB2CCad;
 
   const canOpenCad = Boolean(request?.cadCaseId);
+  const assignedUserIds = Array.isArray(request?.plannedAssignment?.assignedUserIds)
+  ? request.plannedAssignment.assignedUserIds
+  : [];
+
+const isAssignedToThisB2CRequest = Boolean(
+  user?.uid && assignedUserIds.includes(user.uid)
+);
+
+const preparationAcknowledgement = request?.preparationAcknowledgement || {};
+
+const requestPreparationAcknowledged = Boolean(
+  preparationAcknowledgement?.acknowledged
+);
+
+const canAcknowledgeRequest =
+  Boolean(request) &&
+  !request?.cadCaseId &&
+  isAssignedToThisB2CRequest &&
+  !requestPreparationAcknowledged;
+
+const canViewThisB2CRequest =
+  canViewB2CRequest || isAssignedToThisB2CRequest;
 
   function getAmbulanceTeamIds(ambulance: any): string[] {
     if (!ambulance) return [];
@@ -383,6 +406,46 @@ export default function B2CRequestDetailsPage({
       setSaving(false);
     }
   }
+  async function handleAcknowledgeRequest() {
+  if (!request) return;
+
+  if (!isAssignedToThisB2CRequest) {
+    alert("You are not assigned to this B2C request.");
+    return;
+  }
+
+  setAcknowledgingRequest(true);
+
+  try {
+    await updateB2CRequest(request.id, {
+      preparationAcknowledgement: {
+        acknowledged: true,
+        acknowledgedBy: user?.uid || user?.id || "",
+        acknowledgedByName:
+          user?.name ||
+          user?.displayName ||
+          user?.fullName ||
+          user?.email ||
+          "Team Member",
+        acknowledgedAt: serverTimestamp(),
+      },
+      preparationStatus: "Acknowledged",
+      preparationAcknowledgedAt: serverTimestamp(),
+      preparationAcknowledgedBy: user?.uid || user?.id || "",
+      preparationAcknowledgedByName:
+        user?.name ||
+        user?.displayName ||
+        user?.fullName ||
+        user?.email ||
+        "Team Member",
+    });
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.message || "Failed to acknowledge request.");
+  } finally {
+    setAcknowledgingRequest(false);
+  }
+}
 
   async function handleCreateCad() {
     if (!request) return;
@@ -447,15 +510,15 @@ export default function B2CRequestDetailsPage({
     );
   }
 
-  if (!canViewB2CRequest) {
-    return (
-      <div className="page-shell">
-        <div className="card-modern text-red-500">
-          You do not have permission to view this B2C request.
-        </div>
+if (!canViewThisB2CRequest) {
+  return (
+    <div className="page-shell">
+      <div className="card-modern text-red-500">
+        You do not have permission to view this B2C request.
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="page-shell">
@@ -477,12 +540,27 @@ export default function B2CRequestDetailsPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {canAcknowledgeRequest && (
+  <button
+    className="btn-primary"
+    disabled={acknowledgingRequest}
+    onClick={handleAcknowledgeRequest}
+  >
+    {acknowledgingRequest ? "Acknowledging..." : "Acknowledge Request"}
+  </button>
+)}
           {canOpenCad && (
             <button
               className="btn-primary"
-              onClick={() => router.push(`/cases/${request.cadCaseId}`)}
+              onClick={() =>
+  router.push(
+    isParamedic
+      ? `/missions/${request.cadCaseId}`
+      : `/cases/${request.cadCaseId}`
+  )
+}
             >
-              Open CAD Case
+              {isParamedic ? "Open Mission" : "Open CAD Case"}
               <ArrowRight size={16} />
             </button>
           )}
@@ -746,28 +824,43 @@ export default function B2CRequestDetailsPage({
         </div>
 
         <div className="space-y-5">
-          <Section title="Request Status" icon={<CalendarClock size={18} />}>
-            <StatusBadge label="Request Status" value={request.requestStatus} />
-            <StatusBadge label="Payment Status" value={request.paymentStatus} />
-            <StatusBadge
-              label="CAD Status"
-              value={request.cadCaseId ? "CAD Created" : "Not Created"}
-            />
+<Section title="Request Status" icon={<CalendarClock size={18} />}>
+  <StatusBadge label="Request Status" value={request.requestStatus} />
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-              {request.cadCaseId
-                ? "CAD case is already created."
-                : cadReady
-                ? "This request is ready to create CAD case."
-                : "CAD is locked until payment is paid and request is approved."}
-            </div>
+  <StatusBadge label="Payment Status" value={request.paymentStatus} />
 
-            {!request.cadCaseId && withinOneHour && cadReady && (
-              <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
-                This trip is within one hour. CAD should be activated now.
-              </div>
-            )}
-          </Section>
+  <StatusBadge
+    label="CAD Status"
+    value={request.cadCaseId ? "CAD Created" : "Not Created"}
+  />
+
+  <StatusBadge
+    label="Preparation"
+    value={
+      requestPreparationAcknowledged
+        ? `Acknowledged by ${
+            preparationAcknowledgement?.acknowledgedByName ||
+            request.preparationAcknowledgedByName ||
+            "Team"
+          }`
+        : "Pending"
+    }
+  />
+
+  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+    {request.cadCaseId
+      ? "CAD case is already created."
+      : cadReady
+      ? "This request is ready to create CAD case."
+      : "CAD is locked until payment is paid and request is approved."}
+  </div>
+
+  {!request.cadCaseId && withinOneHour && cadReady && (
+    <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
+      This trip is within one hour. CAD should be activated now.
+    </div>
+  )}
+</Section>
 
           <Section title="Payment" icon={<CreditCard size={18} />}>
             {editMode ? (
@@ -905,9 +998,15 @@ export default function B2CRequestDetailsPage({
             {request.cadCaseId ? (
               <button
                 className="btn-primary mt-4 w-full"
-                onClick={() => router.push(`/cases/${request.cadCaseId}`)}
+                onClick={() =>
+  router.push(
+    isParamedic
+      ? `/missions/${request.cadCaseId}`
+      : `/cases/${request.cadCaseId}`
+  )
+}
               >
-                Open CAD Case
+                {isParamedic ? "Open Mission" : "Open CAD Case"}
                 <ArrowRight size={16} />
               </button>
             ) : canCreateCad ? (

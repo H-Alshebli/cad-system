@@ -47,6 +47,29 @@ function isUserAssignedToCase(item: any, user: any) {
   return Boolean(user?.uid && assigned.includes(user.uid));
 }
 
+function getPreparationStatus(request: any) {
+  const acknowledgement = request?.preparationAcknowledgement || {};
+
+  if (acknowledgement?.acknowledged) {
+    return `Acknowledged by ${
+      acknowledgement.acknowledgedByName ||
+      request.preparationAcknowledgedByName ||
+      "Team"
+    }`;
+  }
+
+  return "Pending";
+}
+
+function getB2CRequestIdFromCase(item: any) {
+  return item.sourceRequestId || item.b2cRequestId || item.b2cRequest?.id || "";
+}
+
+function isB2CCase(item: any) {
+  const source = String(item.sourceType || item.caseType || "").toLowerCase();
+  return source === "b2c" || Boolean(getB2CRequestIdFromCase(item));
+}
+
 export default function MyMissionsPage() {
   const { user, loading } = useCurrentUser();
 
@@ -80,7 +103,7 @@ export default function MyMissionsPage() {
       if (request.requestStatus === "Cancelled") return false;
       if (request.requestStatus === "Rejected") return false;
 
-      // If CAD already created, keep it in Active CAD Missions section.
+      // If CAD already created, show it in Active CAD Missions section.
       if (request.cadCaseId) return false;
 
       if (showAllForTesting || isAdmin) return true;
@@ -123,8 +146,8 @@ export default function MyMissionsPage() {
           <h1 className="page-title">My Missions</h1>
 
           <p className="page-subtitle">
-            Upcoming B2C requests appear here for preparation. CAD missions
-            appear after Dispatch creates or activates the CAD case.
+            Upcoming B2C requests appear here for preparation. Active CAD
+            missions appear after Dispatch creates or activates the CAD case.
           </p>
         </div>
 
@@ -146,8 +169,8 @@ export default function MyMissionsPage() {
             </h2>
 
             <p className="text-sm text-slate-400">
-              These requests are for preparation only. The paramedic cannot open
-              the CAD mission until Dispatch creates CAD.
+              These requests are for preparation only. Click View Request to
+              review and acknowledge the request.
             </p>
           </div>
 
@@ -155,7 +178,7 @@ export default function MyMissionsPage() {
         </div>
 
         <div className="table-modern overflow-x-auto">
-          <table className="w-full min-w-[1050px] text-left">
+          <table className="w-full min-w-[1150px] text-left">
             <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Request</th>
@@ -165,6 +188,7 @@ export default function MyMissionsPage() {
                 <th className="px-4 py-3">Transport Time</th>
                 <th className="px-4 py-3">Ambulance</th>
                 <th className="px-4 py-3">Payment</th>
+                <th className="px-4 py-3">Preparation</th>
                 <th className="px-4 py-3">CAD Status</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
@@ -209,6 +233,12 @@ export default function MyMissionsPage() {
                   </td>
 
                   <td className="px-4 py-3">
+                    <span className="badge">
+                      {getPreparationStatus(request)}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
                     <span className="badge">CAD Not Active</span>
                   </td>
 
@@ -226,7 +256,7 @@ export default function MyMissionsPage() {
               {upcomingB2CRequests.length === 0 && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-10 text-center text-slate-400"
                   >
                     No upcoming B2C requests assigned.
@@ -246,7 +276,8 @@ export default function MyMissionsPage() {
             </h2>
 
             <p className="text-sm text-slate-400">
-              These are active CAD cases assigned to your team.
+              These are active CAD cases assigned to your team. For B2C cases,
+              you can still review the original request.
             </p>
           </div>
 
@@ -254,7 +285,7 @@ export default function MyMissionsPage() {
         </div>
 
         <div className="table-modern overflow-x-auto">
-          <table className="w-full min-w-[950px] text-left">
+          <table className="w-full min-w-[1050px] text-left">
             <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Case</th>
@@ -268,53 +299,72 @@ export default function MyMissionsPage() {
             </thead>
 
             <tbody className="divide-y divide-white/10">
-              {activeMissions.map((item) => (
-                <tr key={item.id} className="hover:bg-white/[0.03]">
-                  <td className="px-4 py-3 font-semibold text-white">
-                    {item.lazemCode || item.caseNumber || item.id}
-                  </td>
+              {activeMissions.map((item) => {
+                const b2cRequestId = getB2CRequestIdFromCase(item);
+                const showViewRequest = isB2CCase(item) && b2cRequestId;
 
-                  <td className="px-4 py-3">
-                    <span className="badge">
-                      {item.sourceType || item.caseType || "PROJECT"}
-                    </span>
-                  </td>
+                return (
+                  <tr key={item.id} className="hover:bg-white/[0.03]">
+                    <td className="px-4 py-3 font-semibold text-white">
+                      {item.lazemCode || item.caseNumber || item.id}
+                    </td>
 
-                  <td className="px-4 py-3 text-slate-300">
-                    {item.serviceType || item.chiefComplaint || "—"}
-                  </td>
+                    <td className="px-4 py-3">
+                      <span className="badge">
+                        {item.sourceType || item.caseType || "PROJECT"}
+                      </span>
+                    </td>
 
-                  <td className="px-4 py-3 text-slate-300">
-                    {item.pickup?.text ||
-                      item.pickupText ||
-                      item.location?.text ||
-                      item.locationText ||
-                      "—"}
-                  </td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {item.serviceType || item.chiefComplaint || "—"}
+                    </td>
 
-                  <td className="px-4 py-3">
-                    <span className="badge">
-                      {item.dispatchStatus || item.status || "—"}
-                    </span>
-                  </td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {item.pickup?.text ||
+                        item.pickupText ||
+                        item.location?.text ||
+                        item.locationText ||
+                        "—"}
+                    </td>
 
-                  <td className="px-4 py-3 text-slate-300">
-                    {item.acknowledged
-                      ? `Acknowledged by ${
-                          item.acknowledgedByName ||
-                          item.acknowledgedBy ||
-                          "team"
-                        }`
-                      : "Not acknowledged"}
-                  </td>
+                    <td className="px-4 py-3">
+                      <span className="badge">
+                        {item.dispatchStatus || item.status || "—"}
+                      </span>
+                    </td>
 
-                  <td className="px-4 py-3">
-                    <Link className="btn-secondary" href={`/missions/${item.id}`}>
-                      Open Mission
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-4 py-3 text-slate-300">
+                      {item.acknowledged
+                        ? `Acknowledged by ${
+                            item.acknowledgedByName ||
+                            item.acknowledgedBy ||
+                            "team"
+                          }`
+                        : "Not acknowledged"}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {showViewRequest && (
+                          <Link
+                            className="btn-secondary"
+                            href={`/b2c/requests/${b2cRequestId}`}
+                          >
+                            View Request
+                          </Link>
+                        )}
+
+                        <Link
+                          className="btn-secondary"
+                          href={`/missions/${item.id}`}
+                        >
+                          Open Mission
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {activeMissions.length === 0 && (
                 <tr>
