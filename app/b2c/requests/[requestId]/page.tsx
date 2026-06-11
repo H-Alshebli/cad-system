@@ -9,6 +9,8 @@ import {
   CalendarClock,
   CreditCard,
   Edit3,
+  ExternalLink,
+  FileText,
   MapPin,
   PackageCheck,
   Save,
@@ -32,24 +34,27 @@ const requestTypes = ["Scheduled", "Immediate"];
 const genderOptions = ["Male", "Female"];
 const tripTypes = ["One Way", "Round Trip"];
 const locationTypes = ["Home", "Hospital", "Other"];
+
 const floorOptions = [
   "Ground Floor",
   "Upper Floor - Elevator Available",
   "Upper Floor - No Elevator",
 ];
+
 const patientStabilityOptions = [
   "Conscious and Stable",
   "Needs Monitoring",
   "Critical - Refer to 997",
 ];
+
 const transportLevels = ["BLS - Stable", "ALS - Advanced Medical Support"];
 const mobilityOptions = ["Walking", "Wheelchair", "Bedridden"];
+
 const operationalDecisions = [
   "Approved - Proceed to Pricing",
   "Escalate to Medical Director",
   "Rejected - Document Reason",
 ];
-const payerOptions = ["Customer", "Company", "Insurance"];
 
 function formatDateTime(value: any) {
   if (!value) return "—";
@@ -70,6 +75,14 @@ function yesNo(value: any) {
 function joinList(value: any) {
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
   return value || "—";
+}
+
+function getMedicalReportFiles(request: any) {
+  if (Array.isArray(request?.medicalReportFiles)) {
+    return request.medicalReportFiles.filter((file: any) => file?.url);
+  }
+
+  return [];
 }
 
 export default function B2CRequestDetailsPage({
@@ -374,6 +387,8 @@ export default function B2CRequestDetailsPage({
 
   const canViewThisB2CRequest =
     canViewB2CRequest || isAssignedToThisB2CRequest;
+
+  const medicalReportFiles = getMedicalReportFiles(request);
 
   function getAmbulanceTeamIds(ambulance: any): string[] {
     if (!ambulance) return [];
@@ -961,10 +976,18 @@ export default function B2CRequestDetailsPage({
                   label="Medical Report Available?"
                   value={request.hasMedicalReport}
                 />
-                <Info
-                  label="Medical Report Attachments"
-                  value={joinList(request.medicalReportFileNames)}
-                />
+
+                <div className="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+                  <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                    Medical Report Attachments
+                  </div>
+
+                  <MedicalReportLinks
+                    files={medicalReportFiles}
+                    fallbackNames={request.medicalReportFileNames}
+                  />
+                </div>
+
                 <Info
                   label="Diagnosis / Reason"
                   value={request.diagnosisOrReason}
@@ -1081,15 +1104,9 @@ export default function B2CRequestDetailsPage({
 
         <div className="space-y-5">
           <Section title="Request Status" icon={<CalendarClock size={18} />}>
-            <StatusBadge
-              label="Request Status"
-              value={request.requestStatus}
-            />
+            <StatusBadge label="Request Status" value={request.requestStatus} />
 
-            <StatusBadge
-              label="Payment Status"
-              value={request.paymentStatus}
-            />
+            <StatusBadge label="Payment Status" value={request.paymentStatus} />
 
             <StatusBadge
               label="CAD Status"
@@ -1185,10 +1202,7 @@ export default function B2CRequestDetailsPage({
                   label="Customer Approved Price"
                   value={request.customerApprovedPrice}
                 />
-                <Info
-                  label="Waiting Hours?"
-                  value={request.hasWaitingHours}
-                />
+                <Info label="Waiting Hours?" value={request.hasWaitingHours} />
                 <Info
                   label="Number of Waiting Hours"
                   value={request.waitingHours}
@@ -1348,6 +1362,53 @@ function Info({ label, value }: { label: string; value: any }) {
       <div className="mt-1 break-words text-sm font-semibold text-slate-900 dark:text-white">
         {value || "—"}
       </div>
+    </div>
+  );
+}
+
+function MedicalReportLinks({
+  files,
+  fallbackNames,
+}: {
+  files: any[];
+  fallbackNames?: string[];
+}) {
+  if (files.length > 0) {
+    return (
+      <div className="mt-2 space-y-2">
+        {files.map((file: any, index: number) => (
+          <a
+            key={file.path || file.url || index}
+            href={file.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-700 transition hover:bg-blue-500/20 dark:text-blue-300"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <FileText size={16} className="shrink-0" />
+              <span className="truncate">
+                {file.name || `Medical Report ${index + 1}`}
+              </span>
+            </span>
+
+            <ExternalLink size={15} className="shrink-0" />
+          </a>
+        ))}
+      </div>
+    );
+  }
+
+  if (Array.isArray(fallbackNames) && fallbackNames.length > 0) {
+    return (
+      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+        {fallbackNames.join(", ")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+      —
     </div>
   );
 }

@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { createB2CRequest } from "@/lib/b2cRequests";
+import { createB2CRequest, updateB2CRequest } from "@/lib/b2cRequests";
+import { uploadB2CMedicalReports } from "@/lib/storageUploads";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 const serviceScopes = [
@@ -471,84 +472,102 @@ export default function NewB2CCasePage() {
     }
   }
 
-  async function submitB2C() {
-    if (
-      !form.customerName ||
-      !form.customerMobile ||
-      !form.patientName ||
-      !form.pickupText ||
-      !form.destinationText
-    ) {
-      alert(
-        "Please complete customer name, mobile number, patient name, pickup, and destination."
-      );
-      return;
-    }
-
-    if (!form.requestedTransportAt) {
-      alert("Please select the transport date and time.");
-      return;
-    }
-
-    if (!assignment.unitId) {
-      alert("Please select the planned ambulance/unit.");
-      return;
-    }
-
-    if (assignment.assignedUserIds.length === 0) {
-      alert(
-        "The selected ambulance has no team linked to it. Please update the ambulance profile or select another ambulance."
-      );
-      return;
-    }
-
-    if (isEmergencyRefer997) {
-      alert(
-        "This request is marked as emergency. The instruction is to refer the caller to 997 and close the request."
-      );
-      return;
-    }
-
-    if (isRejected && !form.rejectionReason) {
-      alert("Please enter the rejection reason.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const requestId = await createB2CRequest({
-        ...form,
-
-        sourceType: "B2C_REQUEST",
-        callDateTime: form.callDateTime || toDatetimeLocalValue(new Date()),
-        coordinatorName: form.coordinatorName || getUserName(user),
-
-        medicalReportFileNames: medicalReportFiles.map((file) => file.name),
-
-        plannedAssignment: {
-          ...assignment,
-          unitCode:
-            selectedAmbulance?.code ||
-            selectedAmbulance?.name ||
-            assignment.unitId ||
-            "",
-          unitName: selectedAmbulance?.name || "",
-          unitTypeName:
-            selectedAmbulance?.type ||
-            selectedAmbulance?.vehicleType ||
-            "Ambulance",
-        },
-      });
-
-      router.push(`/b2c/requests/${requestId}`);
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.message || "Failed to create B2C request");
-    } finally {
-      setSaving(false);
-    }
+async function submitB2C() {
+  if (
+    !form.customerName ||
+    !form.customerMobile ||
+    !form.patientName ||
+    !form.pickupText ||
+    !form.destinationText
+  ) {
+    alert(
+      "Please complete customer name, mobile number, patient name, pickup, and destination."
+    );
+    return;
   }
+
+  if (!form.requestedTransportAt) {
+    alert("Please select the transport date and time.");
+    return;
+  }
+
+  if (!assignment.unitId) {
+    alert("Please select the planned ambulance/unit.");
+    return;
+  }
+
+  if (assignment.assignedUserIds.length === 0) {
+    alert(
+      "The selected ambulance has no team linked to it. Please update the ambulance profile or select another ambulance."
+    );
+    return;
+  }
+
+  if (isEmergencyRefer997) {
+    alert(
+      "This request is marked as emergency. The instruction is to refer the caller to 997 and close the request."
+    );
+    return;
+  }
+
+  if (isRejected && !form.rejectionReason) {
+    alert("Please enter the rejection reason.");
+    return;
+  }
+
+  if (form.hasMedicalReport === "Yes" && medicalReportFiles.length === 0) {
+    alert("Please upload the medical report attachment or change Medical Report Available to No.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    const requestId = await createB2CRequest({
+      ...form,
+
+      sourceType: "B2C_REQUEST",
+      callDateTime: form.callDateTime || toDatetimeLocalValue(new Date()),
+      coordinatorName: form.coordinatorName || getUserName(user),
+
+      medicalReportFileNames: medicalReportFiles.map((file) => file.name),
+      medicalReportFiles: [],
+
+      plannedAssignment: {
+        ...assignment,
+        unitCode:
+          selectedAmbulance?.code ||
+          selectedAmbulance?.name ||
+          assignment.unitId ||
+          "",
+        unitName: selectedAmbulance?.name || "",
+        unitTypeName:
+          selectedAmbulance?.type ||
+          selectedAmbulance?.vehicleType ||
+          "Ambulance",
+      },
+    });
+
+    if (medicalReportFiles.length > 0) {
+      const uploadedReports = await uploadB2CMedicalReports(
+        requestId,
+        medicalReportFiles
+      );
+
+      await updateB2CRequest(requestId, {
+        medicalReportFiles: uploadedReports,
+        medicalReportFileNames: uploadedReports.map((file) => file.name),
+      });
+    }
+
+    router.push(`/b2c/requests/${requestId}`);
+  } catch (error: any) {
+    console.error(error);
+    alert(error?.message || "Failed to create B2C request");
+  } finally {
+    setSaving(false);
+  }
+}
 
   return (
     <div className="page-shell">
