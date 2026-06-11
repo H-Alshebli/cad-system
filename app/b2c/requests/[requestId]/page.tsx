@@ -10,6 +10,7 @@ import {
   CreditCard,
   Edit3,
   MapPin,
+  PackageCheck,
   Save,
   ShieldCheck,
   UserRound,
@@ -27,6 +28,50 @@ import {
   updateB2CRequest,
 } from "@/lib/b2cRequests";
 
+const requestTypes = ["Scheduled", "Immediate"];
+const genderOptions = ["Male", "Female"];
+const tripTypes = ["One Way", "Round Trip"];
+const locationTypes = ["Home", "Hospital", "Other"];
+const floorOptions = [
+  "Ground Floor",
+  "Upper Floor - Elevator Available",
+  "Upper Floor - No Elevator",
+];
+const patientStabilityOptions = [
+  "Conscious and Stable",
+  "Needs Monitoring",
+  "Critical - Refer to 997",
+];
+const transportLevels = ["BLS - Stable", "ALS - Advanced Medical Support"];
+const mobilityOptions = ["Walking", "Wheelchair", "Bedridden"];
+const operationalDecisions = [
+  "Approved - Proceed to Pricing",
+  "Escalate to Medical Director",
+  "Rejected - Document Reason",
+];
+const payerOptions = ["Customer", "Company", "Insurance"];
+
+function formatDateTime(value: any) {
+  if (!value) return "—";
+
+  const date = value?.toDate?.() || new Date(value);
+
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleString();
+}
+
+function yesNo(value: any) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return value || "—";
+}
+
+function joinList(value: any) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
+  return value || "—";
+}
+
 export default function B2CRequestDetailsPage({
   params,
 }: {
@@ -40,9 +85,6 @@ export default function B2CRequestDetailsPage({
   const roleRaw = String(user?.role || "").trim();
   const role = roleRaw.toLowerCase();
 
-  // IMPORTANT:
-  // Use roleRaw here because Firestore role document is "Dispatcher",
-  // not "dispatcher".
   const { permissions, loading: permissionsLoading } = usePermissions(roleRaw);
 
   const isAdmin =
@@ -93,33 +135,65 @@ export default function B2CRequestDetailsPage({
   const [users, setUsers] = useState<any[]>([]);
 
   const [editForm, setEditForm] = useState<any>({
+    callDateTime: "",
+    coordinatorName: "",
+
     requestType: "",
+    tripType: "",
+    requestedTransportAt: "",
+
     customerName: "",
     customerMobile: "",
     patientName: "",
     patientAge: "",
     patientGender: "",
     patientIdOrIqama: "",
-    requestedTransportAt: "",
+    approximateWeight: "",
+
+    pickupType: "",
+    pickupOtherText: "",
     pickupText: "",
     pickupMapLink: "",
     pickupFloor: "",
+
+    destinationType: "",
+    destinationOtherText: "",
     destinationText: "",
     destinationMapLink: "",
     destinationFloor: "",
+
     patientStability: "",
     transportLevel: "",
     mobility: "",
+    specialRequirements: [] as string[],
     diagnosisOrReason: "",
+    hasMedicalReport: "No",
+    medicalReportFileNames: [] as string[],
+
     operationalDecision: "",
     rejectionReason: "",
     operationalNotes: "",
+
     price: "",
     payer: "",
     paymentStatus: "Pending",
     customerApprovedPrice: "",
+    hasWaitingHours: "No",
+    waitingHours: "",
+    paymentLink: "",
     paymentLinkSentAt: "",
+    paymentLinkSentViaWhatsApp: false,
+
     bookingConfirmationNumber: "",
+    customerContactBeforeTrip: "",
+    contactPersonName: "",
+    contactPersonMobile: "",
+    relationToPatient: "",
+    notes: "",
+
+    ambulanceBagNumber: "",
+    medicationsBag: "",
+    devices: "",
   });
 
   const [assignment, setAssignment] = useState({
@@ -175,34 +249,71 @@ export default function B2CRequestDetailsPage({
     if (!request) return;
 
     setEditForm({
+      callDateTime: request.callDateTime || "",
+      coordinatorName: request.coordinatorName || "",
+
       requestType: request.requestType || "",
+      tripType: request.tripType || "",
+      requestedTransportAt: request.requestedTransportAt || "",
+
       customerName: request.customerName || "",
       customerMobile: request.customerMobile || "",
       patientName: request.patientName || "",
       patientAge: request.patientAge || "",
       patientGender: request.patientGender || "",
       patientIdOrIqama: request.patientIdOrIqama || "",
-      requestedTransportAt: request.requestedTransportAt || "",
+      approximateWeight: request.approximateWeight || "",
+
+      pickupType: request.pickupType || "",
+      pickupOtherText: request.pickupOtherText || "",
       pickupText: request.pickupText || "",
       pickupMapLink: request.pickupMapLink || "",
       pickupFloor: request.pickupFloor || "",
+
+      destinationType: request.destinationType || "",
+      destinationOtherText: request.destinationOtherText || "",
       destinationText: request.destinationText || "",
       destinationMapLink: request.destinationMapLink || "",
       destinationFloor: request.destinationFloor || "",
+
       patientStability: request.patientStability || "",
       transportLevel: request.transportLevel || "",
       mobility: request.mobility || "",
+      specialRequirements: Array.isArray(request.specialRequirements)
+        ? request.specialRequirements
+        : [],
       diagnosisOrReason: request.diagnosisOrReason || "",
+      hasMedicalReport: request.hasMedicalReport || "No",
+      medicalReportFileNames: Array.isArray(request.medicalReportFileNames)
+        ? request.medicalReportFileNames
+        : [],
+
       operationalDecision:
         request.operationalDecision || "Approved - Proceed to Pricing",
       rejectionReason: request.rejectionReason || "",
       operationalNotes: request.operationalNotes || "",
+
       price: request.price || "",
       payer: request.payer || "",
       paymentStatus: request.paymentStatus || "Pending",
       customerApprovedPrice: request.customerApprovedPrice || "",
+      hasWaitingHours: request.hasWaitingHours || "No",
+      waitingHours: request.waitingHours || "",
+      paymentLink: request.paymentLink || "",
       paymentLinkSentAt: request.paymentLinkSentAt || "",
+      paymentLinkSentViaWhatsApp:
+        request.paymentLinkSentViaWhatsApp === true || false,
+
       bookingConfirmationNumber: request.bookingConfirmationNumber || "",
+      customerContactBeforeTrip: request.customerContactBeforeTrip || "",
+      contactPersonName: request.contactPersonName || "",
+      contactPersonMobile: request.contactPersonMobile || "",
+      relationToPatient: request.relationToPatient || "",
+      notes: request.notes || "",
+
+      ambulanceBagNumber: request.ambulanceBagNumber || "",
+      medicationsBag: request.medicationsBag || "",
+      devices: request.devices || "",
     });
 
     setAssignment({
@@ -238,28 +349,31 @@ export default function B2CRequestDetailsPage({
     canActivateB2CCad;
 
   const canOpenCad = Boolean(request?.cadCaseId);
-  const assignedUserIds = Array.isArray(request?.plannedAssignment?.assignedUserIds)
-  ? request.plannedAssignment.assignedUserIds
-  : [];
 
-const isAssignedToThisB2CRequest = Boolean(
-  user?.uid && assignedUserIds.includes(user.uid)
-);
+  const assignedUserIds = Array.isArray(
+    request?.plannedAssignment?.assignedUserIds
+  )
+    ? request.plannedAssignment.assignedUserIds
+    : [];
 
-const preparationAcknowledgement = request?.preparationAcknowledgement || {};
+  const isAssignedToThisB2CRequest = Boolean(
+    user?.uid && assignedUserIds.includes(user.uid)
+  );
 
-const requestPreparationAcknowledged = Boolean(
-  preparationAcknowledgement?.acknowledged
-);
+  const preparationAcknowledgement = request?.preparationAcknowledgement || {};
 
-const canAcknowledgeRequest =
-  Boolean(request) &&
-  !request?.cadCaseId &&
-  isAssignedToThisB2CRequest &&
-  !requestPreparationAcknowledged;
+  const requestPreparationAcknowledged = Boolean(
+    preparationAcknowledgement?.acknowledged
+  );
 
-const canViewThisB2CRequest =
-  canViewB2CRequest || isAssignedToThisB2CRequest;
+  const canAcknowledgeRequest =
+    Boolean(request) &&
+    !request?.cadCaseId &&
+    isAssignedToThisB2CRequest &&
+    !requestPreparationAcknowledged;
+
+  const canViewThisB2CRequest =
+    canViewB2CRequest || isAssignedToThisB2CRequest;
 
   function getAmbulanceTeamIds(ambulance: any): string[] {
     if (!ambulance) return [];
@@ -336,7 +450,7 @@ const canViewThisB2CRequest =
     });
   }
 
-  function updateEditField(name: string, value: string) {
+  function updateEditField(name: string, value: any) {
     setEditForm((prev: any) => ({
       ...prev,
       [name]: value,
@@ -387,7 +501,9 @@ const canViewThisB2CRequest =
         requestStatus = "CadCreated";
       } else if (editForm.paymentStatus === "Paid") {
         requestStatus =
-          editForm.requestType === "Immediate" ? "ReadyToActivate" : "Confirmed";
+          editForm.requestType === "Immediate"
+            ? "ReadyToActivate"
+            : "Confirmed";
       } else {
         requestStatus = "PendingPayment";
       }
@@ -406,46 +522,47 @@ const canViewThisB2CRequest =
       setSaving(false);
     }
   }
+
   async function handleAcknowledgeRequest() {
-  if (!request) return;
+    if (!request) return;
 
-  if (!isAssignedToThisB2CRequest) {
-    alert("You are not assigned to this B2C request.");
-    return;
-  }
+    if (!isAssignedToThisB2CRequest) {
+      alert("You are not assigned to this B2C request.");
+      return;
+    }
 
-  setAcknowledgingRequest(true);
+    setAcknowledgingRequest(true);
 
-  try {
-    await updateB2CRequest(request.id, {
-      preparationAcknowledgement: {
-        acknowledged: true,
-        acknowledgedBy: user?.uid || user?.id || "",
-        acknowledgedByName:
+    try {
+      await updateB2CRequest(request.id, {
+        preparationAcknowledgement: {
+          acknowledged: true,
+          acknowledgedBy: user?.uid || user?.id || "",
+          acknowledgedByName:
+            user?.name ||
+            user?.displayName ||
+            user?.fullName ||
+            user?.email ||
+            "Team Member",
+          acknowledgedAt: serverTimestamp(),
+        },
+        preparationStatus: "Acknowledged",
+        preparationAcknowledgedAt: serverTimestamp(),
+        preparationAcknowledgedBy: user?.uid || user?.id || "",
+        preparationAcknowledgedByName:
           user?.name ||
           user?.displayName ||
           user?.fullName ||
           user?.email ||
           "Team Member",
-        acknowledgedAt: serverTimestamp(),
-      },
-      preparationStatus: "Acknowledged",
-      preparationAcknowledgedAt: serverTimestamp(),
-      preparationAcknowledgedBy: user?.uid || user?.id || "",
-      preparationAcknowledgedByName:
-        user?.name ||
-        user?.displayName ||
-        user?.fullName ||
-        user?.email ||
-        "Team Member",
-    });
-  } catch (error: any) {
-    console.error(error);
-    alert(error?.message || "Failed to acknowledge request.");
-  } finally {
-    setAcknowledgingRequest(false);
+      });
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to acknowledge request.");
+    } finally {
+      setAcknowledgingRequest(false);
+    }
   }
-}
 
   async function handleCreateCad() {
     if (!request) return;
@@ -472,20 +589,6 @@ const canViewThisB2CRequest =
     }
   }
 
-  console.log("B2C Permission Debug:", {
-    userRoleFromUserDocument: user?.role,
-    roleRawUsedForFirestoreRoleDoc: roleRaw,
-    normalizedRoleForChecks: role,
-    permissionsLoading,
-    b2cPermissions: permissions?.b2c_requests,
-    canViewB2CRequest,
-    canEditB2CRequest,
-    canConfirmB2CPayment,
-    canChangeB2CTeam,
-    canActivateB2CCad,
-    isDispatch,
-  });
-
   if (userLoading || loading) {
     return (
       <div className="page-shell">
@@ -510,15 +613,15 @@ const canViewThisB2CRequest =
     );
   }
 
-if (!canViewThisB2CRequest) {
-  return (
-    <div className="page-shell">
-      <div className="card-modern text-red-500">
-        You do not have permission to view this B2C request.
+  if (!canViewThisB2CRequest) {
+    return (
+      <div className="page-shell">
+        <div className="card-modern text-red-500">
+          You do not have permission to view this B2C request.
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <div className="page-shell">
@@ -533,7 +636,7 @@ if (!canViewThisB2CRequest) {
           </h1>
 
           <p className="page-subtitle">
-            This page is for request follow-up before the CAD case becomes
+            This page is for B2C request follow-up before the CAD case becomes
             active. Dispatch can edit, confirm payment, change ambulance/team,
             and create CAD.
           </p>
@@ -541,24 +644,25 @@ if (!canViewThisB2CRequest) {
 
         <div className="flex flex-wrap gap-2">
           {canAcknowledgeRequest && (
-  <button
-    className="btn-primary"
-    disabled={acknowledgingRequest}
-    onClick={handleAcknowledgeRequest}
-  >
-    {acknowledgingRequest ? "Acknowledging..." : "Acknowledge Request"}
-  </button>
-)}
+            <button
+              className="btn-primary"
+              disabled={acknowledgingRequest}
+              onClick={handleAcknowledgeRequest}
+            >
+              {acknowledgingRequest ? "Acknowledging..." : "Acknowledge Request"}
+            </button>
+          )}
+
           {canOpenCad && (
             <button
               className="btn-primary"
               onClick={() =>
-  router.push(
-    isParamedic
-      ? `/missions/${request.cadCaseId}`
-      : `/cases/${request.cadCaseId}`
-  )
-}
+                router.push(
+                  isParamedic
+                    ? `/missions/${request.cadCaseId}`
+                    : `/cases/${request.cadCaseId}`
+                )
+              }
             >
               {isParamedic ? "Open Mission" : "Open CAD Case"}
               <ArrowRight size={16} />
@@ -642,12 +746,17 @@ if (!canViewThisB2CRequest) {
                   label="Gender"
                   value={editForm.patientGender}
                   onChange={(v) => updateEditField("patientGender", v)}
-                  options={["Male", "Female"]}
+                  options={genderOptions}
                 />
                 <EditInput
                   label="ID / Iqama"
                   value={editForm.patientIdOrIqama}
                   onChange={(v) => updateEditField("patientIdOrIqama", v)}
+                />
+                <EditInput
+                  label="Approximate Weight"
+                  value={editForm.approximateWeight}
+                  onChange={(v) => updateEditField("approximateWeight", v)}
                 />
               </div>
             ) : (
@@ -658,6 +767,10 @@ if (!canViewThisB2CRequest) {
                 <Info label="Age" value={request.patientAge} />
                 <Info label="Gender" value={request.patientGender} />
                 <Info label="ID / Iqama" value={request.patientIdOrIqama} />
+                <Info
+                  label="Approximate Weight"
+                  value={request.approximateWeight}
+                />
               </>
             )}
           </Section>
@@ -669,13 +782,30 @@ if (!canViewThisB2CRequest) {
                   label="Request Type"
                   value={editForm.requestType}
                   onChange={(v) => updateEditField("requestType", v)}
-                  options={["Scheduled", "Immediate"]}
+                  options={requestTypes}
+                />
+                <EditSelect
+                  label="Trip Type"
+                  value={editForm.tripType}
+                  onChange={(v) => updateEditField("tripType", v)}
+                  options={tripTypes}
                 />
                 <EditInput
                   label="Transport Date / Time"
                   type="datetime-local"
                   value={editForm.requestedTransportAt}
                   onChange={(v) => updateEditField("requestedTransportAt", v)}
+                />
+                <EditSelect
+                  label="Pickup Type"
+                  value={editForm.pickupType}
+                  onChange={(v) => updateEditField("pickupType", v)}
+                  options={locationTypes}
+                />
+                <EditInput
+                  label="Other Pickup Location"
+                  value={editForm.pickupOtherText}
+                  onChange={(v) => updateEditField("pickupOtherText", v)}
                 />
                 <EditInput
                   label="Pickup"
@@ -687,10 +817,22 @@ if (!canViewThisB2CRequest) {
                   value={editForm.pickupMapLink}
                   onChange={(v) => updateEditField("pickupMapLink", v)}
                 />
-                <EditInput
+                <EditSelect
                   label="Pickup Floor"
                   value={editForm.pickupFloor}
                   onChange={(v) => updateEditField("pickupFloor", v)}
+                  options={floorOptions}
+                />
+                <EditSelect
+                  label="Destination Type"
+                  value={editForm.destinationType}
+                  onChange={(v) => updateEditField("destinationType", v)}
+                  options={locationTypes}
+                />
+                <EditInput
+                  label="Other Destination Location"
+                  value={editForm.destinationOtherText}
+                  onChange={(v) => updateEditField("destinationOtherText", v)}
                 />
                 <EditInput
                   label="Destination"
@@ -702,22 +844,34 @@ if (!canViewThisB2CRequest) {
                   value={editForm.destinationMapLink}
                   onChange={(v) => updateEditField("destinationMapLink", v)}
                 />
-                <EditInput
+                <EditSelect
                   label="Destination Floor"
                   value={editForm.destinationFloor}
                   onChange={(v) => updateEditField("destinationFloor", v)}
+                  options={floorOptions}
                 />
               </div>
             ) : (
               <>
                 <Info label="Request Type" value={request.requestType} />
+                <Info label="Trip Type" value={request.tripType} />
                 <Info
                   label="Transport Date / Time"
-                  value={request.requestedTransportAt}
+                  value={formatDateTime(request.requestedTransportAt)}
+                />
+                <Info label="Pickup Type" value={request.pickupType} />
+                <Info
+                  label="Other Pickup Location"
+                  value={request.pickupOtherText}
                 />
                 <Info label="Pickup" value={request.pickupText} />
                 <Info label="Pickup Link" value={request.pickupMapLink} />
                 <Info label="Pickup Floor" value={request.pickupFloor} />
+                <Info label="Destination Type" value={request.destinationType} />
+                <Info
+                  label="Other Destination Location"
+                  value={request.destinationOtherText}
+                />
                 <Info label="Destination" value={request.destinationText} />
                 <Info
                   label="Destination Link"
@@ -741,33 +895,31 @@ if (!canViewThisB2CRequest) {
                   label="Patient Stability"
                   value={editForm.patientStability}
                   onChange={(v) => updateEditField("patientStability", v)}
-                  options={[
-                    "Conscious and Stable",
-                    "Needs Monitoring",
-                    "Critical - Refer to 997",
-                  ]}
+                  options={patientStabilityOptions}
                 />
                 <EditSelect
                   label="Transport Level"
                   value={editForm.transportLevel}
                   onChange={(v) => updateEditField("transportLevel", v)}
-                  options={["BLS - Stable", "ALS - Advanced Medical Support"]}
+                  options={transportLevels}
                 />
                 <EditSelect
                   label="Mobility"
                   value={editForm.mobility}
                   onChange={(v) => updateEditField("mobility", v)}
-                  options={["Walking", "Wheelchair", "Bedridden"]}
+                  options={mobilityOptions}
+                />
+                <EditSelect
+                  label="Medical Report Available?"
+                  value={editForm.hasMedicalReport}
+                  onChange={(v) => updateEditField("hasMedicalReport", v)}
+                  options={["No", "Yes"]}
                 />
                 <EditSelect
                   label="Operational Decision"
                   value={editForm.operationalDecision}
                   onChange={(v) => updateEditField("operationalDecision", v)}
-                  options={[
-                    "Approved - Proceed to Pricing",
-                    "Escalate to Medical Director",
-                    "Rejected - Document Reason",
-                  ]}
+                  options={operationalDecisions}
                 />
                 <div className="md:col-span-2">
                   <EditTextarea
@@ -803,11 +955,15 @@ if (!canViewThisB2CRequest) {
                 <Info label="Mobility" value={request.mobility} />
                 <Info
                   label="Special Requirements"
-                  value={
-                    Array.isArray(request.specialRequirements)
-                      ? request.specialRequirements.join(", ")
-                      : request.specialRequirements
-                  }
+                  value={joinList(request.specialRequirements)}
+                />
+                <Info
+                  label="Medical Report Available?"
+                  value={request.hasMedicalReport}
+                />
+                <Info
+                  label="Medical Report Attachments"
+                  value={joinList(request.medicalReportFileNames)}
                 />
                 <Info
                   label="Diagnosis / Reason"
@@ -818,49 +974,155 @@ if (!canViewThisB2CRequest) {
                   value={request.operationalDecision}
                 />
                 <Info label="Rejection Reason" value={request.rejectionReason} />
+                <Info label="Operational Notes" value={request.operationalNotes} />
+              </>
+            )}
+          </Section>
+
+          <Section title="Booking & Contact" icon={<CalendarClock size={18} />}>
+            {editMode ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditInput
+                  label="Booking Confirmation Number"
+                  value={editForm.bookingConfirmationNumber}
+                  onChange={(v) =>
+                    updateEditField("bookingConfirmationNumber", v)
+                  }
+                />
+                <EditInput
+                  label="Contact Customer 24h Before Trip"
+                  type="datetime-local"
+                  value={editForm.customerContactBeforeTrip}
+                  onChange={(v) =>
+                    updateEditField("customerContactBeforeTrip", v)
+                  }
+                />
+                <EditInput
+                  label="Contact Person Name"
+                  value={editForm.contactPersonName}
+                  onChange={(v) => updateEditField("contactPersonName", v)}
+                />
+                <EditInput
+                  label="Contact Person Mobile"
+                  value={editForm.contactPersonMobile}
+                  onChange={(v) => updateEditField("contactPersonMobile", v)}
+                />
+                <EditInput
+                  label="Relation to Patient"
+                  value={editForm.relationToPatient}
+                  onChange={(v) => updateEditField("relationToPatient", v)}
+                />
+                <div className="md:col-span-2">
+                  <EditTextarea
+                    label="Additional Notes"
+                    value={editForm.notes}
+                    onChange={(v) => updateEditField("notes", v)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <Info
+                  label="Booking Confirmation Number"
+                  value={request.bookingConfirmationNumber}
+                />
+                <Info
+                  label="Contact Customer 24h Before Trip"
+                  value={formatDateTime(request.customerContactBeforeTrip)}
+                />
+                <Info
+                  label="Contact Person Name"
+                  value={request.contactPersonName}
+                />
+                <Info
+                  label="Contact Person Mobile"
+                  value={request.contactPersonMobile}
+                />
+                <Info
+                  label="Relation to Patient"
+                  value={request.relationToPatient}
+                />
+                <Info label="Additional Notes" value={request.notes} />
+              </>
+            )}
+          </Section>
+
+          <Section title="Ambulance Equipment" icon={<PackageCheck size={18} />}>
+            {editMode ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <EditInput
+                  label="Ambulance Bag Number"
+                  value={editForm.ambulanceBagNumber}
+                  onChange={(v) => updateEditField("ambulanceBagNumber", v)}
+                />
+                <EditInput
+                  label="Medications Bag"
+                  value={editForm.medicationsBag}
+                  onChange={(v) => updateEditField("medicationsBag", v)}
+                />
+                <EditInput
+                  label="Devices"
+                  value={editForm.devices}
+                  onChange={(v) => updateEditField("devices", v)}
+                />
+              </div>
+            ) : (
+              <>
+                <Info
+                  label="Ambulance Bag Number"
+                  value={request.ambulanceBagNumber}
+                />
+                <Info label="Medications Bag" value={request.medicationsBag} />
+                <Info label="Devices" value={request.devices} />
               </>
             )}
           </Section>
         </div>
 
         <div className="space-y-5">
-<Section title="Request Status" icon={<CalendarClock size={18} />}>
-  <StatusBadge label="Request Status" value={request.requestStatus} />
+          <Section title="Request Status" icon={<CalendarClock size={18} />}>
+            <StatusBadge
+              label="Request Status"
+              value={request.requestStatus}
+            />
 
-  <StatusBadge label="Payment Status" value={request.paymentStatus} />
+            <StatusBadge
+              label="Payment Status"
+              value={request.paymentStatus}
+            />
 
-  <StatusBadge
-    label="CAD Status"
-    value={request.cadCaseId ? "CAD Created" : "Not Created"}
-  />
+            <StatusBadge
+              label="CAD Status"
+              value={request.cadCaseId ? "CAD Created" : "Not Created"}
+            />
 
-  <StatusBadge
-    label="Preparation"
-    value={
-      requestPreparationAcknowledged
-        ? `Acknowledged by ${
-            preparationAcknowledgement?.acknowledgedByName ||
-            request.preparationAcknowledgedByName ||
-            "Team"
-          }`
-        : "Pending"
-    }
-  />
+            <StatusBadge
+              label="Preparation"
+              value={
+                requestPreparationAcknowledged
+                  ? `Acknowledged by ${
+                      preparationAcknowledgement?.acknowledgedByName ||
+                      request.preparationAcknowledgedByName ||
+                      "Team"
+                    }`
+                  : "Pending"
+              }
+            />
 
-  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-    {request.cadCaseId
-      ? "CAD case is already created."
-      : cadReady
-      ? "This request is ready to create CAD case."
-      : "CAD is locked until payment is paid and request is approved."}
-  </div>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+              {request.cadCaseId
+                ? "CAD case is already created."
+                : cadReady
+                ? "This request is ready to create CAD case."
+                : "CAD is locked until payment is paid and request is approved."}
+            </div>
 
-  {!request.cadCaseId && withinOneHour && cadReady && (
-    <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
-      This trip is within one hour. CAD should be activated now.
-    </div>
-  )}
-</Section>
+            {!request.cadCaseId && withinOneHour && cadReady && (
+              <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
+                This trip is within one hour. CAD should be activated now.
+              </div>
+            )}
+          </Section>
 
           <Section title="Payment" icon={<CreditCard size={18} />}>
             {editMode ? (
@@ -887,18 +1149,29 @@ if (!canViewThisB2CRequest) {
                   onChange={(v) => updateEditField("customerApprovedPrice", v)}
                   options={["No", "Yes - Send Payment Link"]}
                 />
+                <EditSelect
+                  label="Waiting Hours?"
+                  value={editForm.hasWaitingHours}
+                  onChange={(v) => updateEditField("hasWaitingHours", v)}
+                  options={["No", "Yes"]}
+                />
+                {editForm.hasWaitingHours === "Yes" && (
+                  <EditInput
+                    label="Number of Waiting Hours"
+                    value={editForm.waitingHours}
+                    onChange={(v) => updateEditField("waitingHours", v)}
+                  />
+                )}
+                <EditInput
+                  label="Payment Link"
+                  value={editForm.paymentLink}
+                  onChange={(v) => updateEditField("paymentLink", v)}
+                />
                 <EditInput
                   label="Payment Link Sent At"
                   type="datetime-local"
                   value={editForm.paymentLinkSentAt}
                   onChange={(v) => updateEditField("paymentLinkSentAt", v)}
-                />
-                <EditInput
-                  label="Booking Confirmation Number"
-                  value={editForm.bookingConfirmationNumber}
-                  onChange={(v) =>
-                    updateEditField("bookingConfirmationNumber", v)
-                  }
                 />
               </div>
             ) : (
@@ -909,12 +1182,25 @@ if (!canViewThisB2CRequest) {
                 />
                 <Info label="Payer" value={request.payer} />
                 <Info
-                  label="Payment Link Sent At"
-                  value={request.paymentLinkSentAt}
-                />
-                <Info
                   label="Customer Approved Price"
                   value={request.customerApprovedPrice}
+                />
+                <Info
+                  label="Waiting Hours?"
+                  value={request.hasWaitingHours}
+                />
+                <Info
+                  label="Number of Waiting Hours"
+                  value={request.waitingHours}
+                />
+                <Info label="Payment Link" value={request.paymentLink} />
+                <Info
+                  label="Payment Link Sent At"
+                  value={formatDateTime(request.paymentLinkSentAt)}
+                />
+                <Info
+                  label="Sent via WhatsApp"
+                  value={yesNo(request.paymentLinkSentViaWhatsApp)}
                 />
               </>
             )}
@@ -941,6 +1227,7 @@ if (!canViewThisB2CRequest) {
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
                       Team Group
                     </div>
+
                     <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">
                       {assignment.assignedTeamGroup || "—"}
                     </div>
@@ -999,12 +1286,12 @@ if (!canViewThisB2CRequest) {
               <button
                 className="btn-primary mt-4 w-full"
                 onClick={() =>
-  router.push(
-    isParamedic
-      ? `/missions/${request.cadCaseId}`
-      : `/cases/${request.cadCaseId}`
-  )
-}
+                  router.push(
+                    isParamedic
+                      ? `/missions/${request.cadCaseId}`
+                      : `/cases/${request.cadCaseId}`
+                  )
+                }
               >
                 {isParamedic ? "Open Mission" : "Open CAD Case"}
                 <ArrowRight size={16} />

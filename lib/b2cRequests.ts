@@ -40,7 +40,6 @@ export type B2CRequest = {
   requestType?: string;
   serviceScope?: string;
 
-  callNumber?: string;
   callDateTime?: string;
   coordinatorName?: string;
 
@@ -57,12 +56,16 @@ export type B2CRequest = {
   requestedTransportAt?: string;
   requestedAt?: string;
 
+  pickupType?: string;
+  pickupOtherText?: string;
   pickupText?: string;
   pickupMapLink?: string;
   pickupLat?: number | null;
   pickupLng?: number | null;
   pickupFloor?: string;
 
+  destinationType?: string;
+  destinationOtherText?: string;
   destinationText?: string;
   destinationMapLink?: string;
   destinationLat?: number | null;
@@ -77,6 +80,7 @@ export type B2CRequest = {
   chiefComplaint?: string;
   serviceType?: string;
   hasMedicalReport?: string;
+  medicalReportFileNames?: string[];
 
   operationalDecision?: string;
   rejectionReason?: string;
@@ -84,8 +88,23 @@ export type B2CRequest = {
 
   price?: string;
   payer?: string;
+  customerApprovedPrice?: string;
+  hasWaitingHours?: string;
+  waitingHours?: string;
+  paymentLink?: string;
   paymentLinkSentAt?: string;
+  paymentLinkSentViaWhatsApp?: boolean;
   bookingConfirmationNumber?: string;
+
+  customerContactBeforeTrip?: string;
+  contactPersonName?: string;
+  contactPersonMobile?: string;
+  relationToPatient?: string;
+  notes?: string;
+
+  ambulanceBagNumber?: string;
+  medicationsBag?: string;
+  devices?: string;
 
   plannedAssignment?: PlannedAssignment;
 
@@ -115,6 +134,26 @@ function toDateValue(value: any): Date | null {
   }
 
   return null;
+}
+
+function cleanUndefinedDeep(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(cleanUndefinedDeep);
+  }
+
+  if (value && typeof value === "object") {
+    const cleaned: Record<string, any> = {};
+
+    Object.entries(value).forEach(([key, val]) => {
+      if (val !== undefined) {
+        cleaned[key] = cleanUndefinedDeep(val);
+      }
+    });
+
+    return cleaned;
+  }
+
+  return value;
 }
 
 export function getAutoCadActivationAt(requestedTransportAt?: string) {
@@ -194,7 +233,7 @@ export async function createB2CRequest(form: any) {
 
   const plannedAssignment = normalizePlannedAssignment(form);
 
-  const ref = await addDoc(collection(db, "b2cRequests"), {
+  const payload = cleanUndefinedDeep({
     ...form,
 
     sourceType: "B2C_REQUEST",
@@ -213,6 +252,8 @@ export async function createB2CRequest(form: any) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  const ref = await addDoc(collection(db, "b2cRequests"), payload);
 
   return ref.id;
 }
@@ -233,10 +274,13 @@ export async function getB2CRequestById(
 }
 
 export async function updateB2CRequest(requestId: string, data: any) {
-  await updateDoc(doc(db, "b2cRequests", requestId), {
-    ...data,
-    updatedAt: serverTimestamp(),
-  });
+  await updateDoc(
+    doc(db, "b2cRequests", requestId),
+    cleanUndefinedDeep({
+      ...data,
+      updatedAt: serverTimestamp(),
+    })
+  );
 }
 
 export function canCreateCadCase(request: B2CRequest | null) {
@@ -288,15 +332,20 @@ export async function createCadCaseFromB2CRequest(
   const timestamp = new Date().toISOString();
   const plannedAssignment = normalizePlannedAssignment(request);
 
-  const caseRef = await addDoc(collection(db, "cases"), {
+  const casePayload = cleanUndefinedDeep({
     sourceType: "B2C",
     sourceRequestId: requestId,
+    b2cRequestId: requestId,
 
     caseType: "B2C",
     requestType: request.requestType || "Immediate",
+    serviceScope: request.serviceScope || "",
 
     status: "Assigned",
     dispatchStatus: "Assigned",
+
+    callDateTime: request.callDateTime || "",
+    coordinatorName: request.coordinatorName || "",
 
     customerName: request.customerName || "",
     customerMobile: request.customerMobile || "",
@@ -321,13 +370,20 @@ export async function createCadCaseFromB2CRequest(
     mobility: request.mobility || "",
     specialRequirements: request.specialRequirements || [],
     hasMedicalReport: request.hasMedicalReport || "No",
+    medicalReportFileNames: request.medicalReportFileNames || [],
 
+    tripType: request.tripType || "",
+
+    pickupType: request.pickupType || "",
+    pickupOtherText: request.pickupOtherText || "",
     pickupText: request.pickupText || "",
     pickupMapLink: request.pickupMapLink || "",
     pickupLat: request.pickupLat || null,
     pickupLng: request.pickupLng || null,
     pickupFloor: request.pickupFloor || "",
 
+    destinationType: request.destinationType || "",
+    destinationOtherText: request.destinationOtherText || "",
     destinationText: request.destinationText || "",
     destinationMapLink: request.destinationMapLink || "",
     destinationLat: request.destinationLat || null,
@@ -337,11 +393,31 @@ export async function createCadCaseFromB2CRequest(
     requestedTransportAt: request.requestedTransportAt || "",
     requestedAt: request.requestedTransportAt || request.requestedAt || "",
 
+    operationalDecision: request.operationalDecision || "",
+    rejectionReason: request.rejectionReason || "",
+    operationalNotes: request.operationalNotes || "",
+
     paymentStatus: request.paymentStatus || "Paid",
     price: request.price || "",
     payer: request.payer || "",
+    customerApprovedPrice: request.customerApprovedPrice || "",
+    hasWaitingHours: request.hasWaitingHours || "No",
+    waitingHours: request.waitingHours || "",
+    paymentLink: request.paymentLink || "",
     paymentLinkSentAt: request.paymentLinkSentAt || "",
+    paymentLinkSentViaWhatsApp:
+      request.paymentLinkSentViaWhatsApp === true || false,
     bookingConfirmationNumber: request.bookingConfirmationNumber || "",
+
+    customerContactBeforeTrip: request.customerContactBeforeTrip || "",
+    contactPersonName: request.contactPersonName || "",
+    contactPersonMobile: request.contactPersonMobile || "",
+    relationToPatient: request.relationToPatient || "",
+    notes: request.notes || "",
+
+    ambulanceBagNumber: request.ambulanceBagNumber || "",
+    medicationsBag: request.medicationsBag || "",
+    devices: request.devices || "",
 
     assignedUnit: plannedAssignment.unitId
       ? {
@@ -361,8 +437,14 @@ export async function createCadCaseFromB2CRequest(
     acknowledgement: {
       acknowledged: false,
       acknowledgedBy: null,
+      acknowledgedByName: null,
       acknowledgedAt: null,
     },
+
+    acknowledged: false,
+    acknowledgedBy: null,
+    acknowledgedByName: null,
+    acknowledgedAt: null,
 
     timeline: {
       Received: timestamp,
@@ -372,6 +454,8 @@ export async function createCadCaseFromB2CRequest(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  const caseRef = await addDoc(collection(db, "cases"), casePayload);
 
   await updateDoc(doc(db, "b2cRequests", requestId), {
     requestStatus: "CadCreated",

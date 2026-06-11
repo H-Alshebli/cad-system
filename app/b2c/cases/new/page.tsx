@@ -16,6 +16,7 @@ import {
 
 import { db } from "@/lib/firebase";
 import { createB2CRequest } from "@/lib/b2cRequests";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 const serviceScopes = [
   "Inside Riyadh",
@@ -28,6 +29,8 @@ const requestTypes = ["Immediate", "Scheduled"];
 const genderOptions = ["Male", "Female"];
 
 const tripTypes = ["One Way", "Round Trip"];
+
+const locationTypes = ["Home", "Hospital", "Other"];
 
 const floorOptions = [
   "Ground Floor",
@@ -60,18 +63,53 @@ const operationalDecisions = [
 
 const payerOptions = ["Customer", "Company", "Insurance"];
 
+function toDatetimeLocalValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function minus24Hours(datetimeLocal: string) {
+  if (!datetimeLocal) return "";
+
+  const date = new Date(datetimeLocal);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  date.setHours(date.getHours() - 24);
+
+  return toDatetimeLocalValue(date);
+}
+
+function getUserName(user: any) {
+  return (
+    user?.name ||
+    user?.displayName ||
+    user?.fullName ||
+    user?.email ||
+    ""
+  );
+}
+
+function getDefaultPrice(tripType: string) {
+  return tripType === "Round Trip" ? "1000" : "600";
+}
+
 export default function NewB2CCasePage() {
   const router = useRouter();
+  const { user } = useCurrentUser();
 
   const [saving, setSaving] = useState(false);
+  const [sendingPaymentLink, setSendingPaymentLink] = useState(false);
+  const [priceManuallyChanged, setPriceManuallyChanged] = useState(false);
+  const [medicalReportFiles, setMedicalReportFiles] = useState<File[]>([]);
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
 
   const [form, setForm] = useState({
-    callNumber: "",
-    callDateTime: new Date().toISOString(),
+    callDateTime: toDatetimeLocalValue(new Date()),
     coordinatorName: "",
+
     serviceScope: "Inside Riyadh",
     isEmergency: "No - Continue Request",
     requestType: "Immediate",
@@ -86,11 +124,15 @@ export default function NewB2CCasePage() {
     approximateWeight: "",
     tripType: "One Way",
 
-    pickupText: "",
+    pickupType: "Home",
+    pickupOtherText: "",
+    pickupText: "Home",
     pickupMapLink: "",
     pickupFloor: "Ground Floor",
 
-    destinationText: "",
+    destinationType: "Hospital",
+    destinationOtherText: "",
+    destinationText: "Hospital",
     destinationMapLink: "",
     destinationFloor: "Ground Floor",
 
@@ -105,20 +147,26 @@ export default function NewB2CCasePage() {
     rejectionReason: "",
     operationalNotes: "",
 
-    price: "",
+    price: "600",
     customerApprovedPrice: "No",
     hasWaitingHours: "No",
     waitingHours: "",
     payer: "Customer",
+    paymentLink: "",
     paymentLinkSentAt: "",
+    paymentLinkSentViaWhatsApp: false,
     paymentStatus: "Pending",
 
     bookingConfirmationNumber: "",
     customerContactBeforeTrip: "",
     contactPersonName: "",
     contactPersonMobile: "",
-    relationToPatient: "",
+    relationToPatient: "Patient",
     notes: "",
+
+    ambulanceBagNumber: "",
+    medicationsBag: "",
+    devices: "",
 
     serviceType: "Ambulance Transportation",
     chiefComplaint: "",
@@ -155,73 +203,90 @@ export default function NewB2CCasePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    setForm((prev) => ({
+      ...prev,
+      coordinatorName: prev.coordinatorName || getUserName(user),
+    }));
+  }, [user]);
+
   const selectedAmbulance = ambulances.find((a) => a.id === assignment.unitId);
 
   const isRejected = form.operationalDecision.startsWith("Rejected");
   const isEmergencyRefer997 = form.isEmergency === "Yes - Refer to 997";
 
-function getAmbulanceTeamIds(ambulance: any): string[] {
-  if (!ambulance) return [];
+  function getAmbulanceTeamIds(ambulance: any): string[] {
+    if (!ambulance) return [];
 
-  if (Array.isArray(ambulance.assignedUserIds)) {
-    return ambulance.assignedUserIds.filter(Boolean);
+    if (Array.isArray(ambulance.assignedUserIds)) {
+      return ambulance.assignedUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.crewUserIds)) {
+      return ambulance.crewUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.teamUserIds)) {
+      return ambulance.teamUserIds.filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.crewMembers)) {
+      return ambulance.crewMembers
+        .map((member: any) =>
+          typeof member === "string"
+            ? member
+            : member.userId || member.uid || member.id
+        )
+        .filter(Boolean);
+    }
+
+    if (Array.isArray(ambulance.teamMembers)) {
+      return ambulance.teamMembers
+        .map((member: any) =>
+          typeof member === "string"
+            ? member
+            : member.userId || member.uid || member.id
+        )
+        .filter(Boolean);
+    }
+
+    return [];
   }
 
-  if (Array.isArray(ambulance.crewUserIds)) {
-    return ambulance.crewUserIds.filter(Boolean);
+  function getAmbulanceTeamGroup(ambulance: any): string {
+    if (!ambulance) return "";
+
+    return (
+      ambulance.assignedTeamGroup ||
+      ambulance.teamGroup ||
+      ambulance.teamName ||
+      ambulance.groupName ||
+      `${ambulance.code || ambulance.name || "Ambulance"} Team`
+    );
   }
 
-  if (Array.isArray(ambulance.teamUserIds)) {
-    return ambulance.teamUserIds.filter(Boolean);
+  function getUserDisplayName(userId: string) {
+    const user = users.find((u) => u.uid === userId || u.id === userId);
+
+    if (user) {
+      return (
+        user.name ||
+        user.displayName ||
+        user.fullName ||
+        user.email ||
+        userId
+      );
+    }
+
+    const crewMember = selectedAmbulance?.crewMembers?.find(
+      (member: any) =>
+        member.userId === userId || member.uid === userId || member.id === userId
+    );
+
+    return crewMember?.name || crewMember?.email || userId;
   }
-
-  if (Array.isArray(ambulance.crewMembers)) {
-    return ambulance.crewMembers
-      .map((member: any) =>
-        typeof member === "string"
-          ? member
-          : member.userId || member.uid || member.id
-      )
-      .filter(Boolean);
-  }
-
-  if (Array.isArray(ambulance.teamMembers)) {
-    return ambulance.teamMembers
-      .map((member: any) =>
-        typeof member === "string"
-          ? member
-          : member.userId || member.uid || member.id
-      )
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-function getAmbulanceTeamGroup(ambulance: any): string {
-  if (!ambulance) return "";
-
-  return (
-    ambulance.assignedTeamGroup ||
-    ambulance.teamGroup ||
-    ambulance.teamName ||
-    ambulance.groupName ||
-    `${ambulance.code || ambulance.name || "Ambulance"} Team`
-  );
-}
-function getUserDisplayName(userId: string) {
-  const user = users.find((u) => u.uid === userId || u.id === userId);
-
-  if (user) {
-    return user.name || user.displayName || user.fullName || user.email || userId;
-  }
-
-  const crewMember = selectedAmbulance?.crewMembers?.find(
-    (member: any) => member.userId === userId || member.uid === userId || member.id === userId
-  );
-
-  return crewMember?.name || crewMember?.email || userId;
-}
 
   function handleAmbulanceChange(unitId: string) {
     const ambulance = ambulances.find((a) => a.id === unitId);
@@ -239,14 +304,73 @@ function getUserDisplayName(userId: string) {
 
   function updateField(name: string, value: string) {
     setForm((prev) => {
-      const next = { ...prev, [name]: value };
+      const next: any = { ...prev, [name]: value };
+
+      if (name === "customerName") {
+        const shouldAutoFillPatient =
+          !prev.patientName || prev.patientName === prev.customerName;
+
+        const shouldAutoFillContact =
+          !prev.contactPersonName ||
+          prev.contactPersonName === prev.customerName;
+
+        if (shouldAutoFillPatient) {
+          next.patientName = value;
+        }
+
+        if (shouldAutoFillContact) {
+          next.contactPersonName = value;
+        }
+      }
+
+      if (name === "customerMobile") {
+        const shouldAutoFillContactMobile =
+          !prev.contactPersonMobile ||
+          prev.contactPersonMobile === prev.customerMobile;
+
+        if (shouldAutoFillContactMobile) {
+          next.contactPersonMobile = value;
+        }
+      }
+
+      if (name === "tripType") {
+        if (!priceManuallyChanged) {
+          next.price = getDefaultPrice(value);
+        }
+      }
+
+      if (name === "price") {
+        setPriceManuallyChanged(true);
+      }
 
       if (name === "requestedTransportAt") {
         next.requestedAt = value;
+        next.customerContactBeforeTrip = minus24Hours(value);
       }
 
       if (name === "diagnosisOrReason") {
         next.chiefComplaint = value;
+      }
+
+      if (name === "pickupType") {
+        next.pickupText = value === "Other" ? prev.pickupOtherText : value;
+      }
+
+      if (name === "pickupOtherText") {
+        if (prev.pickupType === "Other") {
+          next.pickupText = value;
+        }
+      }
+
+      if (name === "destinationType") {
+        next.destinationText =
+          value === "Other" ? prev.destinationOtherText : value;
+      }
+
+      if (name === "destinationOtherText") {
+        if (prev.destinationType === "Other") {
+          next.destinationText = value;
+        }
       }
 
       return next;
@@ -272,6 +396,79 @@ function getUserDisplayName(userId: string) {
           : [...withoutNone, value],
       };
     });
+  }
+
+  async function handleSendPaymentLink() {
+    if (!form.customerMobile) {
+      alert("Please enter customer mobile first.");
+      return;
+    }
+
+    if (!form.customerName) {
+      alert("Please enter customer name first.");
+      return;
+    }
+
+    if (!form.patientName) {
+      alert("Please enter patient name first.");
+      return;
+    }
+
+    if (!form.price) {
+      alert("Please enter service cost first.");
+      return;
+    }
+
+    if (!form.paymentLink) {
+      alert("Please paste the payment link first.");
+      return;
+    }
+
+    setSendingPaymentLink(true);
+
+    try {
+      const response = await fetch("/api/wati/send-payment-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerMobile: form.customerMobile,
+          customerName: form.customerName,
+          patientName: form.patientName,
+          amount: form.price,
+          paymentLink: form.paymentLink,
+        }),
+      });
+
+      const data = await response.json();
+
+   if (!response.ok || !data.success) {
+  console.error("WATI frontend error:", data);
+
+  throw new Error(
+    data?.message ||
+      data?.data?.message ||
+      data?.data?.error ||
+      JSON.stringify(data?.data || data) ||
+      "Failed to send payment link."
+  );
+}
+
+      setForm((prev) => ({
+        ...prev,
+        paymentLinkSentAt: toDatetimeLocalValue(new Date()),
+        paymentLinkSentViaWhatsApp: true,
+        customerApprovedPrice: "Yes - Send Payment Link",
+      }));
+
+      alert("Payment link sent to customer via WhatsApp.");
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to send payment link.");
+    } finally {
+      setSendingPaymentLink(false);
+    }
   }
 
   async function submitB2C() {
@@ -324,7 +521,10 @@ function getUserDisplayName(userId: string) {
         ...form,
 
         sourceType: "B2C_REQUEST",
-        callDateTime: form.callDateTime || new Date().toISOString(),
+        callDateTime: form.callDateTime || toDatetimeLocalValue(new Date()),
+        coordinatorName: form.coordinatorName || getUserName(user),
+
+        medicalReportFileNames: medicalReportFiles.map((file) => file.name),
 
         plannedAssignment: {
           ...assignment,
@@ -383,32 +583,21 @@ function getUserDisplayName(userId: string) {
               subtitle="Initial call details, service scope, emergency check, and request type."
             />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <Field label="Call Number">
-                <input
-                  className="input"
-                  placeholder="Auto-generated or manual"
-                  value={form.callNumber}
-                  onChange={(e) => updateField("callNumber", e.target.value)}
-                />
-              </Field>
-
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Field label="Call Date & Time">
                 <input
-                  className="input"
+                  className="input opacity-80"
                   type="datetime-local"
-                  value={form.callDateTime.slice(0, 16)}
-                  onChange={(e) => updateField("callDateTime", e.target.value)}
+                  value={form.callDateTime}
+                  readOnly
                 />
               </Field>
 
               <Field label="Coordinator Name">
                 <input
-                  className="input"
+                  className="input opacity-80"
                   value={form.coordinatorName}
-                  onChange={(e) =>
-                    updateField("coordinatorName", e.target.value)
-                  }
+                  readOnly
                 />
               </Field>
 
@@ -564,13 +753,29 @@ function getUserDisplayName(userId: string) {
                   Pickup Point
                 </h3>
 
-                <Field label="Pickup Location Name *">
-                  <input
-                    className="input"
-                    value={form.pickupText}
-                    onChange={(e) => updateField("pickupText", e.target.value)}
-                  />
+                <Field label="Pickup Type *">
+                  <select
+                    className="select"
+                    value={form.pickupType}
+                    onChange={(e) => updateField("pickupType", e.target.value)}
+                  >
+                    {locationTypes.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
                 </Field>
+
+                {form.pickupType === "Other" && (
+                  <Field label="Other Pickup Location *">
+                    <input
+                      className="input"
+                      value={form.pickupOtherText}
+                      onChange={(e) =>
+                        updateField("pickupOtherText", e.target.value)
+                      }
+                    />
+                  </Field>
+                )}
 
                 <Field label="Pickup Location Link">
                   <input
@@ -602,15 +807,31 @@ function getUserDisplayName(userId: string) {
                   Destination
                 </h3>
 
-                <Field label="Destination Location Name *">
-                  <input
-                    className="input"
-                    value={form.destinationText}
+                <Field label="Destination Type *">
+                  <select
+                    className="select"
+                    value={form.destinationType}
                     onChange={(e) =>
-                      updateField("destinationText", e.target.value)
+                      updateField("destinationType", e.target.value)
                     }
-                  />
+                  >
+                    {locationTypes.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
                 </Field>
+
+                {form.destinationType === "Other" && (
+                  <Field label="Other Destination Location *">
+                    <input
+                      className="input"
+                      value={form.destinationOtherText}
+                      onChange={(e) =>
+                        updateField("destinationOtherText", e.target.value)
+                      }
+                    />
+                  </Field>
+                )}
 
                 <Field label="Destination Location Link">
                   <input
@@ -699,6 +920,27 @@ function getUserDisplayName(userId: string) {
                   <option>Yes</option>
                 </select>
               </Field>
+
+              {form.hasMedicalReport === "Yes" && (
+                <Field label="Upload Medical Report Attachments">
+                  <input
+                    className="input"
+                    type="file"
+                    multiple
+                    onChange={(e) =>
+                      setMedicalReportFiles(Array.from(e.target.files || []))
+                    }
+                  />
+
+                  {medicalReportFiles.length > 0 && (
+                    <div className="mt-2 space-y-1 text-xs text-slate-400">
+                      {medicalReportFiles.map((file) => (
+                        <div key={file.name}>{file.name}</div>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              )}
             </div>
 
             <div>
@@ -787,7 +1029,7 @@ function getUserDisplayName(userId: string) {
             <SectionTitle
               icon={<CreditCard size={20} />}
               title="5. Pricing & Payment"
-              subtitle="Service cost, customer approval, waiting hours, payer, payment link, and payment confirmation."
+              subtitle="Service cost, customer approval, payer, manual payment link, WhatsApp sending, and payment confirmation."
             />
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -797,6 +1039,15 @@ function getUserDisplayName(userId: string) {
                   type="number"
                   value={form.price}
                   onChange={(e) => updateField("price", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Payment Link">
+                <input
+                  className="input"
+                  value={form.paymentLink}
+                  onChange={(e) => updateField("paymentLink", e.target.value)}
+                  placeholder="Paste manual payment link here"
                 />
               </Field>
 
@@ -853,14 +1104,31 @@ function getUserDisplayName(userId: string) {
 
               <Field label="Payment Link Sent At">
                 <input
-                  className="input"
+                  className="input opacity-80"
                   type="datetime-local"
                   value={form.paymentLinkSentAt}
-                  onChange={(e) =>
-                    updateField("paymentLinkSentAt", e.target.value)
-                  }
+                  readOnly
                 />
               </Field>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={sendingPaymentLink}
+                onClick={handleSendPaymentLink}
+              >
+                {sendingPaymentLink
+                  ? "Sending payment link..."
+                  : "Send Payment Link to Customer"}
+              </button>
+
+              {form.paymentLinkSentViaWhatsApp && (
+                <span className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                  Sent via WhatsApp
+                </span>
+              )}
             </div>
 
             <div className="card-soft">
@@ -917,12 +1185,10 @@ function getUserDisplayName(userId: string) {
 
               <Field label="Contact Customer 24h Before Trip">
                 <input
-                  className="input"
+                  className="input opacity-80"
                   type="datetime-local"
                   value={form.customerContactBeforeTrip}
-                  onChange={(e) =>
-                    updateField("customerContactBeforeTrip", e.target.value)
-                  }
+                  readOnly
                 />
               </Field>
 
@@ -976,129 +1242,149 @@ function getUserDisplayName(userId: string) {
           </section>
         </div>
 
-        <aside className="space-y-5">
-          <div className="card-modern sticky top-5">
-            <SectionTitle
-              icon={<Ambulance size={20} />}
-              title="Planned Ambulance & Team"
-              subtitle="Select the ambulance. The assigned team will be loaded automatically from the ambulance profile."
-            />
+  <aside className="space-y-5">
+  <div className="sticky top-5 space-y-5">
+    <div className="card-modern">
+      <SectionTitle
+        icon={<Ambulance size={20} />}
+        title="Planned Ambulance & Team"
+        subtitle="Select the ambulance. The assigned team will be loaded automatically from the ambulance profile."
+      />
 
-            <div className="mt-5 space-y-4">
-              <Field label="Planned Ambulance / Unit">
-                <select
-                  className="select"
-                  value={assignment.unitId}
-                  onChange={(e) => handleAmbulanceChange(e.target.value)}
-                >
-                  <option value="">Select ambulance</option>
+      <div className="mt-5 space-y-4">
+        <Field label="Planned Ambulance / Unit">
+          <select
+            className="select"
+            value={assignment.unitId}
+            onChange={(e) => handleAmbulanceChange(e.target.value)}
+          >
+            <option value="">Select ambulance</option>
 
-                  {ambulances.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.code || a.name || a.id}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+            {ambulances.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.code || a.name || a.id}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-              {selectedAmbulance ? (
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                  <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
-                    Selected Ambulance
-                  </div>
+        {selectedAmbulance ? (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+            <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
+              Selected Ambulance
+            </div>
 
-                  <div className="text-lg font-black text-slate-950 dark:text-white">
-                    {selectedAmbulance.code ||
-                      selectedAmbulance.name ||
-                      selectedAmbulance.id}
-                  </div>
+            <div className="text-lg font-black text-slate-950 dark:text-white">
+              {selectedAmbulance.code ||
+                selectedAmbulance.name ||
+                selectedAmbulance.id}
+            </div>
 
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {selectedAmbulance.type ||
-                      selectedAmbulance.vehicleType ||
-                      "Ambulance"}
-                  </div>
-                </div>
-              ) : (
-                <Notice
-                  type="warning"
-                  title="No ambulance selected"
-                  message="Select an ambulance to load the assigned team."
-                />
-              )}
-
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
-                  Team Assigned to Ambulance
-                </div>
-
-                {assignment.assignedTeamGroup ? (
-                  <div className="mb-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-700 dark:text-blue-300">
-                    {assignment.assignedTeamGroup}
-                  </div>
-                ) : (
-                  <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-200">
-                    No team group is linked to this ambulance.
-                  </div>
-                )}
-
-                {assignment.assignedUserIds.length > 0 ? (
-                  <div className="space-y-2">
-                    {assignment.assignedUserIds.map((userId) => (
-                      <div
-                        key={userId}
-                        className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#0b1220]"
-                      >
-                        <div>
-                          <div className="text-sm font-black text-slate-950 dark:text-white">
-                            {getUserDisplayName(userId)}
-                          </div>
-
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            {userId}
-                          </div>
-                        </div>
-
-                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300">
-                          Assigned
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-200">
-                    No paramedics are linked to this ambulance. Please update
-                    the ambulance profile or select another unit.
-                  </div>
-                )}
-              </div>
-
-              <Notice
-                type="warning"
-                title="This does not create CAD yet"
-                message="This request will be visible as an upcoming request for the planned team. When CAD is created, the same ambulance and team will be copied to the CAD case."
-              />
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {selectedAmbulance.type ||
+                selectedAmbulance.vehicleType ||
+                "Ambulance"}
             </div>
           </div>
+        ) : (
+          <Notice
+            type="warning"
+            title="No ambulance selected"
+            message="Select an ambulance to load the assigned team."
+          />
+        )}
 
-          <div className="card-modern">
-            <SectionTitle
-              icon={<Lock size={20} />}
-              title="New B2C Flow"
-              subtitle="The request is created first. CAD is activated later."
-            />
-
-            <ol className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-              <li>1. Dispatcher creates B2C request.</li>
-              <li>2. Dispatcher selects the planned ambulance.</li>
-              <li>3. System loads the ambulance team automatically.</li>
-              <li>4. Request appears to the assigned team as Upcoming Request.</li>
-              <li>5. Dispatcher manually clicks Create CAD Case.</li>
-              <li>6. If not done manually, CAD will be created before trip time.</li>
-              <li>7. Team opens the active CAD mission.</li>
-            </ol>
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+          <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
+            Team Assigned to Ambulance
           </div>
-        </aside>
+
+          {assignment.assignedTeamGroup ? (
+            <div className="mb-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-700 dark:text-blue-300">
+              {assignment.assignedTeamGroup}
+            </div>
+          ) : (
+            <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-200">
+              No team group is linked to this ambulance.
+            </div>
+          )}
+
+          {assignment.assignedUserIds.length > 0 ? (
+            <div className="space-y-2">
+              {assignment.assignedUserIds.map((userId) => (
+                <div
+                  key={userId}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#0b1220]"
+                >
+                  <div>
+                    <div className="text-sm font-black text-slate-950 dark:text-white">
+                      {getUserDisplayName(userId)}
+                    </div>
+
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {userId}
+                    </div>
+                  </div>
+
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300">
+                    Assigned
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-200">
+              No paramedics are linked to this ambulance. Please update the
+              ambulance profile or select another unit.
+            </div>
+          )}
+        </div>
+
+        <Notice
+          type="warning"
+          title="This does not create CAD yet"
+          message="This request will be visible as an upcoming request for the planned team. When CAD is created, the same ambulance and team will be copied to the CAD case."
+        />
+      </div>
+    </div>
+
+    <div className="card-modern">
+      <SectionTitle
+        icon={<Lock size={20} />}
+        title="Ambulance Equipment"
+        subtitle="Temporary fields. Later we can convert them to managed lists."
+      />
+
+      <div className="mt-5 space-y-4">
+        <Field label="Ambulance Bag Number">
+          <input
+            className="input"
+            value={form.ambulanceBagNumber}
+            onChange={(e) =>
+              updateField("ambulanceBagNumber", e.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Medications Bag">
+          <input
+            className="input"
+            value={form.medicationsBag}
+            onChange={(e) => updateField("medicationsBag", e.target.value)}
+          />
+        </Field>
+
+        <Field label="Devices">
+          <input
+            className="input"
+            value={form.devices}
+            onChange={(e) => updateField("devices", e.target.value)}
+          />
+        </Field>
+      </div>
+    </div>
+  </div>
+</aside>
       </div>
     </div>
   );
