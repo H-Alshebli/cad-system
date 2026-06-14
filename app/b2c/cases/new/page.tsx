@@ -148,7 +148,7 @@ export default function NewB2CCasePage() {
     rejectionReason: "",
     operationalNotes: "",
 
-    price: "600",
+    price: "690",
     customerApprovedPrice: "No",
     hasWaitingHours: "No",
     waitingHours: "",
