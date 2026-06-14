@@ -420,14 +420,13 @@ const SIGNS_SYMPTOMS = [
 ] as const;
 
 const DESTINATIONS = [
-  "Emergency Room",
-  "Clinic",
-  "On Scene (No Transport)",
-  "Other",
+  "Hospital to Home",
+  "Home to Hospital",
+  "Hospital to Hospital",
+  "Treated on Scene",
+  "Scene to Hospital",
+  "Death",
 ] as const;
-
-const UNITS = ["Unit 1", "Unit 2", "Unit 3", "Other"] as const;
-const POSITIONS = ["Paramedic", "EMT", "Nurse", "Doctor", "Other"] as const;
 
 const MEDICATIONS_LIST = [
   "Oxygen",
@@ -465,6 +464,148 @@ const timestampToHHMM = (ts: any): string => {
 
 const pickTimelineTime = (timeline: any, newKey: string, oldKey: string) => {
   return timeline?.[newKey] ?? timeline?.[oldKey] ?? null;
+};
+
+const requiresHospitalFields = (destination: string) => {
+  return String(destination || "").toLowerCase().includes("hospital");
+};
+
+const getCaseAssignedUserIds = (caseData: any): string[] => {
+  const possibleSources = [
+    caseData?.assignedUserIds,
+    caseData?.plannedAssignment?.assignedUserIds,
+    caseData?.assignedTeam?.assignedUserIds,
+    caseData?.assignedCrewUserIds,
+    caseData?.crewUserIds,
+    caseData?.teamUserIds,
+  ];
+
+  for (const source of possibleSources) {
+    if (Array.isArray(source)) {
+      return source.filter(Boolean).slice(0, 2);
+    }
+  }
+
+  if (Array.isArray(caseData?.assignedCrew)) {
+    return caseData.assignedCrew
+      .map((member: any) =>
+        typeof member === "string"
+          ? member
+          : member.userId || member.uid || member.id
+      )
+      .filter(Boolean)
+      .slice(0, 2);
+  }
+
+  return [];
+};
+
+const getCaseUnitValue = (caseData: any): string => {
+  return (
+    caseData?.assignedAmbulanceCode ||
+    caseData?.assignedUnit?.code ||
+    caseData?.assignedUnit?.name ||
+    caseData?.assignedUnit ||
+    caseData?.unitCode ||
+    caseData?.unitName ||
+    caseData?.plannedAssignment?.unitCode ||
+    caseData?.plannedAssignment?.unitName ||
+    caseData?.plannedAssignment?.unitId ||
+    ""
+  );
+};
+
+const getUserDisplayName = (userData: any, fallbackId: string) => {
+  return (
+    userData?.name ||
+    userData?.fullName ||
+    userData?.displayName ||
+    userData?.email ||
+    fallbackId ||
+    ""
+  );
+};
+
+const getUserBadgeNo = (userData: any) => {
+  return (
+    userData?.badgeNo ||
+    userData?.badgeNumber ||
+    userData?.badge ||
+    userData?.employeeId ||
+    userData?.employeeNo ||
+    userData?.staffId ||
+    ""
+  );
+};
+
+const getUserPosition = (userData: any) => {
+  return (
+    userData?.position ||
+    userData?.jobTitle ||
+    userData?.title ||
+    userData?.role ||
+    ""
+  );
+};
+
+const getNormalizedTransferMembers = (
+  transferTeam?: TransferTeam
+): [TransferMember, TransferMember] => {
+  return [
+    transferTeam?.members?.[0] ?? emptyTransferMember(),
+    transferTeam?.members?.[1] ?? emptyTransferMember(),
+  ];
+};
+
+const buildAutoTransferTeam = async (
+  caseData: any,
+  currentTransferTeam?: TransferTeam
+): Promise<TransferTeam | null> => {
+  const assignedUserIds = getCaseAssignedUserIds(caseData);
+  const unitValue = getCaseUnitValue(caseData);
+
+  if (!assignedUserIds.length && !unitValue) return null;
+
+  const currentMembers = getNormalizedTransferMembers(currentTransferTeam);
+  const nextMembers: [TransferMember, TransferMember] = [
+    { ...currentMembers[0] },
+    { ...currentMembers[1] },
+  ];
+
+  for (let idx = 0; idx < 2; idx += 1) {
+    const userId = assignedUserIds[idx];
+    let userData: any = null;
+
+    if (userId) {
+      try {
+        const userSnap = await getDoc(doc(db, "users", userId));
+        if (userSnap.exists()) {
+          userData = userSnap.data();
+        }
+      } catch (error) {
+        console.error("Failed to read assigned user for ePCR transfer team:", error);
+      }
+    }
+
+    const current = nextMembers[idx] ?? emptyTransferMember();
+
+    nextMembers[idx] = {
+      ...current,
+      name: current.name || (userId ? getUserDisplayName(userData, userId) : ""),
+      badgeNo: current.badgeNo || getUserBadgeNo(userData),
+      unit: current.unit || unitValue,
+      position: current.position || getUserPosition(userData),
+      signatureDataUrl: current.signatureDataUrl || "",
+    };
+  }
+
+  const changed = JSON.stringify(currentMembers) !== JSON.stringify(nextMembers);
+
+  if (!changed) return null;
+
+  return {
+    members: nextMembers,
+  };
 };
 
 export default function EpcrPage({ params }: { params: { id: string } }) {
@@ -524,6 +665,23 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
           });
 
           epcrData.projectInfo = newProjectInfo;
+          setData(epcrData);
+          setLoading(false);
+          return;
+        }
+
+        const autoTransferTeam = await buildAutoTransferTeam(
+          caseData,
+          epcrData.transferTeam
+        );
+
+        if (autoTransferTeam) {
+          await updateDoc(epcrRef, {
+            transferTeam: autoTransferTeam,
+            updatedAt: new Date(),
+          });
+
+          epcrData.transferTeam = autoTransferTeam;
           setData(epcrData);
           setLoading(false);
           return;
@@ -629,10 +787,13 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
     }
 
     if (!outcome.destination.trim()) m.push("Outcome: Destination");
-    if (!outcome.hospitalName.trim()) m.push("Outcome: Hospital Name");
-    if (!outcome.hospitalMember.trim()) m.push("Outcome: Hospital Member");
-    if (!outcome.hospitalSignatureDataUrl) {
-      m.push("Outcome: Hospital Signature");
+
+    if (requiresHospitalFields(outcome.destination)) {
+      if (!outcome.hospitalName.trim()) m.push("Outcome: Hospital Name");
+      if (!outcome.hospitalMember.trim()) m.push("Outcome: Hospital Member");
+      if (!outcome.hospitalSignatureDataUrl) {
+        m.push("Outcome: Hospital Signature");
+      }
     }
 
     transferTeam.members.forEach((mem, idx) => {
@@ -1665,52 +1826,73 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
           ))}
         </Select>
 
-        <Input
-          disabled={locked}
-          label="Hospital Name *"
-          value={outcome.hospitalName}
-          onChange={(e) =>
-            setData((prev) => ({
-              ...(prev ?? {}),
-              outcome: {
-                ...(prev?.outcome ?? emptyOutcome()),
-                hospitalName: e.target.value,
-              },
-            }))
-          }
-        />
+        {requiresHospitalFields(outcome.destination) && (
+          <>
+            <Input
+              disabled={locked}
+              label="Hospital Name *"
+              value={outcome.hospitalName}
+              onChange={(e) =>
+                setData((prev) => ({
+                  ...(prev ?? {}),
+                  outcome: {
+                    ...(prev?.outcome ?? emptyOutcome()),
+                    hospitalName: e.target.value,
+                  },
+                }))
+              }
+            />
 
-        <Input
-          disabled={locked}
-          label="Hospital Member *"
-          value={outcome.hospitalMember}
-          onChange={(e) =>
-            setData((prev) => ({
-              ...(prev ?? {}),
-              outcome: {
-                ...(prev?.outcome ?? emptyOutcome()),
-                hospitalMember: e.target.value,
-              },
-            }))
-          }
-        />
+            <Input
+              disabled={locked}
+              label="Hospital Member *"
+              value={outcome.hospitalMember}
+              onChange={(e) =>
+                setData((prev) => ({
+                  ...(prev ?? {}),
+                  outcome: {
+                    ...(prev?.outcome ?? emptyOutcome()),
+                    hospitalMember: e.target.value,
+                  },
+                }))
+              }
+            />
 
-        <div className="grid grid-cols-2 gap-6">
-          <SignatureBox
-            disabled={locked}
-            label="Hospital Signature *"
-            value={outcome.hospitalSignatureDataUrl}
-            onChange={(dataUrl) =>
-              setData((prev) => ({
-                ...(prev ?? {}),
-                outcome: {
-                  ...(prev?.outcome ?? emptyOutcome()),
-                  hospitalSignatureDataUrl: dataUrl,
-                },
-              }))
-            }
-          />
+            <div className="grid grid-cols-2 gap-6">
+              <SignatureBox
+                disabled={locked}
+                label="Hospital Signature *"
+                value={outcome.hospitalSignatureDataUrl}
+                onChange={(dataUrl) =>
+                  setData((prev) => ({
+                    ...(prev ?? {}),
+                    outcome: {
+                      ...(prev?.outcome ?? emptyOutcome()),
+                      hospitalSignatureDataUrl: dataUrl,
+                    },
+                  }))
+                }
+              />
 
+              <SignatureBox
+                disabled={locked}
+                label="Patient Signature"
+                value={outcome.patientSignatureDataUrl}
+                onChange={(dataUrl) =>
+                  setData((prev) => ({
+                    ...(prev ?? {}),
+                    outcome: {
+                      ...(prev?.outcome ?? emptyOutcome()),
+                      patientSignatureDataUrl: dataUrl,
+                    },
+                  }))
+                }
+              />
+            </div>
+          </>
+        )}
+
+        {!requiresHospitalFields(outcome.destination) && (
           <SignatureBox
             disabled={locked}
             label="Patient Signature"
@@ -1725,7 +1907,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
               }))
             }
           />
-        </div>
+        )}
       </Section>
 
       <Section title="Transfer Team">
@@ -1773,7 +1955,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
             />
 
             <div className="grid grid-cols-2 gap-4">
-              <Select
+              <Input
                 disabled={locked}
                 label="Unit"
                 value={mem.unit}
@@ -1788,15 +1970,9 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
                     return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                   })
                 }
-              >
-                {UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </Select>
+              />
 
-              <Select
+              <Input
                 disabled={locked}
                 label="Position"
                 value={mem.position}
@@ -1811,13 +1987,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
                     return { ...(prev ?? {}), transferTeam: { ...tt, members } };
                   })
                 }
-              >
-                {POSITIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
 
             <SignatureBox
