@@ -92,7 +92,7 @@ function getUserName(user: any) {
 }
 
 function getDefaultPrice(tripType: string) {
-  return tripType === "Round Trip" ? "1000" : "600";
+  return tripType === "Round Trip" ? "1150" : "690";
 }
 
 export default function NewB2CCasePage() {
