@@ -129,7 +129,10 @@ function normalizeDestinationLocation(data: any): NormalizedLocation {
 
   return {
     text:
+      nested.hospitalName ||
+      nested.name ||
       nested.text ||
+      data.destinationHospitalName ||
       data.destinationText ||
       data.destinationName ||
       data.destinationLocation ||
@@ -338,6 +341,15 @@ export default function CaseDetailsPage({
               currentStatus={caseData.status}
               caseLocation={pickupLocation}
               projectHospitals={caseData.projectHospitals || []}
+              sourceType={sourceType}
+              caseType={caseData.caseType}
+              b2cDestination={caseData.destination}
+              destinationHospitalName={caseData.destinationHospitalName}
+              destinationText={caseData.destinationText}
+              destinationMapLink={caseData.destinationMapLink}
+              destinationLat={caseData.destinationLat}
+              destinationLng={caseData.destinationLng}
+              destinationFloor={caseData.destinationFloor}
               onDestinationSelected={() => {}}
             />
 
@@ -496,6 +508,19 @@ export default function CaseDetailsPage({
                 "—"
               }
             />
+            {sourceType === "B2C" && (
+              <Info
+                label="Destination Hospital"
+                value={
+                  caseData.destinationHospitalName ||
+                  caseData.destination?.hospitalName ||
+                  caseData.destination?.name ||
+                  caseData.destinationText ||
+                  "—"
+                }
+              />
+            )}
+
             <Info
               label="Payment"
               value={

@@ -132,6 +132,7 @@ export default function NewB2CCasePage() {
     pickupFloor: "Ground Floor",
 
     destinationType: "Hospital",
+    destinationHospitalName: "",
     destinationOtherText: "",
     destinationText: "Hospital",
     destinationMapLink: "",
@@ -364,8 +365,20 @@ export default function NewB2CCasePage() {
       }
 
       if (name === "destinationType") {
-        next.destinationText =
-          value === "Other" ? prev.destinationOtherText : value;
+        if (value === "Other") {
+          next.destinationText = prev.destinationOtherText;
+        } else if (value === "Hospital") {
+          next.destinationText = prev.destinationHospitalName || "Hospital";
+        } else {
+          next.destinationText = value;
+          next.destinationHospitalName = "";
+        }
+      }
+
+      if (name === "destinationHospitalName") {
+        if (prev.destinationType === "Hospital") {
+          next.destinationText = value || "Hospital";
+        }
       }
 
       if (name === "destinationOtherText") {
@@ -483,6 +496,11 @@ async function submitB2C() {
     alert(
       "Please complete customer name, mobile number, patient name, pickup, and destination."
     );
+    return;
+  }
+
+  if (form.destinationType === "Hospital" && !form.destinationHospitalName.trim()) {
+    alert("Please enter the hospital name.");
     return;
   }
 
@@ -839,6 +857,20 @@ async function submitB2C() {
                     ))}
                   </select>
                 </Field>
+
+                {form.destinationType === "Hospital" && (
+                  <Field label="Hospital Name *">
+                    <input
+                      className="input"
+                      value={form.destinationHospitalName}
+                      onChange={(e) =>
+                        updateField("destinationHospitalName", e.target.value)
+                      }
+                      placeholder="Enter hospital name"
+                    />
+                  </Field>
+                )}
+                
 
                 {form.destinationType === "Other" && (
                   <Field label="Other Destination Location *">

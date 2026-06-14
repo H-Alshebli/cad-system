@@ -65,6 +65,7 @@ export type B2CRequest = {
   pickupFloor?: string;
 
   destinationType?: string;
+  destinationHospitalName?: string;
   destinationOtherText?: string;
   destinationText?: string;
   destinationMapLink?: string;
@@ -220,6 +221,14 @@ function normalizePlannedAssignment(form: any): PlannedAssignment {
       ? plannedAssignment.assignedUserIds
       : [],
   };
+}
+
+function getB2CDestinationText(request: B2CRequest) {
+  if (request.destinationType === "Hospital") {
+    return request.destinationHospitalName || request.destinationText || "Hospital";
+  }
+
+  return request.destinationText || "";
 }
 
 export async function createB2CRequest(form: any) {
@@ -383,12 +392,23 @@ export async function createCadCaseFromB2CRequest(
     pickupFloor: request.pickupFloor || "",
 
     destinationType: request.destinationType || "",
+    destinationHospitalName: request.destinationHospitalName || "",
     destinationOtherText: request.destinationOtherText || "",
-    destinationText: request.destinationText || "",
+    destinationText: getB2CDestinationText(request),
     destinationMapLink: request.destinationMapLink || "",
     destinationLat: request.destinationLat || null,
     destinationLng: request.destinationLng || null,
     destinationFloor: request.destinationFloor || "",
+
+    destination: {
+      text: getB2CDestinationText(request),
+      googleMapLink: request.destinationMapLink || "",
+      lat: request.destinationLat || null,
+      lng: request.destinationLng || null,
+      hospitalName: request.destinationHospitalName || "",
+      type: request.destinationType || "",
+      floor: request.destinationFloor || "",
+    },
 
     requestedTransportAt: request.requestedTransportAt || "",
     requestedAt: request.requestedTransportAt || request.requestedAt || "",
