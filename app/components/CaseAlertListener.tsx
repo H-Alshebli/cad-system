@@ -73,6 +73,28 @@ function hasAnyRole(role: string | undefined, allowed: string[]) {
   const normalized = (role || "").trim().toLowerCase();
   return allowed.includes(normalized);
 }
+function isB2CCase(c: AlertCase) {
+  return (
+    String(c.sourceType || "").toUpperCase() === "B2C" ||
+    String(c.caseType || "").toUpperCase() === "B2C"
+  );
+}
+
+function shouldTriggerCaseAlert(
+  c: AlertCase,
+  audience: "dispatch" | "client" | "team"
+) {
+  if (c.status === "Closed") return false;
+
+  if (c.suppressInitialAlert === true) return false;
+  if (c.alertOnCreate === false) return false;
+
+  // B2C CAD cases can appear in My Missions,
+  // but should not trigger alarm popup when created early.
+  if (audience === "team" && isB2CCase(c)) return false;
+
+  return true;
+}
 
 function getCaseProjectId(c: AlertCase) {
   return c.projectId || c.assignedProjectId || "";
@@ -332,14 +354,16 @@ export default function CaseAlertListener() {
     }, 1600);
   }
 
-  function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
-    if (seenCaseIdsRef.current.has(`${audience}:${c.id}`)) return;
+function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
+  if (!shouldTriggerCaseAlert(c, audience)) return;
 
-    seenCaseIdsRef.current.add(`${audience}:${c.id}`);
-    setAlertCase(c);
-    setAlertAudience(audience);
-    startAlarm();
-  }
+  if (seenCaseIdsRef.current.has(`${audience}:${c.id}`)) return;
+
+  seenCaseIdsRef.current.add(`${audience}:${c.id}`);
+  setAlertCase(c);
+  setAlertAudience(audience);
+  startAlarm();
+}
 
   function dismissAlert() {
     stopAlarm();
