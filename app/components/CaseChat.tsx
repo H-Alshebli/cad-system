@@ -69,8 +69,7 @@ export default function CaseChat({
   const [uid, setUid] = useState<string | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-
+const messagesBoxRef = useRef<HTMLDivElement>(null);
   /* -------------------------
      AUTH + LOAD USER
   -------------------------- */
@@ -134,9 +133,14 @@ export default function CaseChat({
   /* -------------------------
      AUTO SCROLL
   -------------------------- */
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+useEffect(() => {
+  if (messages.length === 0) return;
+
+  const box = messagesBoxRef.current;
+  if (!box) return;
+
+  box.scrollTop = box.scrollHeight;
+}, [messages.length]);
 
   /* -------------------------
      DISABLE LOGIC (FIXED)
@@ -198,7 +202,7 @@ const effectiveDisabled =
       </div>
 
       {/* MESSAGES */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <div ref={messagesBoxRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
         {messages.length === 0 && (
           <div className="text-sm text-gray-400 text-center mt-10">
             No messages yet
@@ -234,7 +238,6 @@ const effectiveDisabled =
           );
         })}
 
-        <div ref={bottomRef} />
       </div>
 
       {/* INPUT */}
