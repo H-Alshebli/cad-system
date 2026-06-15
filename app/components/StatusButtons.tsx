@@ -41,8 +41,8 @@ type Destination = {
   id: string;
   name: string;
   type: "hospital" | "clinic";
-  lat?: number | null;
-  lng?: number | null;
+  lat: number;
+  lng: number;
   address?: string;
   googleMapLink?: string;
   hospitalName?: string;
@@ -86,8 +86,7 @@ type StatusButtonsProps = {
   destinationLng?: number | null;
   destinationFloor?: string;
 
-  onDestinationSelected?: (destination: Destination) => void;
-};
+onDestinationSelected?: (destination: any) => void;};
 
 const STATUSES = [
   "Received",
@@ -137,18 +136,18 @@ return {
   id: b2cDestination?.id || "b2c-destination",
   name,
   type: "hospital",
-    lat:
-      typeof b2cDestination?.lat === "number"
-        ? b2cDestination.lat
-        : typeof destinationLat === "number"
-        ? destinationLat
-        : null,
-    lng:
-      typeof b2cDestination?.lng === "number"
-        ? b2cDestination.lng
-        : typeof destinationLng === "number"
-        ? destinationLng
-        : null,
+lat:
+  typeof b2cDestination?.lat === "number"
+    ? b2cDestination.lat
+    : typeof destinationLat === "number"
+    ? destinationLat
+    : 0,
+lng:
+  typeof b2cDestination?.lng === "number"
+    ? b2cDestination.lng
+    : typeof destinationLng === "number"
+    ? destinationLng
+    : 0,
     address: b2cDestination?.address || "",
     googleMapLink: b2cDestination?.googleMapLink || destinationMapLink || "",
     hospitalName: b2cDestination?.hospitalName || destinationHospitalName || name,
