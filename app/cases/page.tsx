@@ -36,6 +36,20 @@ interface CaseData {
   [key: string]: any;
 }
 
+function isB2CCase(c: CaseData) {
+  return c.sourceType === "B2C" || c.caseType === "B2C";
+}
+
+function shouldTriggerAlarm(c: CaseData) {
+  // Do not alarm when B2C CAD is created early
+  if (isB2CCase(c)) return false;
+
+  // Optional flags for future control
+  if (c.suppressInitialAlert === true) return false;
+  if (c.alertOnCreate === false) return false;
+
+  return c.status !== "Closed";
+}
 export default function CasesDashboard() {
   /* ---------------------------------------------------------
      STATE
@@ -160,15 +174,21 @@ export default function CasesDashboard() {
       const newest = list[0];
       if (!newest) return;
 
-      // Dispatch alarm
-      if (role === "dispatch" && newest.id !== lastLatestCaseId) {
-        startAlarm();
-        setLastLatestCaseId(newest.id);
-      }
+// Dispatch alarm - Project cases only
+if (role === "dispatch") {
+  const newestAlarmCase = list.find((c) => shouldTriggerAlarm(c));
+
+  if (newestAlarmCase && newestAlarmCase.id !== lastLatestCaseId) {
+    startAlarm();
+    setLastLatestCaseId(newestAlarmCase.id);
+  }
+}
 
       // Ambulance alarm
       if (role === "ambulance" && unitFilter) {
-        const myCase = list.find((c) => c.ambulanceCode === unitFilter);
+       const myCase = list.find(
+  (c) => c.ambulanceCode === unitFilter && shouldTriggerAlarm(c)
+);
         if (
           myCase &&
           myCase.id !== lastLatestCaseId &&
@@ -181,7 +201,9 @@ export default function CasesDashboard() {
 
       // Roaming alarm
       if (role === "roaming" && unitFilter) {
-        const myCase = list.find((c) => c.roaming === unitFilter);
+       const myCase = list.find(
+  (c) => c.roaming === unitFilter && shouldTriggerAlarm(c)
+);
         if (
           myCase &&
           myCase.id !== lastLatestCaseId &&

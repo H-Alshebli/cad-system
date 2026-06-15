@@ -171,6 +171,7 @@ export default function B2CRequestDetailsPage({
 
     destinationType: "",
     destinationOtherText: "",
+    destinationHospitalName: "",
     destinationText: "",
     destinationMapLink: "",
     destinationFloor: "",
@@ -285,6 +286,7 @@ export default function B2CRequestDetailsPage({
 
       destinationType: request.destinationType || "",
       destinationOtherText: request.destinationOtherText || "",
+      destinationHospitalName: request.destinationHospitalName || "",
       destinationText: request.destinationText || "",
       destinationMapLink: request.destinationMapLink || "",
       destinationFloor: request.destinationFloor || "",
@@ -466,10 +468,39 @@ export default function B2CRequestDetailsPage({
   }
 
   function updateEditField(name: string, value: any) {
-    setEditForm((prev: any) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setEditForm((prev: any) => {
+      const next: any = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (name === "destinationType") {
+        if (value === "Hospital") {
+          next.destinationText =
+            prev.destinationHospitalName || prev.destinationText || "Hospital";
+        } else if (value === "Other") {
+          next.destinationText = prev.destinationOtherText || "";
+          next.destinationHospitalName = "";
+        } else {
+          next.destinationText = value || "";
+          next.destinationHospitalName = "";
+        }
+      }
+
+      if (name === "destinationHospitalName") {
+        if (prev.destinationType === "Hospital") {
+          next.destinationText = value || "Hospital";
+        }
+      }
+
+      if (name === "destinationOtherText") {
+        if (prev.destinationType === "Other") {
+          next.destinationText = value || "";
+        }
+      }
+
+      return next;
+    });
   }
 
   async function handleSaveEdit() {
@@ -490,6 +521,14 @@ export default function B2CRequestDetailsPage({
       alert(
         "Please complete customer name, mobile, patient name, pickup, and destination."
       );
+      return;
+    }
+
+    if (
+      editForm.destinationType === "Hospital" &&
+      !String(editForm.destinationHospitalName || "").trim()
+    ) {
+      alert("Please enter the hospital name.");
       return;
     }
 
@@ -523,8 +562,16 @@ export default function B2CRequestDetailsPage({
         requestStatus = "PendingPayment";
       }
 
+      const destinationText =
+        editForm.destinationType === "Hospital"
+          ? editForm.destinationHospitalName || "Hospital"
+          : editForm.destinationType === "Other"
+          ? editForm.destinationOtherText || ""
+          : editForm.destinationText || editForm.destinationType || "";
+
       await updateB2CRequest(request.id, {
         ...editForm,
+        destinationText,
         requestStatus,
         plannedAssignment: assignment,
       });
@@ -844,6 +891,17 @@ export default function B2CRequestDetailsPage({
                   onChange={(v) => updateEditField("destinationType", v)}
                   options={locationTypes}
                 />
+
+                {editForm.destinationType === "Hospital" && (
+                  <EditInput
+                    label="Hospital Name"
+                    value={editForm.destinationHospitalName}
+                    onChange={(v) =>
+                      updateEditField("destinationHospitalName", v)
+                    }
+                  />
+                )}
+
                 <EditInput
                   label="Other Destination Location"
                   value={editForm.destinationOtherText}
@@ -883,6 +941,14 @@ export default function B2CRequestDetailsPage({
                 <Info label="Pickup Link" value={request.pickupMapLink} />
                 <Info label="Pickup Floor" value={request.pickupFloor} />
                 <Info label="Destination Type" value={request.destinationType} />
+
+                {request.destinationType === "Hospital" && (
+                  <Info
+                    label="Destination Hospital"
+                    value={request.destinationHospitalName || request.destinationText}
+                  />
+                )}
+
                 <Info
                   label="Other Destination Location"
                   value={request.destinationOtherText}
