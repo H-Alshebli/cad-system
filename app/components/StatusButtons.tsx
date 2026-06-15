@@ -40,7 +40,7 @@ type B2CDestination = {
 type Destination = {
   id: string;
   name: string;
-  type: "hospital" | "clinic" | "b2c";
+  type: "hospital" | "clinic";
   lat?: number | null;
   lng?: number | null;
   address?: string;
@@ -133,10 +133,10 @@ function buildB2CDestination({
 
   if (!name.trim()) return null;
 
-  return {
-    id: b2cDestination?.id || "b2c-destination",
-    name,
-    type: "b2c",
+return {
+  id: b2cDestination?.id || "b2c-destination",
+  name,
+  type: "hospital",
     lat:
       typeof b2cDestination?.lat === "number"
         ? b2cDestination.lat
