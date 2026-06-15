@@ -639,24 +639,49 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
         const caseData = caseSnap.data();
         const timeline = caseData.timeline;
 
-        let projectUpdated = false;
-        const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
+let projectUpdated = false;
+const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
 
-        if (!newProjectInfo.projectId && caseData.projectId) {
-          newProjectInfo.projectId = caseData.projectId;
-          projectUpdated = true;
-        }
+const sourceType = String(
+  caseData.sourceType || caseData.caseType || ""
+).toUpperCase();
 
-        if (caseData.projectId && !newProjectInfo.projectName) {
-          const projectRef = doc(db, "projects", caseData.projectId);
-          const projectSnap = await getDoc(projectRef);
+const isB2C = sourceType === "B2C";
 
-          if (projectSnap.exists()) {
-            const projectData = projectSnap.data();
-            newProjectInfo.projectName = projectData.projectName ?? "";
-            projectUpdated = true;
-          }
-        }
+if (isB2C) {
+  const b2cCaseId =
+    caseData.b2cRequestId ||
+    caseData.requestId ||
+    caseData.sourceRequestId ||
+    caseData.bookingConfirmationNumber ||
+    epcrId;
+
+  if (!newProjectInfo.projectName) {
+    newProjectInfo.projectName = "B2C";
+    projectUpdated = true;
+  }
+
+  if (!newProjectInfo.projectId) {
+    newProjectInfo.projectId = b2cCaseId;
+    projectUpdated = true;
+  }
+} else {
+  if (!newProjectInfo.projectId && caseData.projectId) {
+    newProjectInfo.projectId = caseData.projectId;
+    projectUpdated = true;
+  }
+
+  if (caseData.projectId && !newProjectInfo.projectName) {
+    const projectRef = doc(db, "projects", caseData.projectId);
+    const projectSnap = await getDoc(projectRef);
+
+    if (projectSnap.exists()) {
+      const projectData = projectSnap.data();
+      newProjectInfo.projectName = projectData.projectName ?? "";
+      projectUpdated = true;
+    }
+  }
+}
 
         if (projectUpdated) {
           await updateDoc(epcrRef, {
