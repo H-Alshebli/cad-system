@@ -364,6 +364,7 @@ export default function B2CRequestDetailsPage({
     canActivateB2CCad;
 
   const canOpenCad = Boolean(request?.cadCaseId);
+  const canOpenReturnCad = Boolean(request?.returnCadCaseId);
 
   const assignedUserIds = Array.isArray(
     request?.plannedAssignment?.assignedUserIds
@@ -726,7 +727,23 @@ export default function B2CRequestDetailsPage({
                 )
               }
             >
-              {isParamedic ? "Open Mission" : "Open CAD Case"}
+              {isParamedic ? "Open Mission" : "Open Outbound CAD"}
+              <ArrowRight size={16} />
+            </button>
+          )}
+
+          {canOpenReturnCad && (
+            <button
+              className="btn-primary"
+              onClick={() =>
+                router.push(
+                  isParamedic
+                    ? `/missions/${request.returnCadCaseId}`
+                    : `/cases/${request.returnCadCaseId}`
+                )
+              }
+            >
+              {isParamedic ? "Open Return Mission" : "Open Return CAD"}
               <ArrowRight size={16} />
             </button>
           )}
@@ -928,6 +945,22 @@ export default function B2CRequestDetailsPage({
               <>
                 <Info label="Request Type" value={request.requestType} />
                 <Info label="Trip Type" value={request.tripType} />
+                {request.tripType === "Round Trip" && (
+                  <>
+                    <Info
+                      label="Outbound CAD Case"
+                      value={request.cadCaseId || "Not Created"}
+                    />
+                    <Info
+                      label="Return CAD Case"
+                      value={request.returnCadCaseId || "Not Created"}
+                    />
+                    <Info
+                      label="Return Trip Status"
+                      value={request.returnTripStatus || "Not Created"}
+                    />
+                  </>
+                )}
                 <Info
                   label="Transport Date / Time"
                   value={formatDateTime(request.requestedTransportAt)}
@@ -1175,9 +1208,27 @@ export default function B2CRequestDetailsPage({
             <StatusBadge label="Payment Status" value={request.paymentStatus} />
 
             <StatusBadge
-              label="CAD Status"
-              value={request.cadCaseId ? "CAD Created" : "Not Created"}
+              label="Outbound CAD"
+              value={request.cadCaseId ? `Created: ${request.cadCaseId}` : "Not Created"}
             />
+
+            {request.tripType === "Round Trip" && (
+              <>
+                <StatusBadge
+                  label="Return Trip Status"
+                  value={request.returnTripStatus || "Not Created"}
+                />
+
+                <StatusBadge
+                  label="Return CAD"
+                  value={
+                    request.returnCadCaseId
+                      ? `Created: ${request.returnCadCaseId}`
+                      : "Not Created"
+                  }
+                />
+              </>
+            )}
 
             <StatusBadge
               label="Preparation"
@@ -1194,7 +1245,11 @@ export default function B2CRequestDetailsPage({
 
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
               {request.cadCaseId
-                ? "CAD case is already created."
+                ? request.tripType === "Round Trip"
+                  ? request.returnCadCaseId
+                    ? "Outbound and return CAD cases are already created."
+                    : "Outbound CAD is created. Return CAD will be created from the outbound CAD case after it is closed."
+                  : "CAD case is already created."
                 : cadReady
                 ? "This request is ready to create CAD case."
                 : "CAD is locked until payment is paid and request is approved."}
@@ -1363,19 +1418,45 @@ export default function B2CRequestDetailsPage({
             )}
 
             {request.cadCaseId ? (
-              <button
-                className="btn-primary mt-4 w-full"
-                onClick={() =>
-                  router.push(
-                    isParamedic
-                      ? `/missions/${request.cadCaseId}`
-                      : `/cases/${request.cadCaseId}`
-                  )
-                }
-              >
-                {isParamedic ? "Open Mission" : "Open CAD Case"}
-                <ArrowRight size={16} />
-              </button>
+              <div className="mt-4 space-y-2">
+                <button
+                  className="btn-primary w-full"
+                  onClick={() =>
+                    router.push(
+                      isParamedic
+                        ? `/missions/${request.cadCaseId}`
+                        : `/cases/${request.cadCaseId}`
+                    )
+                  }
+                >
+                  {isParamedic ? "Open Mission" : "Open Outbound CAD"}
+                  <ArrowRight size={16} />
+                </button>
+
+                {request.returnCadCaseId && (
+                  <button
+                    className="btn-primary w-full"
+                    onClick={() =>
+                      router.push(
+                        isParamedic
+                          ? `/missions/${request.returnCadCaseId}`
+                          : `/cases/${request.returnCadCaseId}`
+                      )
+                    }
+                  >
+                    {isParamedic ? "Open Return Mission" : "Open Return CAD"}
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+
+                {request.tripType === "Round Trip" && !request.returnCadCaseId && (
+                  <div className="notice-warning">
+                    Return CAD is not created yet. Open the outbound CAD case,
+                    close it after completion, then create the return CAD from
+                    there.
+                  </div>
+                )}
+              </div>
             ) : canCreateCad ? (
               <button
                 className="btn-primary mt-4 w-full"

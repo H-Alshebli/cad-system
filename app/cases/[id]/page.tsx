@@ -9,6 +9,7 @@ import CaseTimeline from "@/app/components/CaseTimeline";
 import CaseChat from "@/app/components/CaseChat";
 import StatusButtons from "@/app/components/StatusButtons";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
+import { createReturnCadCaseFromB2CRequest } from "@/lib/b2cRequests";
 import {
   Activity,
   ArrowLeft,
@@ -163,6 +164,7 @@ export default function CaseDetailsPage({
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [epcr, setEpcr] = useState<any | null>(null);
+  const [creatingReturnCad, setCreatingReturnCad] = useState(false);
 
   const [editPatient, setEditPatient] = useState(false);
   const [editCaseInfo, setEditCaseInfo] = useState(false);
@@ -233,6 +235,15 @@ export default function CaseDetailsPage({
   const pickupLocation = caseData.pickupLocation;
   const destinationLocation = caseData.destinationLocation;
 
+  const canCreateReturnCad =
+    sourceType === "B2C" &&
+    caseData.tripType === "Round Trip" &&
+    caseData.tripLeg === "outbound" &&
+    caseData.status === "Closed" &&
+    !!caseData.b2cRequestId &&
+    !caseData.linkedReturnCaseId &&
+    !caseData.returnCadCaseId;
+
   async function handleEpcr() {
     if (epcr) {
       router.push(`/epcr/${epcr.id}`);
@@ -246,6 +257,33 @@ export default function CaseDetailsPage({
     });
 
     router.push(`/epcr/${epcrId}`);
+  }
+
+  async function handleCreateReturnCad() {
+    if (!caseData?.b2cRequestId) {
+      alert("B2C request ID is missing.");
+      return;
+    }
+
+    if (!confirm("Create return CAD case for this round trip?")) {
+      return;
+    }
+
+    setCreatingReturnCad(true);
+
+    try {
+      const returnCaseId = await createReturnCadCaseFromB2CRequest(
+        caseData.b2cRequestId,
+        "dispatch"
+      );
+
+      router.push(`/cases/${returnCaseId}`);
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to create return CAD case.");
+    } finally {
+      setCreatingReturnCad(false);
+    }
   }
 
   async function savePatientInfo() {
@@ -294,6 +332,12 @@ export default function CaseDetailsPage({
 
               <Badge tone="blue">{sourceType}</Badge>
 
+              {caseData.tripLeg && (
+                <Badge tone="blue">
+                  {caseData.tripLeg === "return" ? "Return Trip" : "Outbound"}
+                </Badge>
+              )}
+
               <Badge tone={caseData.status === "Closed" ? "slate" : "green"}>
                 {caseData.status || "—"}
               </Badge>
@@ -328,6 +372,18 @@ export default function CaseDetailsPage({
             >
               {epcr ? "View ePCR" : "Create ePCR"}
             </button>
+
+            {canCreateReturnCad && (
+              <button
+                onClick={handleCreateReturnCad}
+                disabled={creatingReturnCad}
+                className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {creatingReturnCad
+                  ? "Creating Return CAD..."
+                  : "Create Return CAD Case"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -488,6 +544,16 @@ export default function CaseDetailsPage({
         <div className="space-y-6">
           <Section title="Dispatch Summary" icon={<AmbulanceIcon />}>
             <Info label="Source" value={sourceType} />
+            <Info
+              label="Trip Type"
+              value={
+                caseData.tripType
+                  ? `${caseData.tripType}${
+                      caseData.tripLeg ? ` / ${caseData.tripLeg}` : ""
+                    }`
+                  : "—"
+              }
+            />
             <Info label="Project" value={caseData.projectName || "—"} />
             <Info
               label="Customer"
@@ -508,6 +574,7 @@ export default function CaseDetailsPage({
                 "—"
               }
             />
+
             {sourceType === "B2C" && (
               <Info
                 label="Destination Hospital"
@@ -517,6 +584,17 @@ export default function CaseDetailsPage({
                   caseData.destination?.name ||
                   caseData.destinationText ||
                   "—"
+                }
+              />
+            )}
+
+            {sourceType === "B2C" && caseData.tripType === "Round Trip" && (
+              <Info
+                label="Return CAD"
+                value={
+                  caseData.linkedReturnCaseId ||
+                  caseData.returnCadCaseId ||
+                  "Not Created"
                 }
               />
             )}
@@ -768,7 +846,9 @@ function Badge({
       : "bg-slate-500/10 text-slate-600 dark:text-slate-300";
 
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${cls}`}>
+    <span
+      className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${cls}`}
+    >
       {children}
     </span>
   );

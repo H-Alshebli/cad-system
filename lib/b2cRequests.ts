@@ -20,6 +20,12 @@ export type B2CRequestStatus =
 
 export type PaymentStatus = "Pending" | "Paid";
 
+export type ReturnTripStatus =
+  | "Not Created"
+  | "Ready"
+  | "Created"
+  | "Cancelled";
+
 export type PlannedAssignment = {
   unitType?: string;
   unitId?: string;
@@ -112,6 +118,12 @@ export type B2CRequest = {
   cadCaseId?: string | null;
   cadCreatedAt?: any;
   cadCreatedBy?: string | null;
+
+  returnCadCaseId?: string | null;
+  returnCadCreatedAt?: any;
+  returnCadCreatedBy?: string | null;
+  returnTripStatus?: ReturnTripStatus | null;
+
   autoCadActivationAt?: string | null;
 
   createdAt?: any;
@@ -225,10 +237,22 @@ function normalizePlannedAssignment(form: any): PlannedAssignment {
 
 function getB2CDestinationText(request: B2CRequest) {
   if (request.destinationType === "Hospital") {
-    return request.destinationHospitalName || request.destinationText || "Hospital";
+    return (
+      request.destinationHospitalName ||
+      request.destinationText ||
+      "Hospital"
+    );
   }
 
   return request.destinationText || "";
+}
+
+function getB2CReturnDestinationText(request: B2CRequest) {
+  if (request.pickupType === "Hospital") {
+    return request.pickupOtherText || request.pickupText || "Hospital";
+  }
+
+  return request.pickupText || "";
 }
 
 export async function createB2CRequest(form: any) {
@@ -255,6 +279,12 @@ export async function createB2CRequest(form: any) {
     cadCaseId: null,
     cadCreatedAt: null,
     cadCreatedBy: null,
+
+    returnCadCaseId: null,
+    returnCadCreatedAt: null,
+    returnCadCreatedBy: null,
+    returnTripStatus:
+      form.tripType === "Round Trip" ? "Not Created" : null,
 
     autoCadActivationAt: getAutoCadActivationAt(form.requestedTransportAt),
 
@@ -350,6 +380,13 @@ export async function createCadCaseFromB2CRequest(
     requestType: request.requestType || "Immediate",
     serviceScope: request.serviceScope || "",
 
+    tripType: request.tripType || "",
+    tripLeg: "outbound",
+    linkedReturnCaseId: "",
+
+    suppressInitialAlert: true,
+    alertOnCreate: false,
+
     status: "Assigned",
     dispatchStatus: "Assigned",
 
@@ -380,8 +417,6 @@ export async function createCadCaseFromB2CRequest(
     specialRequirements: request.specialRequirements || [],
     hasMedicalReport: request.hasMedicalReport || "No",
     medicalReportFileNames: request.medicalReportFileNames || [],
-
-    tripType: request.tripType || "",
 
     pickupType: request.pickupType || "",
     pickupOtherText: request.pickupOtherText || "",
@@ -482,8 +517,219 @@ export async function createCadCaseFromB2CRequest(
     cadCaseId: caseRef.id,
     cadCreatedAt: serverTimestamp(),
     cadCreatedBy: createdBy,
+    returnTripStatus:
+      request.tripType === "Round Trip"
+        ? request.returnTripStatus || "Not Created"
+        : null,
     updatedAt: serverTimestamp(),
   });
 
   return caseRef.id;
+}
+
+export function canCreateReturnCadCase(request: B2CRequest | null) {
+  if (!request) return false;
+
+  const isRoundTrip = request.tripType === "Round Trip";
+  const hasOutboundCad = !!request.cadCaseId;
+  const alreadyHasReturnCad = !!request.returnCadCaseId;
+
+  const isRejectedOrCancelled =
+    request.requestStatus === "Rejected" ||
+    request.requestStatus === "Cancelled" ||
+    request.returnTripStatus === "Cancelled";
+
+  return (
+    isRoundTrip &&
+    hasOutboundCad &&
+    !alreadyHasReturnCad &&
+    !isRejectedOrCancelled
+  );
+}
+
+export async function createReturnCadCaseFromB2CRequest(
+  requestId: string,
+  createdBy = "dispatch"
+) {
+  const request = await getB2CRequestById(requestId);
+
+  if (!request) {
+    throw new Error("B2C request not found.");
+  }
+
+  if (!canCreateReturnCadCase(request)) {
+    throw new Error(
+      "Return CAD cannot be created. This must be a Round Trip request with an outbound CAD already created."
+    );
+  }
+
+  const timestamp = new Date().toISOString();
+  const plannedAssignment = normalizePlannedAssignment(request);
+
+  const returnPickupText = getB2CDestinationText(request);
+  const returnDestinationText = getB2CReturnDestinationText(request);
+
+  const casePayload = cleanUndefinedDeep({
+    sourceType: "B2C",
+    sourceRequestId: requestId,
+    b2cRequestId: requestId,
+
+    caseType: "B2C",
+    requestType: request.requestType || "Scheduled",
+    serviceScope: request.serviceScope || "",
+
+    tripType: request.tripType || "Round Trip",
+    tripLeg: "return",
+    linkedOutboundCaseId: request.cadCaseId || "",
+
+    suppressInitialAlert: true,
+    alertOnCreate: false,
+
+    status: "Assigned",
+    dispatchStatus: "Assigned",
+
+    callDateTime: request.callDateTime || "",
+    coordinatorName: request.coordinatorName || "",
+
+    customerName: request.customerName || "",
+    customerMobile: request.customerMobile || "",
+
+    patientName: request.patientName || "",
+    patientAge: request.patientAge || "",
+    patientGender: request.patientGender || "",
+    patientIdOrIqama: request.patientIdOrIqama || "",
+    approximateWeight: request.approximateWeight || "",
+
+    chiefComplaint:
+      request.diagnosisOrReason ||
+      request.chiefComplaint ||
+      request.serviceType ||
+      "",
+
+    diagnosisOrReason: request.diagnosisOrReason || "",
+    serviceType: request.serviceType || "Ambulance Transportation",
+
+    patientStability: request.patientStability || "",
+    transportLevel: request.transportLevel || "",
+    mobility: request.mobility || "",
+    specialRequirements: request.specialRequirements || [],
+    hasMedicalReport: request.hasMedicalReport || "No",
+    medicalReportFileNames: request.medicalReportFileNames || [],
+
+    pickupType: request.destinationType || "",
+    pickupOtherText: request.destinationOtherText || "",
+    pickupText: returnPickupText,
+    pickupMapLink: request.destinationMapLink || "",
+    pickupLat: request.destinationLat || null,
+    pickupLng: request.destinationLng || null,
+    pickupFloor: request.destinationFloor || "",
+
+    destinationType: request.pickupType || "",
+    destinationHospitalName:
+      request.pickupType === "Hospital"
+        ? request.pickupOtherText || request.pickupText || "Hospital"
+        : "",
+    destinationOtherText: request.pickupOtherText || "",
+    destinationText: returnDestinationText,
+    destinationMapLink: request.pickupMapLink || "",
+    destinationLat: request.pickupLat || null,
+    destinationLng: request.pickupLng || null,
+    destinationFloor: request.pickupFloor || "",
+
+    destination: {
+      text: returnDestinationText,
+      googleMapLink: request.pickupMapLink || "",
+      lat: request.pickupLat || null,
+      lng: request.pickupLng || null,
+      hospitalName:
+        request.pickupType === "Hospital"
+          ? request.pickupOtherText || request.pickupText || "Hospital"
+          : "",
+      type: request.pickupType || "",
+      floor: request.pickupFloor || "",
+    },
+
+    requestedTransportAt: request.requestedTransportAt || "",
+    requestedAt: request.requestedTransportAt || request.requestedAt || "",
+
+    operationalDecision: request.operationalDecision || "",
+    rejectionReason: request.rejectionReason || "",
+    operationalNotes: request.operationalNotes || "",
+
+    paymentStatus: request.paymentStatus || "Paid",
+    price: request.price || "",
+    payer: request.payer || "",
+    customerApprovedPrice: request.customerApprovedPrice || "",
+    hasWaitingHours: request.hasWaitingHours || "No",
+    waitingHours: request.waitingHours || "",
+    paymentLink: request.paymentLink || "",
+    paymentLinkSentAt: request.paymentLinkSentAt || "",
+    paymentLinkSentViaWhatsApp:
+      request.paymentLinkSentViaWhatsApp === true || false,
+    bookingConfirmationNumber: request.bookingConfirmationNumber || "",
+
+    customerContactBeforeTrip: request.customerContactBeforeTrip || "",
+    contactPersonName: request.contactPersonName || "",
+    contactPersonMobile: request.contactPersonMobile || "",
+    relationToPatient: request.relationToPatient || "",
+    notes: request.notes || "",
+
+    ambulanceBagNumber: request.ambulanceBagNumber || "",
+    medicationsBag: request.medicationsBag || "",
+    devices: request.devices || "",
+
+    assignedUnit: plannedAssignment.unitId
+      ? {
+          type: plannedAssignment.unitType || "ambulance",
+          id: plannedAssignment.unitId,
+          code: plannedAssignment.unitCode || "",
+          name: plannedAssignment.unitName || "",
+          unitTypeName: plannedAssignment.unitTypeName || "Ambulance",
+        }
+      : null,
+
+    assignedAmbulanceId: plannedAssignment.unitId || "",
+    assignedAmbulanceCode: plannedAssignment.unitCode || "",
+    assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
+    assignedUserIds: plannedAssignment.assignedUserIds || [],
+
+    acknowledgement: {
+      acknowledged: false,
+      acknowledgedBy: null,
+      acknowledgedByName: null,
+      acknowledgedAt: null,
+    },
+
+    acknowledged: false,
+    acknowledgedBy: null,
+    acknowledgedByName: null,
+    acknowledgedAt: null,
+
+    timeline: {
+      Received: timestamp,
+      Assigned: timestamp,
+    },
+
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const returnCaseRef = await addDoc(collection(db, "cases"), casePayload);
+
+  await updateDoc(doc(db, "b2cRequests", requestId), {
+    returnCadCaseId: returnCaseRef.id,
+    returnCadCreatedAt: serverTimestamp(),
+    returnCadCreatedBy: createdBy,
+    returnTripStatus: "Created",
+    updatedAt: serverTimestamp(),
+  });
+
+  if (request.cadCaseId) {
+    await updateDoc(doc(db, "cases", request.cadCaseId), {
+      linkedReturnCaseId: returnCaseRef.id,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  return returnCaseRef.id;
 }
