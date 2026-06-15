@@ -35,6 +35,7 @@ type TriageColor =
 type ProjectInfo = {
   projectId?: string;
   projectName?: string;
+  tripLeg?: string;
 };
 
 type HealthClassification =
@@ -171,6 +172,7 @@ type EpcrDoc = {
 const emptyProjectInfo = (): ProjectInfo => ({
   projectId: "",
   projectName: "",
+  tripLeg: "",
 });
 
 const emptyPatientInfo = (): PatientInfo => ({
@@ -469,7 +471,16 @@ const pickTimelineTime = (timeline: any, newKey: string, oldKey: string) => {
 const requiresHospitalFields = (destination: string) => {
   return String(destination || "").toLowerCase().includes("hospital");
 };
-
+const getCaseDestinationHospitalName = (caseData: any): string => {
+  return (
+    caseData?.destinationHospitalName ||
+    caseData?.destination?.hospitalName ||
+    caseData?.destination?.name ||
+    caseData?.destination?.text ||
+    caseData?.destinationText ||
+    ""
+  );
+};
 const getCaseAssignedUserIds = (caseData: any): string[] => {
   const possibleSources = [
     caseData?.assignedUserIds,
@@ -631,9 +642,11 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      const epcrData = epcrSnap.data() as EpcrDoc;
-      const caseRef = doc(db, "cases", epcrId);
-      const caseSnap = await getDoc(caseRef);
+const epcrData = epcrSnap.data() as EpcrDoc & { caseId?: string };
+const sourceCaseId = epcrData.caseId || epcrId;
+
+const caseRef = doc(db, "cases", sourceCaseId);
+const caseSnap = await getDoc(caseRef);
 
       if (caseSnap.exists()) {
         const caseData = caseSnap.data();
@@ -649,20 +662,25 @@ const sourceType = String(
 const isB2C = sourceType === "B2C";
 
 if (isB2C) {
-  const b2cCaseId =
+  const b2cRequestId =
     caseData.b2cRequestId ||
     caseData.requestId ||
     caseData.sourceRequestId ||
     caseData.bookingConfirmationNumber ||
-    epcrId;
+    sourceCaseId;
 
-  if (!newProjectInfo.projectName) {
+  if (newProjectInfo.projectName !== "B2C") {
     newProjectInfo.projectName = "B2C";
     projectUpdated = true;
   }
 
-  if (!newProjectInfo.projectId) {
-    newProjectInfo.projectId = b2cCaseId;
+  if (newProjectInfo.projectId !== b2cRequestId) {
+    newProjectInfo.projectId = b2cRequestId;
+    projectUpdated = true;
+  }
+
+  if (caseData.tripLeg && newProjectInfo.tripLeg !== caseData.tripLeg) {
+    newProjectInfo.tripLeg = caseData.tripLeg;
     projectUpdated = true;
   }
 } else {
@@ -694,6 +712,24 @@ if (isB2C) {
           setLoading(false);
           return;
         }
+        const destinationHospitalName = getCaseDestinationHospitalName(caseData);
+
+if (destinationHospitalName && !epcrData.outcome?.hospitalName) {
+  const nextOutcome = {
+    ...(epcrData.outcome ?? emptyOutcome()),
+    hospitalName: destinationHospitalName,
+  };
+
+  await updateDoc(epcrRef, {
+    outcome: nextOutcome,
+    updatedAt: new Date(),
+  });
+
+  epcrData.outcome = nextOutcome;
+  setData(epcrData);
+  setLoading(false);
+  return;
+}
 
         const autoTransferTeam = await buildAutoTransferTeam(
           caseData,
@@ -783,12 +819,17 @@ if (isB2C) {
     if (!patientInfo.chiefComplaints.length)
       m.push("Patient: Chief Complaints");
 
-    patientInfo.chiefComplaints.forEach((complaint) => {
-      const details = patientInfo.chiefComplaintDetails?.[complaint] ?? [];
-      if (details.length === 0) {
-        m.push(`Chief Complaint Details: ${complaint}`);
-      }
-    });
+patientInfo.chiefComplaints.forEach((complaint) => {
+  const detailOptions = CHIEF_COMPLAINT_DETAILS[complaint] ?? [];
+
+  if (detailOptions.length === 0) return;
+
+  const details = patientInfo.chiefComplaintDetails?.[complaint] ?? [];
+
+  if (details.length === 0) {
+    m.push(`Chief Complaint Details: ${complaint}`);
+  }
+});
 
     if (!patientInfo.signsAndSymptoms.length)
       m.push("Patient: Signs & Symptoms");
@@ -976,10 +1017,11 @@ if (isB2C) {
         </Section>
       )}
 
-      <Section title="Case Information">
-        <Input disabled label="Project Name" value={projectInfo.projectName || "—"} />
-        <Input disabled label="Project ID" value={projectInfo.projectId || "—"} />
-      </Section>
+<Section title="Case Information">
+  <Input disabled label="Project Name" value={projectInfo.projectName || "—"} />
+  <Input disabled label="Project ID" value={projectInfo.projectId || "—"} />
+  <Input disabled label="Trip Leg" value={projectInfo.tripLeg || "—"} />
+</Section>
 
       <Section title="Patient Information">
         <Input disabled label="Patient ID" value={patientInfo.patientId || "—"} />
