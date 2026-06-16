@@ -70,12 +70,23 @@ function isB2CCase(item: any) {
   return source === "b2c" || Boolean(getB2CRequestIdFromCase(item));
 }
 
+function isClosedCase(item: any) {
+  const status = String(item.status || item.dispatchStatus || "").toLowerCase();
+
+  return (
+    status === "closed" ||
+    status === "completed" ||
+    status === "cancelled"
+  );
+}
+
 export default function MyMissionsPage() {
   const { user, loading } = useCurrentUser();
 
   const [cases, setCases] = useState<any[]>([]);
   const [b2cRequests, setB2CRequests] = useState<any[]>([]);
   const [showAllForTesting, setShowAllForTesting] = useState(false);
+  const [showClosedMissions, setShowClosedMissions] = useState(false);
 
   useEffect(() => {
     const unsubCases = onSnapshot(collection(db, "cases"), (snap) => {
@@ -120,7 +131,10 @@ export default function MyMissionsPage() {
 
   const activeMissions = useMemo(() => {
     const list = cases.filter((item) => {
+      if (!showClosedMissions && isClosedCase(item)) return false;
+
       if (showAllForTesting || isAdmin) return true;
+
       return isUserAssignedToCase(item, user);
     });
 
@@ -129,7 +143,7 @@ export default function MyMissionsPage() {
       const bd = getDateValue(b)?.getTime?.() || 0;
       return bd - ad;
     });
-  }, [cases, showAllForTesting, isAdmin, user]);
+  }, [cases, showAllForTesting, showClosedMissions, isAdmin, user]);
 
   if (loading) {
     return (
@@ -142,7 +156,7 @@ export default function MyMissionsPage() {
   return (
     <div className="page-shell">
       <div className="page-header">
-        <div>
+        
           <h1 className="page-title">My Missions</h1>
 
           <p className="page-subtitle">
@@ -151,16 +165,7 @@ export default function MyMissionsPage() {
           </p>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={showAllForTesting}
-            onChange={(e) => setShowAllForTesting(e.target.checked)}
-          />
-          Show all for local testing
-        </label>
-      </div>
-
+ 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -174,7 +179,7 @@ export default function MyMissionsPage() {
             </p>
           </div>
 
-          <span className="badge">{upcomingB2CRequests.length}</span>
+          <span className="badge">{upcomingB2CRequests.length}</span>  
         </div>
 
         <div className="table-modern overflow-x-auto">
@@ -281,7 +286,18 @@ export default function MyMissionsPage() {
             </p>
           </div>
 
-          <span className="badge">{activeMissions.length}</span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+              <input
+                type="checkbox"
+                checked={showClosedMissions}
+                onChange={(e) => setShowClosedMissions(e.target.checked)}
+              />
+              Show closed missions
+            </label>
+
+            <span className="badge">{activeMissions.length}</span>
+          </div>
         </div>
 
         <div className="table-modern overflow-x-auto">

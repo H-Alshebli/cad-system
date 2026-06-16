@@ -18,11 +18,13 @@ export default function B2CRequestsPage() {
   const router = useRouter();
 
   const [requests, setRequests] = useState<any[]>([]);
+  const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [paymentFilter, setPaymentFilter] = useState("All");
+  const [showClosedRequests, setShowClosedRequests] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "b2cRequests"), (snap) => {
@@ -38,11 +40,28 @@ export default function B2CRequestsPage() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "cases"), (snap) => {
+      setCases(
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }))
+      );
+    });
+
+    return () => unsub();
+  }, []);
+
   const filteredRequests = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
 
     return requests
       .filter((request) => {
+        if (!showClosedRequests && isB2CRequestCompleted(request, cases)) {
+          return false;
+        }
+
         if (statusFilter !== "All" && request.requestStatus !== statusFilter) {
           return false;
         }
@@ -77,22 +96,21 @@ export default function B2CRequestsPage() {
 
         return bTime - aTime;
       });
-  }, [requests, search, statusFilter, paymentFilter]);
+  }, [requests, cases, search, statusFilter, paymentFilter, showClosedRequests]);
 
   const stats = useMemo(() => {
+    const closedRequests = requests.filter((r) => isB2CRequestCompleted(r, cases));
+    const activeRequests = requests.filter((r) => !isB2CRequestCompleted(r, cases));
+
     return {
       total: requests.length,
-      pendingPayment: requests.filter(
-        (r) => r.requestStatus === "PendingPayment"
-      ).length,
-      confirmed: requests.filter((r) => r.requestStatus === "Confirmed").length,
-      readyToActivate: requests.filter(
-        (r) => r.requestStatus === "ReadyToActivate"
-      ).length,
-      cadCreated: requests.filter((r) => r.requestStatus === "CadCreated")
+      active: activeRequests.length,
+      closed: closedRequests.length,
+      pendingPayment: requests.filter((r) => r.requestStatus === "PendingPayment")
         .length,
+      cadCreated: requests.filter((r) => r.requestStatus === "CadCreated").length,
     };
-  }, [requests]);
+  }, [requests, cases]);
 
   if (loading) {
     return (
@@ -127,14 +145,14 @@ export default function B2CRequestsPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total Requests" value={stats.total} />
+        <StatCard label="Active Requests" value={stats.active} />
+        <StatCard label="Closed Requests" value={stats.closed} />
         <StatCard label="Pending Payment" value={stats.pendingPayment} />
-        <StatCard label="Confirmed" value={stats.confirmed} />
-        <StatCard label="Ready to Activate" value={stats.readyToActivate} />
         <StatCard label="CAD Created" value={stats.cadCreated} />
       </div>
 
       <div className="card-modern">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_220px_220px]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_220px_220px_180px]">
           <div>
             <label className="field-label">Search</label>
 
@@ -184,6 +202,19 @@ export default function B2CRequestsPage() {
               <option>Pending</option>
               <option>Paid</option>
             </select>
+          </div>
+
+          <div>
+            <label className="field-label">Closed</label>
+
+            <label className="flex h-[42px] items-center gap-2 rounded-2xl border border-slate-700 px-3 text-sm font-semibold text-slate-300">
+              <input
+                type="checkbox"
+                checked={showClosedRequests}
+                onChange={(e) => setShowClosedRequests(e.target.checked)}
+              />
+              Show closed
+            </label>
           </div>
         </div>
       </div>
@@ -342,6 +373,50 @@ function InfoLine({
       </div>
     </div>
   );
+}
+
+function isClosedStatus(value: any) {
+  const status = String(value || "").toLowerCase();
+
+  return (
+    status === "closed" ||
+    status === "completed" ||
+    status === "cancelled"
+  );
+}
+
+function getCaseById(cases: any[], caseId?: string | null) {
+  if (!caseId) return null;
+  return cases.find((c) => c.id === caseId) || null;
+}
+
+function isB2CRequestCompleted(request: any, cases: any[]) {
+  const outboundCase = getCaseById(cases, request.cadCaseId);
+  const returnCase = getCaseById(cases, request.returnCadCaseId);
+
+  const outboundClosed =
+    isClosedStatus(outboundCase?.status) ||
+    isClosedStatus(outboundCase?.dispatchStatus) ||
+    isClosedStatus(request.cadStatus) ||
+    isClosedStatus(request.caseStatus);
+
+  if (!outboundClosed) return false;
+
+  const tripType = String(request.tripType || "").toLowerCase();
+
+  if (tripType !== "round trip") {
+    return true;
+  }
+
+  if (request.returnTripStatus === "Cancelled") {
+    return true;
+  }
+
+  const returnClosed =
+    isClosedStatus(returnCase?.status) ||
+    isClosedStatus(returnCase?.dispatchStatus);
+
+  return returnClosed;
 }
 
 function getDateValue(value: any) {
