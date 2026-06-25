@@ -12,10 +12,15 @@ import {
   CreditCard,
   Lock,
   UserRound,
+  X,
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { createB2CRequest, updateB2CRequest } from "@/lib/b2cRequests";
+import {
+  createB2CRequest,
+  createCancelledB2CRequestFromIntake,
+  updateB2CRequest,
+} from "@/lib/b2cRequests";
 import { uploadB2CMedicalReports } from "@/lib/storageUploads";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
@@ -64,6 +69,20 @@ const operationalDecisions = [
 
 const payerOptions = ["Customer", "Company", "Insurance"];
 
+const cancellationReasons = [
+  { label: "Customer changed mind", value: "Customer changed mind" },
+  { label: "Customer booked by mistake", value: "Customer booked by mistake" },
+  {
+    label: "Customer requested rescheduling",
+    value: "Customer requested rescheduling",
+  },
+  { label: "Duplicate booking", value: "Duplicate booking" },
+  { label: "Customer unavailable", value: "Customer unavailable" },
+  { label: "Operational issue", value: "Operational issue" },
+  { label: "Referred to 997", value: "Referred to 997" },
+  { label: "Other", value: "Other" },
+];
+
 function toDatetimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
@@ -103,6 +122,10 @@ export default function NewB2CCasePage() {
   const [sendingPaymentLink, setSendingPaymentLink] = useState(false);
   const [priceManuallyChanged, setPriceManuallyChanged] = useState(false);
   const [medicalReportFiles, setMedicalReportFiles] = useState<File[]>([]);
+  const [showCancellationDialog, setShowCancellationDialog] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationNotes, setCancellationNotes] = useState("");
+  const [cancellingIntake, setCancellingIntake] = useState(false);
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -587,6 +610,63 @@ async function submitB2C() {
   }
 }
 
+  async function handleCancelIntake() {
+    if (!cancellationReason) {
+      alert("Please select a cancellation reason.");
+      return;
+    }
+
+    if (cancellationReason === "Other" && !cancellationNotes.trim()) {
+      alert("Please add a note when selecting Other.");
+      return;
+    }
+
+    setCancellingIntake(true);
+
+    try {
+      const requestId = await createCancelledB2CRequestFromIntake(
+        {
+          ...form,
+          sourceType: "B2C_REQUEST",
+          callDateTime: form.callDateTime || toDatetimeLocalValue(new Date()),
+          coordinatorName: form.coordinatorName || getUserName(user),
+
+          medicalReportFileNames: medicalReportFiles.map((file) => file.name),
+          medicalReportFiles: [],
+
+          plannedAssignment: {
+            ...assignment,
+            unitCode:
+              selectedAmbulance?.code ||
+              selectedAmbulance?.name ||
+              assignment.unitId ||
+              "",
+            unitName: selectedAmbulance?.name || "",
+            unitTypeName:
+              selectedAmbulance?.type ||
+              selectedAmbulance?.vehicleType ||
+              "Ambulance",
+          },
+        },
+        {
+          reason: cancellationReason,
+          notes: cancellationNotes,
+          cancelledBy: user?.uid || user?.id || null,
+          cancelledByName: getUserName(user) || null,
+          cancelledByRole: user?.role || null,
+          cancellationStage: "Intake",
+        }
+      );
+
+      router.push(`/b2c/requests/${requestId}`);
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to save cancelled intake.");
+    } finally {
+      setCancellingIntake(false);
+    }
+  }
+
   return (
     <div className="page-shell">
       <div className="page-header">
@@ -609,6 +689,15 @@ async function submitB2C() {
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          className="btn-secondary shrink-0"
+          onClick={() => setShowCancellationDialog(true)}
+        >
+          <X size={16} />
+          Cancel Intake
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_0.65fr]">
@@ -1436,6 +1525,113 @@ async function submitB2C() {
     </div>
   </div>
 </aside>
+      </div>
+
+      {showCancellationDialog && (
+        <CancellationModal
+          reason={cancellationReason}
+          notes={cancellationNotes}
+          saving={cancellingIntake}
+          onReasonChange={setCancellationReason}
+          onNotesChange={setCancellationNotes}
+          onClose={() => {
+            if (cancellingIntake) return;
+            setShowCancellationDialog(false);
+          }}
+          onConfirm={handleCancelIntake}
+        />
+      )}
+    </div>
+  );
+}
+
+function CancellationModal({
+  reason,
+  notes,
+  saving,
+  onReasonChange,
+  onNotesChange,
+  onClose,
+  onConfirm,
+}: {
+  reason: string;
+  notes: string;
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-slate-950 p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black text-white">Cancel Intake</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              Save this call as cancelled. The information entered so far will
+              be kept for reporting, and no CAD case will be created.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+            onClick={onClose}
+            disabled={saving}
+            aria-label="Close cancellation dialog"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <Field label="Cancellation Reason *">
+            <select
+              className="select"
+              value={reason}
+              onChange={(e) => onReasonChange(e.target.value)}
+              disabled={saving}
+            >
+              <option value="">Select reason</option>
+              {cancellationReasons.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={reason === "Other" ? "Notes *" : "Notes"}>
+            <textarea
+              className="textarea"
+              value={notes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              disabled={saving}
+              placeholder="Optional cancellation notes"
+            />
+          </Field>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Continue Intake
+          </button>
+
+          <button
+            type="button"
+            className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onConfirm}
+            disabled={saving}
+          >
+            {saving ? "Saving Cancellation..." : "Confirm Cancellation"}
+          </button>
+        </div>
       </div>
     </div>
   );

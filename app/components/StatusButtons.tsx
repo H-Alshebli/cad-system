@@ -105,6 +105,16 @@ function isB2CCase(sourceType?: string, caseType?: string) {
   return sourceType === "B2C" || caseType === "B2C";
 }
 
+/**
+ * A cancelled CAD case is terminal, just like a closed case.
+ * The B2C request cancellation workflow updates the CAD status directly.
+ */
+function isFinalCaseStatus(status?: string) {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  return normalized === "closed" || normalized === "cancelled";
+}
+
 function buildB2CDestination({
   b2cDestination,
   destinationHospitalName,
@@ -184,6 +194,7 @@ export default function StatusButtons({
   const [showB2CConfirm, setShowB2CConfirm] = useState(false);
 
   const currentIsB2C = isB2CCase(sourceType, caseType);
+  const isFinalStatus = isFinalCaseStatus(currentStatus);
 
   const resolvedB2CDestination = buildB2CDestination({
     b2cDestination,
@@ -199,7 +210,7 @@ export default function StatusButtons({
      BASIC STATUS UPDATE
   ============================= */
   const updateStatus = async (newStatus: string) => {
-    if (currentStatus === "Closed") return;
+    if (isFinalCaseStatus(currentStatus)) return;
 
     /**
      * Special handling for Transporting:
@@ -365,14 +376,14 @@ export default function StatusButtons({
         {STATUSES.map((s) => (
           <button
             key={s}
-            disabled={currentStatus === "Closed"}
+            disabled={isFinalStatus}
             onClick={() => updateStatus(s)}
             className={`py-2 rounded text-white font-medium transition ${
               currentStatus === s
                 ? "bg-green-600"
                 : "bg-blue-600 hover:bg-blue-700"
             } ${
-              currentStatus === "Closed"
+              isFinalStatus
                 ? "opacity-50 cursor-not-allowed"
                 : ""
             }`}
@@ -381,6 +392,12 @@ export default function StatusButtons({
           </button>
         ))}
       </div>
+
+      {currentStatus === "Cancelled" && (
+        <div className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+          This CAD case has been cancelled. Status changes are locked.
+        </div>
+      )}
 
       {/* =============================
          B2C DESTINATION CONFIRM

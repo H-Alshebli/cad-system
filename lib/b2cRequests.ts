@@ -20,6 +20,16 @@ export type B2CRequestStatus =
 
 export type PaymentStatus = "Pending" | "Paid";
 
+export type RefundStatus =
+  | "NotRequired"
+  | "Required"
+  | "Completed";
+
+export type CancellationStage =
+  | "Intake"
+  | "BeforeCAD"
+  | "AfterCAD";
+
 export type ReturnTripStatus =
   | "Not Created"
   | "Ready"
@@ -34,6 +44,29 @@ export type PlannedAssignment = {
   unitTypeName?: string;
   assignedTeamGroup?: string;
   assignedUserIds?: string[];
+};
+
+export type CancellationOptions = {
+  reason: string;
+  notes?: string;
+
+  cancelledBy?: string | null;
+  cancelledByName?: string | null;
+  cancelledByRole?: string | null;
+
+  refundStatus?: RefundStatus;
+
+  /**
+   * Used only when cancelling while filling the intake form.
+   * For normal saved requests, the system determines the stage automatically.
+   */
+  cancellationStage?: CancellationStage;
+};
+
+export type CancelB2CRequestResult = {
+  requestId: string;
+  outboundCadCancelled: boolean;
+  returnCadCancelled: boolean;
 };
 
 export type B2CRequest = {
@@ -126,6 +159,20 @@ export type B2CRequest = {
 
   autoCadActivationAt?: string | null;
 
+  /**
+   * Cancellation information
+   */
+  cancellationStage?: CancellationStage;
+  cancellationReason?: string;
+  cancellationNotes?: string;
+
+  cancelledAt?: any;
+  cancelledBy?: string | null;
+  cancelledByName?: string | null;
+  cancelledByRole?: string | null;
+
+  refundStatus?: RefundStatus;
+
   createdAt?: any;
   updatedAt?: any;
 
@@ -167,6 +214,76 @@ function cleanUndefinedDeep(value: any): any {
   }
 
   return value;
+}
+
+function normalizeCaseStatus(value: any) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+}
+
+/**
+ * These are stages where the ambulance/team has already started
+ * operational work, so the dispatcher cannot cancel normally.
+ */
+function isCaseAlreadyOperational(caseData: any) {
+  const status = normalizeCaseStatus(
+    caseData?.dispatchStatus || caseData?.status
+  );
+
+  const blockedStatuses = [
+    "enroute",
+    "onscene",
+    "transporting",
+    "hospital",
+    "arrivedtopatient",
+    "treated",
+    "movingtohospital",
+    "arrivedtohospital",
+    "discharged",
+    "returned",
+    "ready",
+    "closed",
+    "completed",
+  ];
+
+  return blockedStatuses.includes(status);
+}
+
+function isCaseAlreadyCancelled(caseData: any) {
+  const status = normalizeCaseStatus(
+    caseData?.dispatchStatus || caseData?.status
+  );
+
+  return status === "cancelled";
+}
+
+function getRefundStatusForCancellation(
+  paymentStatus: PaymentStatus,
+  requestedRefundStatus?: RefundStatus
+): RefundStatus {
+  if (paymentStatus !== "Paid") {
+    return "NotRequired";
+  }
+
+  return requestedRefundStatus || "Required";
+}
+
+function normalizePlannedAssignment(form: any): PlannedAssignment {
+  const plannedAssignment = form.plannedAssignment || {};
+
+  return {
+    unitType: plannedAssignment.unitType || "ambulance",
+    unitId: plannedAssignment.unitId || "",
+    unitCode: plannedAssignment.unitCode || "",
+    unitName: plannedAssignment.unitName || "",
+    unitTypeName: plannedAssignment.unitTypeName || "Ambulance",
+    assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
+    assignedUserIds: Array.isArray(plannedAssignment.assignedUserIds)
+      ? plannedAssignment.assignedUserIds
+      : [],
+  };
 }
 
 export function getAutoCadActivationAt(requestedTransportAt?: string) {
@@ -219,22 +336,6 @@ function getRequestStatus(form: any): B2CRequestStatus {
   return "Confirmed";
 }
 
-function normalizePlannedAssignment(form: any): PlannedAssignment {
-  const plannedAssignment = form.plannedAssignment || {};
-
-  return {
-    unitType: plannedAssignment.unitType || "ambulance",
-    unitId: plannedAssignment.unitId || "",
-    unitCode: plannedAssignment.unitCode || "",
-    unitName: plannedAssignment.unitName || "",
-    unitTypeName: plannedAssignment.unitTypeName || "Ambulance",
-    assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
-    assignedUserIds: Array.isArray(plannedAssignment.assignedUserIds)
-      ? plannedAssignment.assignedUserIds
-      : [],
-  };
-}
-
 function getB2CDestinationText(request: B2CRequest) {
   if (request.destinationType === "Hospital") {
     return (
@@ -255,6 +356,9 @@ function getB2CReturnDestinationText(request: B2CRequest) {
   return request.pickupText || "";
 }
 
+/**
+ * Normal B2C request creation.
+ */
 export async function createB2CRequest(form: any) {
   const paymentStatus: PaymentStatus =
     form.paymentStatus === "Paid" ? "Paid" : "Pending";
@@ -274,6 +378,8 @@ export async function createB2CRequest(form: any) {
     requestStatus,
     paymentStatus,
 
+    refundStatus: "NotRequired",
+
     plannedAssignment,
 
     cadCaseId: null,
@@ -287,6 +393,70 @@ export async function createB2CRequest(form: any) {
       form.tripType === "Round Trip" ? "Not Created" : null,
 
     autoCadActivationAt: getAutoCadActivationAt(form.requestedTransportAt),
+
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const ref = await addDoc(collection(db, "b2cRequests"), payload);
+
+  return ref.id;
+}
+
+/**
+ * Creates a Cancelled request directly from the intake/new-request page.
+ *
+ * This allows Dispatch to save a cancelled call even when the form is incomplete.
+ * No CAD case will be created.
+ */
+export async function createCancelledB2CRequestFromIntake(
+  form: any,
+  cancellation: CancellationOptions
+) {
+  if (!cancellation.reason?.trim()) {
+    throw new Error("Cancellation reason is required.");
+  }
+
+  const paymentStatus: PaymentStatus =
+    form.paymentStatus === "Paid" ? "Paid" : "Pending";
+
+  const plannedAssignment = normalizePlannedAssignment(form);
+
+  const payload = cleanUndefinedDeep({
+    ...form,
+
+    sourceType: "B2C_REQUEST",
+
+    requestStatus: "Cancelled",
+    paymentStatus,
+
+    cancellationStage: cancellation.cancellationStage || "Intake",
+    cancellationReason: cancellation.reason.trim(),
+    cancellationNotes: cancellation.notes?.trim() || "",
+
+    cancelledAt: serverTimestamp(),
+    cancelledBy: cancellation.cancelledBy || null,
+    cancelledByName: cancellation.cancelledByName || null,
+    cancelledByRole: cancellation.cancelledByRole || null,
+
+    refundStatus: getRefundStatusForCancellation(
+      paymentStatus,
+      cancellation.refundStatus
+    ),
+
+    plannedAssignment,
+
+    cadCaseId: null,
+    cadCreatedAt: null,
+    cadCreatedBy: null,
+
+    returnCadCaseId: null,
+    returnCadCreatedAt: null,
+    returnCadCreatedBy: null,
+    returnTripStatus:
+      form.tripType === "Round Trip" ? "Cancelled" : null,
+
+    autoCadActivationAt: null,
 
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -320,6 +490,190 @@ export async function updateB2CRequest(requestId: string, data: any) {
       updatedAt: serverTimestamp(),
     })
   );
+}
+
+/**
+ * Cancels a saved B2C request.
+ *
+ * - Before CAD: cancels the request only.
+ * - After CAD but before team movement: cancels both request and CAD.
+ * - After En Route / On Scene / Transporting / Closed: throws an error.
+ */
+export async function cancelB2CRequest(
+  requestId: string,
+  cancellation: CancellationOptions
+): Promise<CancelB2CRequestResult> {
+  if (!cancellation.reason?.trim()) {
+    throw new Error("Cancellation reason is required.");
+  }
+
+  const request = await getB2CRequestById(requestId);
+
+  if (!request) {
+    throw new Error("B2C request not found.");
+  }
+
+  if (request.requestStatus === "Cancelled") {
+    return {
+      requestId,
+      outboundCadCancelled: false,
+      returnCadCancelled: false,
+    };
+  }
+
+  const outboundCaseRef = request.cadCaseId
+    ? doc(db, "cases", request.cadCaseId)
+    : null;
+
+  const returnCaseRef = request.returnCadCaseId
+    ? doc(db, "cases", request.returnCadCaseId)
+    : null;
+
+  const outboundCaseSnap = outboundCaseRef
+    ? await getDoc(outboundCaseRef)
+    : null;
+
+  const returnCaseSnap = returnCaseRef
+    ? await getDoc(returnCaseRef)
+    : null;
+
+  const outboundCaseData = outboundCaseSnap?.exists()
+    ? outboundCaseSnap.data()
+    : null;
+
+  const returnCaseData = returnCaseSnap?.exists()
+    ? returnCaseSnap.data()
+    : null;
+
+  if (outboundCaseData && isCaseAlreadyOperational(outboundCaseData)) {
+    throw new Error(
+      "This request cannot be cancelled because the outbound team has already started the service."
+    );
+  }
+
+  if (returnCaseData && isCaseAlreadyOperational(returnCaseData)) {
+    throw new Error(
+      "This request cannot be cancelled because the return-trip team has already started the service."
+    );
+  }
+
+  const cancellationStage: CancellationStage =
+    request.cadCaseId || request.returnCadCaseId
+      ? "AfterCAD"
+      : "BeforeCAD";
+
+  const refundStatus = getRefundStatusForCancellation(
+    request.paymentStatus || "Pending",
+    cancellation.refundStatus
+  );
+
+  const timestamp = new Date().toISOString();
+
+  let outboundCadCancelled = false;
+  let returnCadCancelled = false;
+
+  if (
+    outboundCaseRef &&
+    outboundCaseData &&
+    !isCaseAlreadyCancelled(outboundCaseData)
+  ) {
+    const currentTimeline =
+      outboundCaseData.timeline &&
+      typeof outboundCaseData.timeline === "object"
+        ? outboundCaseData.timeline
+        : {};
+
+    await updateDoc(
+      outboundCaseRef,
+      cleanUndefinedDeep({
+        status: "Cancelled",
+        dispatchStatus: "Cancelled",
+
+        cancellationReason: cancellation.reason.trim(),
+        cancellationNotes: cancellation.notes?.trim() || "",
+        cancelledAt: serverTimestamp(),
+        cancelledBy: cancellation.cancelledBy || null,
+        cancelledByName: cancellation.cancelledByName || null,
+        cancelledByRole: cancellation.cancelledByRole || null,
+
+        timeline: {
+          ...currentTimeline,
+          Cancelled: timestamp,
+        },
+
+        updatedAt: serverTimestamp(),
+      })
+    );
+
+    outboundCadCancelled = true;
+  }
+
+  if (
+    returnCaseRef &&
+    returnCaseData &&
+    !isCaseAlreadyCancelled(returnCaseData)
+  ) {
+    const currentTimeline =
+      returnCaseData.timeline &&
+      typeof returnCaseData.timeline === "object"
+        ? returnCaseData.timeline
+        : {};
+
+    await updateDoc(
+      returnCaseRef,
+      cleanUndefinedDeep({
+        status: "Cancelled",
+        dispatchStatus: "Cancelled",
+
+        cancellationReason: cancellation.reason.trim(),
+        cancellationNotes: cancellation.notes?.trim() || "",
+        cancelledAt: serverTimestamp(),
+        cancelledBy: cancellation.cancelledBy || null,
+        cancelledByName: cancellation.cancelledByName || null,
+        cancelledByRole: cancellation.cancelledByRole || null,
+
+        timeline: {
+          ...currentTimeline,
+          Cancelled: timestamp,
+        },
+
+        updatedAt: serverTimestamp(),
+      })
+    );
+
+    returnCadCancelled = true;
+  }
+
+  await updateDoc(
+    doc(db, "b2cRequests", requestId),
+    cleanUndefinedDeep({
+      requestStatus: "Cancelled",
+
+      cancellationStage,
+      cancellationReason: cancellation.reason.trim(),
+      cancellationNotes: cancellation.notes?.trim() || "",
+
+      cancelledAt: serverTimestamp(),
+      cancelledBy: cancellation.cancelledBy || null,
+      cancelledByName: cancellation.cancelledByName || null,
+      cancelledByRole: cancellation.cancelledByRole || null,
+
+      refundStatus,
+
+      autoCadActivationAt: null,
+
+      returnTripStatus:
+        request.tripType === "Round Trip" ? "Cancelled" : null,
+
+      updatedAt: serverTimestamp(),
+    })
+  );
+
+  return {
+    requestId,
+    outboundCadCancelled,
+    returnCadCancelled,
+  };
 }
 
 export function canCreateCadCase(request: B2CRequest | null) {

@@ -25,6 +25,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import { can } from "@/lib/can";
 import {
   canCreateCadCase,
+  cancelB2CRequest,
   createCadCaseFromB2CRequest,
   isWithinOneHour,
   updateB2CRequest,
@@ -54,6 +55,16 @@ const operationalDecisions = [
   "Approved - Proceed to Pricing",
   "Escalate to Medical Director",
   "Rejected - Document Reason",
+];
+
+const cancellationReasons = [
+  { label: "Customer changed mind", value: "Customer changed mind" },
+  { label: "Customer booked by mistake", value: "Customer booked by mistake" },
+  { label: "Customer requested rescheduling", value: "Customer requested rescheduling" },
+  { label: "Duplicate booking", value: "Duplicate booking" },
+  { label: "Customer unavailable", value: "Customer unavailable" },
+  { label: "Operational issue", value: "Operational issue" },
+  { label: "Other", value: "Other" },
 ];
 
 function formatDateTime(value: any) {
@@ -143,6 +154,13 @@ export default function B2CRequestDetailsPage({
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [acknowledgingRequest, setAcknowledgingRequest] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancellingRequest, setCancellingRequest] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationNotes, setCancellationNotes] = useState("");
+  const [refundDecision, setRefundDecision] = useState<"Required" | "NotRequired">(
+    "NotRequired"
+  );
 
   const [ambulances, setAmbulances] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -354,14 +372,21 @@ export default function B2CRequestDetailsPage({
 
   const canEditRequest =
     Boolean(request) &&
+    request?.requestStatus !== "Cancelled" &&
     !request?.cadCaseId &&
     (canEditB2CRequest || canConfirmB2CPayment || canChangeB2CTeam);
 
   const canCreateCad =
     Boolean(request) &&
+    request?.requestStatus !== "Cancelled" &&
     !request?.cadCaseId &&
     cadReady &&
     canActivateB2CCad;
+
+  const canCancelRequest =
+    Boolean(request) &&
+    request?.requestStatus !== "Cancelled" &&
+    isDispatch;
 
   const canOpenCad = Boolean(request?.cadCaseId);
   const canOpenReturnCad = Boolean(request?.returnCadCaseId);
@@ -384,6 +409,7 @@ export default function B2CRequestDetailsPage({
 
   const canAcknowledgeRequest =
     Boolean(request) &&
+    request?.requestStatus !== "Cancelled" &&
     !request?.cadCaseId &&
     isAssignedToThisB2CRequest &&
     !requestPreparationAcknowledged;
@@ -627,6 +653,58 @@ export default function B2CRequestDetailsPage({
     }
   }
 
+  function openCancelModal() {
+    if (!request) return;
+
+    setCancellationReason("");
+    setCancellationNotes("");
+    setRefundDecision(
+      request.paymentStatus === "Paid" ? "Required" : "NotRequired"
+    );
+    setCancelModalOpen(true);
+  }
+
+  async function handleCancelRequest() {
+    if (!request) return;
+
+    if (!cancellationReason.trim()) {
+      alert("Please select a cancellation reason.");
+      return;
+    }
+
+    if (cancellationReason === "Other" && !cancellationNotes.trim()) {
+      alert("Please add cancellation notes when selecting Other.");
+      return;
+    }
+
+    setCancellingRequest(true);
+
+    try {
+      await cancelB2CRequest(request.id, {
+        reason: cancellationReason,
+        notes: cancellationNotes,
+        cancelledBy: user?.uid || user?.id || null,
+        cancelledByName:
+          user?.name ||
+          user?.displayName ||
+          user?.fullName ||
+          user?.email ||
+          "Dispatch",
+        cancelledByRole: roleRaw || null,
+        refundStatus:
+          request.paymentStatus === "Paid" ? refundDecision : "NotRequired",
+      });
+
+      setEditMode(false);
+      setCancelModalOpen(false);
+    } catch (error: any) {
+      console.error(error);
+      alert(error?.message || "Failed to cancel request.");
+    } finally {
+      setCancellingRequest(false);
+    }
+  }
+
   async function handleCreateCad() {
     if (!request) return;
 
@@ -775,6 +853,16 @@ export default function B2CRequestDetailsPage({
                 {saving ? "Saving..." : "Save Changes"}
               </button>
             </>
+          )}
+
+          {canCancelRequest && !editMode && (
+            <button
+              className="btn-secondary border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-300"
+              onClick={openCancelModal}
+            >
+              <X size={16} />
+              Cancel Request
+            </button>
           )}
 
           {canCreateCad && (
@@ -1207,6 +1295,35 @@ export default function B2CRequestDetailsPage({
 
             <StatusBadge label="Payment Status" value={request.paymentStatus} />
 
+            {request.requestStatus === "Cancelled" && (
+              <>
+                <StatusBadge
+                  label="Cancellation Stage"
+                  value={request.cancellationStage || "—"}
+                />
+                <StatusBadge
+                  label="Cancellation Reason"
+                  value={request.cancellationReason || "—"}
+                />
+                <StatusBadge
+                  label="Refund Status"
+                  value={request.refundStatus || "NotRequired"}
+                />
+                <Info
+                  label="Cancelled By"
+                  value={request.cancelledByName || request.cancelledBy}
+                />
+                <Info
+                  label="Cancelled At"
+                  value={formatDateTime(request.cancelledAt)}
+                />
+                <Info
+                  label="Cancellation Notes"
+                  value={request.cancellationNotes}
+                />
+              </>
+            )}
+
             <StatusBadge
               label="Outbound CAD"
               value={request.cadCaseId ? `Created: ${request.cadCaseId}` : "Not Created"}
@@ -1472,6 +1589,129 @@ export default function B2CRequestDetailsPage({
               </div>
             )}
           </Section>
+        </div>
+      </div>
+
+      {cancelModalOpen && (
+        <CancelRequestModal
+          request={request}
+          reason={cancellationReason}
+          notes={cancellationNotes}
+          refundDecision={refundDecision}
+          saving={cancellingRequest}
+          onReasonChange={setCancellationReason}
+          onNotesChange={setCancellationNotes}
+          onRefundDecisionChange={setRefundDecision}
+          onClose={() => setCancelModalOpen(false)}
+          onConfirm={handleCancelRequest}
+        />
+      )}
+    </div>
+  );
+}
+
+function CancelRequestModal({
+  request,
+  reason,
+  notes,
+  refundDecision,
+  saving,
+  onReasonChange,
+  onNotesChange,
+  onRefundDecisionChange,
+  onClose,
+  onConfirm,
+}: {
+  request: any;
+  reason: string;
+  notes: string;
+  refundDecision: "Required" | "NotRequired";
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onRefundDecisionChange: (value: "Required" | "NotRequired") => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const isPaid = request?.paymentStatus === "Paid";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0b1220]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black text-slate-950 dark:text-white">
+              Cancel B2C Request
+            </h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              This action keeps the request in the system as Cancelled. It will not be deleted.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            disabled={saving}
+            onClick={onClose}
+            aria-label="Close cancellation dialog"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          <EditSelect
+            label="Cancellation Reason"
+            value={reason}
+            onChange={onReasonChange}
+            options={[{ label: "Select reason", value: "" }, ...cancellationReasons]}
+          />
+
+          <EditTextarea
+            label={reason === "Other" ? "Cancellation Notes (Required)" : "Cancellation Notes"}
+            value={notes}
+            onChange={onNotesChange}
+          />
+
+          {isPaid && (
+            <EditSelect
+              label="Refund Status"
+              value={refundDecision}
+              onChange={(value) =>
+                onRefundDecisionChange(value as "Required" | "NotRequired")
+              }
+              options={[
+                { label: "Refund Required", value: "Required" },
+                { label: "No Refund Required", value: "NotRequired" },
+              ]}
+            />
+          )}
+
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+            {request?.cadCaseId
+              ? "If the CAD team has not started the service, the linked CAD case will also become Cancelled."
+              : "No CAD case has been created for this request."}
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={saving}
+            onClick={onClose}
+          >
+            Keep Request
+          </button>
+          <button
+            type="button"
+            className="btn-secondary border border-red-500/40 bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-300"
+            disabled={saving}
+            onClick={onConfirm}
+          >
+            <X size={16} />
+            {saving ? "Cancelling..." : "Confirm Cancellation"}
+          </button>
         </div>
       </div>
     </div>

@@ -83,6 +83,9 @@ export default function B2CRequestsPage() {
           request.plannedAssignment?.unitCode,
           request.requestStatus,
           request.paymentStatus,
+          request.cancellationStage,
+          request.cancellationReason,
+          request.refundStatus,
         ]
           .filter(Boolean)
           .join(" ")
@@ -257,6 +260,19 @@ export default function B2CRequestsPage() {
                     >
                       {request.cadCaseId ? "CAD Created" : "CAD Not Created"}
                     </span>
+
+                    {request.requestStatus === "Cancelled" && (
+                      <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-black text-red-700 dark:text-red-300">
+                        {formatCancellationStage(request.cancellationStage)}
+                      </span>
+                    )}
+
+                    {request.requestStatus === "Cancelled" &&
+                      request.refundStatus && (
+                        <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-xs font-black text-violet-700 dark:text-violet-300">
+                          Refund: {request.refundStatus}
+                        </span>
+                      )}
                   </div>
 
                   <h2 className="text-lg font-black text-slate-950 dark:text-white">
@@ -307,6 +323,14 @@ export default function B2CRequestsPage() {
                       label="Destination"
                       value={request.destinationText}
                     />
+
+                    {request.requestStatus === "Cancelled" && (
+                      <InfoLine
+                        icon={<FileText size={15} />}
+                        label="Cancellation Reason"
+                        value={request.cancellationReason}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -391,6 +415,12 @@ function getCaseById(cases: any[], caseId?: string | null) {
 }
 
 function isB2CRequestCompleted(request: any, cases: any[]) {
+  // A cancelled request must be considered closed even when CAD was never created.
+  // This covers cancellations directly from the B2C intake page.
+  if (request.requestStatus === "Cancelled") {
+    return true;
+  }
+
   const outboundCase = getCaseById(cases, request.cadCaseId);
   const returnCase = getCaseById(cases, request.returnCadCaseId);
 
@@ -417,6 +447,19 @@ function isB2CRequestCompleted(request: any, cases: any[]) {
     isClosedStatus(returnCase?.dispatchStatus);
 
   return returnClosed;
+}
+
+function formatCancellationStage(value: any) {
+  switch (value) {
+    case "Intake":
+      return "Cancelled During Intake";
+    case "BeforeCAD":
+      return "Cancelled Before CAD";
+    case "AfterCAD":
+      return "Cancelled After CAD";
+    default:
+      return "Cancelled";
+  }
 }
 
 function getDateValue(value: any) {
