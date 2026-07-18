@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Sun,
   Truck,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -195,6 +196,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
     },
     {
+      href: "/crew-profile",
+      label: "Crew Profile",
+      icon: <UserRound size={18} />,
+      visible: true,
+    },
+    {
       href: "/dashboard/epcr",
       label: "ePCR Dashboard",
       icon: <BarChart3 size={18} />,
@@ -226,6 +233,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       label: "Users Management",
       icon: <Users size={18} />,
       visible: isAdmin || can(permissions, "users", "view"),
+    },
+    {
+      href: "/admin/crew-profiles",
+      label: "Crew Profiles",
+      icon: <UserRound size={18} />,
+      visible: isAdmin || can(permissions, "crew_profile", "view_all"),
     },
     {
       href: "/admin/roles",

@@ -230,10 +230,6 @@ export function generateEpcrPdf(data: {
         value: data.projectInfo?.projectName || "-",
       },
       {
-        label: "Project ID",
-        value: data.projectInfo?.projectId || "-",
-      },
-      {
         label: "Trip Leg",
         value: data.projectInfo?.tripLeg || "-",
       },

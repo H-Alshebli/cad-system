@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
+import { getB2CRequestDisplay, getUnitDisplayName } from "@/lib/displayLabels";
 
 export default function B2CRequestsPage() {
   const router = useRouter();
@@ -276,9 +277,7 @@ export default function B2CRequestsPage() {
                   </div>
 
                   <h2 className="text-lg font-black text-slate-950 dark:text-white">
-                    {request.bookingConfirmationNumber
-                      ? `Booking #${request.bookingConfirmationNumber}`
-                      : `Request #${request.id}`}
+                    {getB2CRequestDisplay(request)}
                   </h2>
 
                   <div className="mt-2 grid grid-cols-1 gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4 dark:text-slate-300">

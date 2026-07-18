@@ -205,6 +205,14 @@ export default function RolesPage() {
     setPermissionSafe(next, "missions", "update_status", true);
     setPermissionSafe(next, "missions", "report", true);
 
+    // Project readiness checklists. Paramedics can create, save, and submit
+    // their own drafts, but cannot review, approve, or return checklists.
+    setPermissionSafe(next, "readiness_checklists", "view", true);
+    setPermissionSafe(next, "readiness_checklists", "view_own", true);
+    setPermissionSafe(next, "readiness_checklists", "create", true);
+    setPermissionSafe(next, "readiness_checklists", "edit_own_draft", true);
+    setPermissionSafe(next, "readiness_checklists", "submit", true);
+
     // Paramedic can view upcoming assigned B2C requests only
     setPermissionSafe(next, "b2c_requests", "view", true);
     setPermissionSafe(next, "b2c_requests", "view_assigned", true);

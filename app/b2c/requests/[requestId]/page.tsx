@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
+import { getB2CRequestDisplay } from "@/lib/displayLabels";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { can } from "@/lib/can";
@@ -773,7 +774,7 @@ export default function B2CRequestDetailsPage({
           </div>
 
           <h1 className="page-title">
-            Request #{request.bookingConfirmationNumber || request.id}
+            {getB2CRequestDisplay(request)}
           </h1>
 
           <p className="page-subtitle">

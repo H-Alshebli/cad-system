@@ -64,6 +64,23 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "report",
   ],
 
+  crew_profile: ["view", "edit_own", "view_all", "edit_all"],
+
+  readiness_checklists: [
+    "view",
+    "view_all",
+    "view_own",
+    "create",
+    "edit_own_draft",
+    "submit",
+    "review",
+    "approve",
+    "return_for_correction",
+    "manage_expiry",
+    "export_pdf",
+    "manage_templates",
+  ],
+
   epcr: [
     "view",
     "view_dashboard",
@@ -112,6 +129,8 @@ export const MODULE_LABELS: Record<string, string> = {
   b2c_requests: "B2C Requests",
 
   missions: "My Missions",
+  crew_profile: "Crew Profile",
+  readiness_checklists: "Readiness Checklists",
   epcr: "ePCR",
   ambulances: "Ambulances",
   destinations: "Hospitals / Destinations",
@@ -152,6 +171,12 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   missions:
     "Assigned missions for paramedics and field teams, including acknowledgement and status updates.",
+
+  crew_profile:
+    "Crew member personal, employment, license, contact, and bank profile data.",
+
+  readiness_checklists:
+    "Project EMS readiness checks linked to missions, units, shifts, inspectors, and supervisor review.",
 
   epcr:
     "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
@@ -239,6 +264,13 @@ export const ACTION_LABELS: Record<string, string> = {
 
   acknowledge: "Acknowledge",
   report: "Report",
+  edit_own: "Edit Own",
+  edit_all: "Edit All",
+
+  review: "Review",
+  return_for_correction: "Return for Correction",
+  manage_expiry: "Manage Expiry",
+  manage_templates: "Manage Templates",
 };
 
 export const PERMISSION_GROUPS = [
@@ -253,6 +285,8 @@ export const PERMISSION_GROUPS = [
       "cad",
       "b2c_cases",
       "missions",
+      "crew_profile",
+      "readiness_checklists",
       "epcr",
     ],
   },

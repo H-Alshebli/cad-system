@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { acknowledgeCase } from "@/lib/cases";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import { isMissionActive, isProjectMission } from "@/lib/readinessChecklist";
+import { getCaseDisplayCode, getCaseDisplayTitle } from "@/lib/displayLabels";
 
 export default function MissionAcknowledgePage({
   params,
@@ -13,8 +16,10 @@ export default function MissionAcknowledgePage({
   params: { caseId: string };
 }) {
   const { user, loading: userLoading } = useCurrentUser();
+  const { can } = usePermissions(user?.role);
 
   const [caseData, setCaseData] = useState<any>(null);
+  const [missionChecklists, setMissionChecklists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ackLoading, setAckLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -23,6 +28,25 @@ export default function MissionAcknowledgePage({
     const unsub = onSnapshot(doc(db, "cases", params.caseId), (snap) => {
       setCaseData(snap.exists() ? { id: snap.id, ...snap.data() } : null);
       setLoading(false);
+    });
+
+    return () => unsub();
+  }, [params.caseId]);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "projectChecklists"),
+      where("missionId", "==", params.caseId)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const rows: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      rows.sort((a, b) => {
+        const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
+        const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
+        return bd - ad;
+      });
+      setMissionChecklists(rows);
     });
 
     return () => unsub();
@@ -68,6 +92,19 @@ export default function MissionAcknowledgePage({
     Boolean(caseData?.acknowledged);
 
   const detailsVisible = showDetails || acknowledged;
+  const checklistRequired =
+    isProjectMission(caseData) && isMissionActive(caseData);
+  const latestChecklist =
+    missionChecklists.find((entry) => (entry.checklistPhase || "opening") === "opening") ||
+    missionChecklists[0];
+  const latestClosingChecklist = missionChecklists.find(
+    (entry) => entry.checklistPhase === "closing"
+  );
+  const checklistProjectId = isB2C ? "_b2c" : caseData?.projectId;
+  const canStartChecklist =
+    checklistRequired &&
+    can("readiness_checklists", "create") &&
+    Boolean(checklistProjectId);
 
   async function acknowledgeAndView() {
     if (!caseData || !user) return;
@@ -209,11 +246,11 @@ export default function MissionAcknowledgePage({
           <span className="badge">Active CAD Mission</span>
 
           <h2 className="mt-4 text-2xl font-bold text-white">
-            Case {caseData.lazemCode || caseData.caseNumber || caseData.id}
+            Case {getCaseDisplayCode(caseData)}
           </h2>
 
           <p className="mt-1 text-sm text-slate-400">
-            {isB2C ? customerName : caseData.projectName || "Project Case"}
+            {getCaseDisplayTitle(caseData) || (isB2C ? customerName : caseData.projectName || "Project Case")}
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-300 md:grid-cols-2">
@@ -252,6 +289,60 @@ export default function MissionAcknowledgePage({
             </p>
           </div>
 
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm">
+            <div className="font-semibold text-white">Readiness Checklist</div>
+
+            {checklistRequired ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {latestChecklist ? (
+                  <>
+                    <span className="badge">
+                      {latestChecklist.result || "In Progress"} /{" "}
+                      {latestChecklist.readinessScore ?? "-"}%
+                    </span>
+
+                    <Link
+                      className="btn-secondary"
+                      href={`/projects/${checklistProjectId}/checklists/${latestChecklist.id}`}
+                    >
+                      Open Checklist
+                    </Link>
+                    {latestChecklist.status === "approved" && (
+                      latestClosingChecklist ? (
+                        <Link
+                          className="btn-secondary"
+                          href={`/projects/${checklistProjectId}/checklists/${latestClosingChecklist.id}`}
+                        >
+                          Open Closing
+                        </Link>
+                      ) : canStartChecklist ? (
+                        <Link
+                          className="btn-primary"
+                          href={`/projects/${checklistProjectId}/checklists/new?phase=closing&sourceChecklistId=${latestChecklist.id}&missionId=${caseData.id}`}
+                        >
+                          Start Closing
+                        </Link>
+                      ) : null
+                    )}
+                  </>
+                ) : canStartChecklist ? (
+                  <Link
+                    className="btn-secondary"
+                    href={`/projects/${checklistProjectId}/checklists/new?missionId=${caseData.id}`}
+                  >
+                    Start Checklist
+                  </Link>
+                ) : (
+                  <span className="badge">Permission Required</span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-2">
+                <span className="badge">Checklist Not Required</span>
+              </div>
+            )}
+          </div>
+
           <p className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
             By clicking the button below, the system will record that you
             received this active CAD mission. After acknowledgement, you can open
@@ -285,11 +376,11 @@ export default function MissionAcknowledgePage({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-white">
-                  Case {caseData.lazemCode || caseData.caseNumber || caseData.id}
+                  Case {getCaseDisplayCode(caseData)}
                 </h2>
 
                 <p className="text-sm text-slate-400">
-                  {isB2C ? customerName : caseData.projectName || "Project Case"}
+                  {getCaseDisplayTitle(caseData) || (isB2C ? customerName : caseData.projectName || "Project Case")}
                 </p>
               </div>
 
@@ -375,6 +466,64 @@ export default function MissionAcknowledgePage({
                 Request” if you need the full booking and preparation details.
               </div>
             )}
+
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm">
+              <h4 className="font-semibold text-white">Readiness Checklist</h4>
+
+              {checklistRequired ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {latestChecklist ? (
+                    <>
+                      <span className="badge">
+                        {latestChecklist.status || "draft"}
+                      </span>
+
+                      <span className="badge">
+                        {latestChecklist.result || "In Progress"} /{" "}
+                        {latestChecklist.readinessScore ?? "-"}%
+                      </span>
+
+                      <Link
+                        className="btn-secondary"
+                        href={`/projects/${checklistProjectId}/checklists/${latestChecklist.id}`}
+                      >
+                        Open Checklist
+                      </Link>
+                      {latestChecklist.status === "approved" && (
+                        latestClosingChecklist ? (
+                          <Link
+                            className="btn-secondary"
+                            href={`/projects/${checklistProjectId}/checklists/${latestClosingChecklist.id}`}
+                          >
+                            Open Closing
+                          </Link>
+                        ) : canStartChecklist ? (
+                          <Link
+                            className="btn-primary"
+                            href={`/projects/${checklistProjectId}/checklists/new?phase=closing&sourceChecklistId=${latestChecklist.id}&missionId=${caseData.id}`}
+                          >
+                            Start Closing
+                          </Link>
+                        ) : null
+                      )}
+                    </>
+                  ) : canStartChecklist ? (
+                    <Link
+                      className="btn-secondary"
+                      href={`/projects/${checklistProjectId}/checklists/new?missionId=${caseData.id}`}
+                    >
+                      Start Checklist
+                    </Link>
+                  ) : (
+                    <span className="badge">Permission Required</span>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <span className="badge">Checklist Not Required</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

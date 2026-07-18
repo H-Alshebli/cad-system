@@ -10,6 +10,7 @@ import StatusButtons from "@/app/components/StatusButtons";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
 import dynamic from "next/dynamic";
+import { getCaseDisplayCode, getCaseDisplayTitle } from "@/lib/displayLabels";
 
 const Map = dynamic(() => import("@/app/components/Map"), {
   ssr: false,
@@ -212,8 +213,9 @@ export default function CaseDetailsPage({
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">
-            Case #{caseData.lazemCode || caseData.id}
+            Case {getCaseDisplayCode(caseData)}
           </h1>
+          <p className="text-sm text-gray-300">{getCaseDisplayTitle(caseData)}</p>
           <p className="text-sm text-gray-400">
             Status: <span className="text-green-400">{caseData.status}</span>
           </p>

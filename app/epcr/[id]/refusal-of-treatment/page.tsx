@@ -169,11 +169,6 @@ export default function RefusalOfTreatmentPage({
             label="Project Name"
             value={epcrData?.projectInfo?.projectName || "—"}
           />
-          <Input
-            disabled
-            label="Project ID"
-            value={epcrData?.projectInfo?.projectId || "—"}
-          />
           <Input disabled label="Patient Name" value={patientName || "—"} />
           <Input
             disabled

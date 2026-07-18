@@ -15,8 +15,19 @@ export default function ProjectLayout({
 }) {
   const pathname = usePathname();
   const [project, setProject] = useState<any>(null);
+  const isUtilityChecklistProject =
+    params.projectId === "_manual" || params.projectId === "_b2c" || params.projectId === "b2c";
 
   useEffect(() => {
+    if (isUtilityChecklistProject) {
+      setProject({
+        id: params.projectId,
+        projectName: params.projectId === "_manual" ? "Manual Checklist" : "B2C Transport",
+        client: "HCAD",
+        status: "Active",
+      });
+      return;
+    }
     const unsub = onSnapshot(
       doc(db, "projects", params.projectId),
       (snap) => {
@@ -27,7 +38,7 @@ export default function ProjectLayout({
     );
 
     return () => unsub();
-  }, [params.projectId]);
+  }, [params.projectId, isUtilityChecklistProject]);
 
   if (!project) return <div className="p-6">Loading project...</div>;
 
@@ -35,6 +46,8 @@ export default function ProjectLayout({
     { label: "Dashboard", href: `/projects/${params.projectId}` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
+    { label: "Checklist Review", href: `/projects/${params.projectId}/checklists` },
+    { label: "Create Checklist", href: `/projects/${params.projectId}/checklists/new` },
   ];
 
   return (
@@ -49,7 +62,10 @@ export default function ProjectLayout({
       <div className="flex gap-2 border-b">
         {tabs.map((t) => {
           const active =
-            pathname === t.href || pathname.startsWith(`${t.href}/`);
+            t.href.endsWith("/checklists")
+              ? pathname === t.href ||
+                (pathname.startsWith(`${t.href}/`) && !pathname.startsWith(`${t.href}/new`))
+              : pathname === t.href || pathname.startsWith(`${t.href}/`);
 
           return (
             <Link

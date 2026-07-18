@@ -5,6 +5,9 @@ import Link from "next/link";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import { isMissionActive, isProjectMission } from "@/lib/readinessChecklist";
+import { getB2CRequestDisplay, getCaseDisplayCode, getCaseDisplayTitle, getUnitDisplayName } from "@/lib/displayLabels";
 
 function getDateValue(item: any) {
   const raw =
@@ -82,6 +85,7 @@ function isClosedCase(item: any) {
 
 export default function MyMissionsPage() {
   const { user, loading } = useCurrentUser();
+  const { can } = usePermissions(user?.role);
 
   const [cases, setCases] = useState<any[]>([]);
   const [b2cRequests, setB2CRequests] = useState<any[]>([]);
@@ -156,13 +160,21 @@ export default function MyMissionsPage() {
   return (
     <div className="page-shell">
       <div className="page-header">
-        
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
           <h1 className="page-title">My Missions</h1>
 
           <p className="page-subtitle">
             Upcoming B2C requests appear here for preparation. Active CAD
             missions appear after Dispatch creates or activates the CAD case.
           </p>
+          </div>
+          {can("readiness_checklists", "create") && (
+            <Link className="btn-secondary" href="/projects/_manual/checklists/new?manual=1">
+              Manual Checklist
+            </Link>
+          )}
+        </div>
         </div>
 
  
@@ -203,9 +215,7 @@ export default function MyMissionsPage() {
               {upcomingB2CRequests.map((request) => (
                 <tr key={request.id} className="hover:bg-white/[0.03]">
                   <td className="px-4 py-3 font-semibold text-white">
-                    {request.bookingConfirmationNumber
-                      ? `#${request.bookingConfirmationNumber}`
-                      : request.id}
+                    {getB2CRequestDisplay(request)}
                   </td>
 
                   <td className="px-4 py-3 text-slate-300">
@@ -227,7 +237,7 @@ export default function MyMissionsPage() {
                   <td className="px-4 py-3 text-slate-300">
                     {request.plannedAssignment?.unitCode ||
                       request.plannedAssignment?.unitName ||
-                      request.plannedAssignment?.unitId ||
+                      getUnitDisplayName(request.plannedAssignment) ||
                       "—"}
                   </td>
 
@@ -310,6 +320,7 @@ export default function MyMissionsPage() {
                 <th className="px-4 py-3">Location</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Acknowledgement</th>
+                <th className="px-4 py-3">Checklist</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
@@ -318,11 +329,19 @@ export default function MyMissionsPage() {
               {activeMissions.map((item) => {
                 const b2cRequestId = getB2CRequestIdFromCase(item);
                 const showViewRequest = isB2CCase(item) && b2cRequestId;
+                const checklistRequired =
+                  isProjectMission(item) && isMissionActive(item);
+                const canStartChecklist =
+                  checklistRequired && can("readiness_checklists", "create");
+                const checklistProjectId = isB2CCase(item) ? "_b2c" : item.projectId;
 
                 return (
                   <tr key={item.id} className="hover:bg-white/[0.03]">
                     <td className="px-4 py-3 font-semibold text-white">
-                      {item.lazemCode || item.caseNumber || item.id}
+                      {getCaseDisplayCode(item)}
+                      <div className="mt-1 text-xs font-normal text-slate-500">
+                        {getCaseDisplayTitle(item)}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3">
@@ -332,7 +351,7 @@ export default function MyMissionsPage() {
                     </td>
 
                     <td className="px-4 py-3 text-slate-300">
-                      {item.serviceType || item.chiefComplaint || "—"}
+                      {item.chiefComplaint || item.serviceType || "—"}
                     </td>
 
                     <td className="px-4 py-3 text-slate-300">
@@ -357,6 +376,19 @@ export default function MyMissionsPage() {
                             "team"
                           }`
                         : "Not acknowledged"}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {canStartChecklist ? (
+                        <Link
+                          className="btn-secondary"
+                          href={`/projects/${checklistProjectId}/checklists/new?missionId=${item.id}`}
+                        >
+                          Start Checklist
+                        </Link>
+                      ) : (
+                        <span className="badge">Checklist Not Required</span>
+                      )}
                     </td>
 
                     <td className="px-4 py-3">
@@ -385,7 +417,7 @@ export default function MyMissionsPage() {
               {activeMissions.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-center text-slate-400"
                   >
                     No active CAD missions found.

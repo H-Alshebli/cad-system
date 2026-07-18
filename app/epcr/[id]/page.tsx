@@ -1019,7 +1019,6 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
 <Section title="Case Information">
   <Input disabled label="Project Name" value={projectInfo.projectName || "—"} />
-  <Input disabled label="Project ID" value={projectInfo.projectId || "—"} />
   <Input disabled label="Trip Leg" value={projectInfo.tripLeg || "—"} />
 </Section>
 

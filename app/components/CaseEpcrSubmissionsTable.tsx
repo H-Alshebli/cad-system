@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
+import { getCaseDisplayCode, shortTechnicalId } from "@/lib/displayLabels";
 
 type FirestoreDate = Timestamp | Date | string | null | undefined;
 
@@ -305,8 +306,8 @@ function exportToCsv(rows: Row[]) {
       : {};
 
     return {
-      "Case Ref": caseItem.id,
-      "ePCR Ref": epcr?.epcrId || epcr?.id || "Not Created",
+      "Case Ref": getCaseDisplayCode(caseItem),
+      "ePCR Ref": epcr ? shortTechnicalId(epcr.epcrId || epcr.id, "EPCR") : "Not Created",
       Project: getProjectName(caseItem, epcr),
       Patient: getPatientName(caseItem, epcr),
       Age: cleanExportValue(epcr?.patientInfo?.age),
@@ -630,19 +631,15 @@ export default function CaseEpcrSubmissionsTable({
                   <tr key={caseItem.id} className="hover:bg-white/[0.03]">
                     <td className="whitespace-nowrap px-4 py-4 text-white">
                       <div className="font-medium">
-                        CASE-{shortId(caseItem.id)}
+                        {getCaseDisplayCode(caseItem)}
                       </div>
-                      <div className="text-xs text-gray-500">{caseItem.id}</div>
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-4">
                       {epcr ? (
                         <>
                           <div className="font-medium text-blue-300">
-                            EPCR-{shortId(epcr.epcrId || epcr.id)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {epcr.epcrId || epcr.id}
+                            {shortTechnicalId(epcr.epcrId || epcr.id, "EPCR")}
                           </div>
                         </>
                       ) : (

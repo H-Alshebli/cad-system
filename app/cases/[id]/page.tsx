@@ -10,6 +10,7 @@ import CaseChat from "@/app/components/CaseChat";
 import StatusButtons from "@/app/components/StatusButtons";
 import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
 import { createReturnCadCaseFromB2CRequest } from "@/lib/b2cRequests";
+import { getCaseDisplayCode, getCaseDisplayTitle, getUnitDisplayName } from "@/lib/displayLabels";
 import {
   Activity,
   ArrowLeft,
@@ -327,7 +328,7 @@ export default function CaseDetailsPage({
 
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-black text-slate-950 dark:text-white">
-                Case #{caseData.lazemCode || caseData.id}
+                Case {getCaseDisplayCode(caseData)}
               </h1>
 
               <Badge tone="blue">{sourceType}</Badge>
@@ -346,12 +347,13 @@ export default function CaseDetailsPage({
             </div>
 
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {sourceType === "B2C"
-                ? caseData.customer?.name ||
-                  caseData.customerName ||
-                  caseData.callerName ||
-                  "B2C Customer"
-                : caseData.projectName || "Project Case"}
+              {getCaseDisplayTitle(caseData) ||
+                (sourceType === "B2C"
+                  ? caseData.customer?.name ||
+                    caseData.customerName ||
+                    caseData.callerName ||
+                    "B2C Customer"
+                  : caseData.projectName || "Project Case")}
             </p>
           </div>
 

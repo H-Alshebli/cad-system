@@ -382,9 +382,6 @@ export default function ProjectsPage() {
                     <span className="text-gray-500">Client:</span> {p.client || "—"}
                   </p>
                   <p className="truncate">
-                    <span className="text-gray-500">Project ID:</span> {p.id}
-                  </p>
-                  <p className="truncate">
                     <span className="text-gray-500">Ambulances:</span>{" "}
                     {Array.isArray(p.assignedAmbulances) && p.assignedAmbulances.length > 0
                       ? p.assignedAmbulances.map((a: any) => a.code || a.id).join(", ")
