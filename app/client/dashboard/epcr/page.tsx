@@ -19,6 +19,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import { getEpcrResponseMinutes } from "@/lib/epcrResponseTime";
 
 type Project = {
   id: string;
@@ -54,6 +55,9 @@ type EpcrItem = {
     minutes?: number;
     avgMinutes?: number;
   };
+  time?: any;
+  timeline?: any;
+  caseSnapshot?: any;
 
   createdAt?: any;
   isArchived?: boolean;
@@ -155,16 +159,6 @@ function getHealth(e: EpcrItem) {
   return String(
     e.healthClassification || e.classification || "Unspecified"
   );
-}
-
-function getResponseMinutes(e: EpcrItem) {
-  const value =
-    e.responseTimeMinutes ||
-    e.responseTime?.minutes ||
-    e.responseTime?.avgMinutes ||
-    0;
-
-  return Number(value) || 0;
 }
 
 function isVisibleRecord(item: EpcrItem) {
@@ -320,8 +314,8 @@ export default function ClientEpcrDashboardPage() {
 
   const avgResponseMinutes = useMemo(() => {
     const values = allowedEpcrs
-      .map(getResponseMinutes)
-      .filter((value) => value > 0);
+      .map(getEpcrResponseMinutes)
+      .filter((value): value is number => value !== null && value > 0);
 
     if (values.length === 0) return 0;
 

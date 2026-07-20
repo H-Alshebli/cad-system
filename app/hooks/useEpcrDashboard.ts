@@ -9,6 +9,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getEpcrResponseMinutes } from "@/lib/epcrResponseTime";
 
 type DashboardStats = {
   totalCases: number;
@@ -27,20 +28,6 @@ type DashboardStats = {
     maxMinutes: number;
   };
 };
-
-function hhmmToMinutes(time?: string): number | null {
-  if (!time) return null;
-
-  const parts = time.split(":");
-  if (parts.length !== 2) return null;
-
-  const hours = Number(parts[0]);
-  const minutes = Number(parts[1]);
-
-  if (isNaN(hours) || isNaN(minutes)) return null;
-
-  return hours * 60 + minutes;
-}
 
 function isVisibleEpcr(item: any) {
   return item?.isArchived !== true && item?.projectArchived !== true;
@@ -123,20 +110,8 @@ export function useEpcrDashboard(
           complaints[c] = (complaints[c] || 0) + 1;
         });
 
-        // Average Response Time Calculation
-        // Response Time = Arrival To Patient Time - Received Time
-        const receivedMin = hhmmToMinutes(epcr.time?.Received?.timeHHMM);
-        const arrivalMin = hhmmToMinutes(
-          epcr.time?.arrivalToPTTime?.timeHHMM
-        );
-
-        if (
-          receivedMin !== null &&
-          arrivalMin !== null &&
-          arrivalMin > receivedMin
-        ) {
-          const minutes = arrivalMin - receivedMin;
-
+        const minutes = getEpcrResponseMinutes(epcr);
+        if (minutes !== null) {
           responseSum += minutes;
           responseMin = Math.min(responseMin, minutes);
           responseMax = Math.max(responseMax, minutes);
