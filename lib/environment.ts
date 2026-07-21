@@ -34,9 +34,7 @@ export function getEnvironmentLabel() {
   return "Local Development";
 }
 
-function requirePublicEnv(key: string) {
-  const value = process.env[key];
-
+function validatePublicEnv(value: string | undefined, key: string) {
   if (!value) {
     throw new Error(`Missing required environment variable: ${key}`);
   }
@@ -45,15 +43,41 @@ function requirePublicEnv(key: string) {
 }
 
 export function getFirebaseConfigFromEnv() {
+  const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  };
+
   return {
-    apiKey: requirePublicEnv("NEXT_PUBLIC_FIREBASE_API_KEY"),
-    authDomain: requirePublicEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
-    projectId: requirePublicEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
-    storageBucket: requirePublicEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
-    messagingSenderId: requirePublicEnv(
+    ...firebaseConfig,
+    apiKey: validatePublicEnv(
+      firebaseConfig.apiKey,
+      "NEXT_PUBLIC_FIREBASE_API_KEY"
+    ),
+    authDomain: validatePublicEnv(
+      firebaseConfig.authDomain,
+      "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
+    ),
+    projectId: validatePublicEnv(
+      firebaseConfig.projectId,
+      "NEXT_PUBLIC_FIREBASE_PROJECT_ID"
+    ),
+    storageBucket: validatePublicEnv(
+      firebaseConfig.storageBucket,
+      "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"
+    ),
+    messagingSenderId: validatePublicEnv(
+      firebaseConfig.messagingSenderId,
       "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
     ),
-    appId: requirePublicEnv("NEXT_PUBLIC_FIREBASE_APP_ID"),
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    appId: validatePublicEnv(
+      firebaseConfig.appId,
+      "NEXT_PUBLIC_FIREBASE_APP_ID"
+    ),
   };
 }
