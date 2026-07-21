@@ -9,8 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "file-saver": "^2.0.5",
     "firebase": "^10.7.1",
+    "firebase-admin": "^14.2.0",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",

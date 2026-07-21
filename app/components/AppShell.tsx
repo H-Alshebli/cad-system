@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
+import EnvironmentBanner from "./EnvironmentBanner";
 
 const PUBLIC_ROUTES = ["/login", "/register"];
 
@@ -58,6 +59,8 @@ export default function AppShell({
         />
 
         <div className="relative z-10">
+          <EnvironmentBanner />
+
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-[#07111f]/95">
             <button
               onClick={() => setMobileSidebarOpen(true)}
