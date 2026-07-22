@@ -15,6 +15,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { MoreHorizontal, Plus } from "lucide-react";
 import Can from "../components/Can";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
@@ -140,13 +141,13 @@ function ActionMenu({
           e.stopPropagation();
           setOpen((prev) => !prev);
         }}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-700 bg-[#0f172a] text-gray-300 hover:bg-[#1e293b] hover:text-white transition"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#86A7B2]/35 bg-white text-[#274C5A] shadow-sm transition hover:border-[#274C5A]/40 hover:bg-[#f8fbfc]"
       >
-        ⋯
+        <MoreHorizontal size={18} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-20 min-w-[150px] overflow-hidden rounded-xl border border-gray-700 bg-[#0b1220] shadow-xl">
+        <div className="absolute right-0 top-11 z-20 min-w-[160px] overflow-hidden rounded-xl border border-[#86A7B2]/30 bg-white shadow-xl shadow-[#274C5A]/10">
           {!isArchived ? (
             <button
               type="button"
@@ -157,7 +158,7 @@ function ActionMenu({
                 setOpen(false);
                 onArchive();
               }}
-              className="block w-full px-4 py-3 text-left text-sm text-amber-400 hover:bg-white/5 disabled:opacity-50"
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
             >
               {loading ? "Archiving..." : "Archive Project"}
             </button>
@@ -171,7 +172,7 @@ function ActionMenu({
                 setOpen(false);
                 onRestore();
               }}
-              className="block w-full px-4 py-3 text-left text-sm text-green-400 hover:bg-white/5 disabled:opacity-50"
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
             >
               {loading ? "Restoring..." : "Restore Project"}
             </button>
@@ -283,24 +284,32 @@ export default function ProjectsPage() {
   };
 
   if (loading || permsLoading) {
-    return <div className="p-6 text-gray-400">Loading projects...</div>;
+    return (
+      <div className="p-6 text-sm font-semibold text-[#7F7F7F]">
+        Loading projects...
+      </div>
+    );
   }
 
  return (
   <PermissionGuard module="projects" action="view" showMessage={true}>
-    <div className="p-6 space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5 p-4 sm:p-6">
+      <div className="rounded-2xl bg-[#274C5A] p-5 text-white shadow-sm shadow-[#274C5A]/20">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Projects</h1>
-          <p className="text-sm text-gray-400">
+          <div className="mb-2 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide">
+            HCAD Command Center
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-white">Projects</h1>
+          <p className="mt-1 text-sm font-medium text-white/78">
             Manage active and archived projects
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             onClick={() => setShowArchived((v) => !v)}
-            className="px-4 py-2 rounded-lg border border-gray-600 bg-transparent text-white hover:bg-white/5 transition"
+            className="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16"
           >
             {showArchived ? "Show Active" : "Show Archived"}
           </button>
@@ -308,16 +317,18 @@ export default function ProjectsPage() {
           <Can permission="projects.create">
             <Link
               href="/projects/new"
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-[#274C5A] shadow-sm transition hover:bg-[#f8fbfc]"
             >
-              + New Project
+              <Plus size={16} />
+              New Project
             </Link>
           </Can>
         </div>
       </div>
+      </div>
 
       {projects.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-700 p-8 text-center text-sm text-gray-400">
+        <div className="rounded-2xl border border-dashed border-[#86A7B2]/40 bg-white p-8 text-center text-sm font-semibold text-[#7F7F7F] shadow-sm">
           {showArchived
             ? "No archived projects found."
             : canViewAll
@@ -334,11 +345,11 @@ export default function ProjectsPage() {
           return (
             <div
               key={p.id}
-              className="rounded-xl border border-gray-700 bg-[#111827] p-4 shadow-sm hover:border-gray-500 hover:bg-[#172033] transition"
+              className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm shadow-[#274C5A]/5 transition hover:-translate-y-0.5 hover:border-[#274C5A]/30 hover:shadow-md hover:shadow-[#274C5A]/10"
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <Link href={`/projects/${p.id}`} className="min-w-0 flex-1">
-                  <h2 className="text-sm font-semibold text-white leading-5 line-clamp-2">
+                  <h2 className="line-clamp-2 text-sm font-black leading-5 text-[#274C5A]">
                     {p.projectName || "Untitled Project"}
                   </h2>
                 </Link>
@@ -348,7 +359,7 @@ export default function ProjectsPage() {
                     <Link
                       href={`/projects/${p.id}/edit`}
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded-lg border border-blue-500/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/10 transition"
+                      className="rounded-lg border border-[#86A7B2]/35 px-3 py-2 text-xs font-bold text-[#274C5A] transition hover:border-[#274C5A]/40 hover:bg-[#f8fbfc]"
                     >
                       Edit
                     </Link>
@@ -367,31 +378,31 @@ export default function ProjectsPage() {
               <Link href={`/projects/${p.id}`} className="block space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-medium ${
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
                       isArchived
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-green-500/15 text-green-400"
+                        ? "border-amber-500/25 bg-amber-500/10 text-amber-700"
+                        : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
                     }`}
                   >
                     {isArchived ? "Archived" : p.status || "Active"}
                   </span>
                 </div>
 
-                <div className="space-y-1 text-xs text-gray-400">
+                <div className="space-y-2 text-xs font-semibold text-[#274C5A]/75">
                   <p className="truncate">
-                    <span className="text-gray-500">Client:</span> {p.client || "—"}
+                    <span className="text-[#7F7F7F]">Client:</span> {p.client || "-"}
                   </p>
                   <p className="truncate">
-                    <span className="text-gray-500">Ambulances:</span>{" "}
+                    <span className="text-[#7F7F7F]">Ambulances:</span>{" "}
                     {Array.isArray(p.assignedAmbulances) && p.assignedAmbulances.length > 0
                       ? p.assignedAmbulances.map((a: any) => a.code || a.id).join(", ")
-                      : "—"}
+                      : "-"}
                   </p>
                   <p className="truncate">
-                    <span className="text-gray-500">Hospitals:</span>{" "}
+                    <span className="text-[#7F7F7F]">Hospitals:</span>{" "}
                     {Array.isArray(p.projectHospitals) && p.projectHospitals.length > 0
                       ? p.projectHospitals.map((h: any) => h.name || h.id).join(", ")
-                      : "—"}
+                      : "-"}
                   </p>
                 </div>
               </Link>

@@ -165,15 +165,15 @@ export default function CaseDetailsPage({
   ------------------------------ */
   if (loading) {
     return (
-      <div className="p-6 text-gray-400">
-        Loading case…
+      <div className="p-6 text-sm font-semibold text-[#7F7F7F]">
+        Loading case...
       </div>
     );
   }
 
   if (!caseData) {
     return (
-      <div className="p-6 text-red-400">
+      <div className="p-6 text-sm font-semibold text-red-700">
         Case not found
       </div>
     );
@@ -201,35 +201,42 @@ export default function CaseDetailsPage({
     setEditCaseInfo(false);
   };
 
+  const cardClass =
+    "rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5";
+  const primaryButtonClass =
+    "rounded-xl bg-white px-4 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:bg-[#f8fbfc]";
 
 
   /* =============================
      RENDER
   ============================== */
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-4 sm:p-6">
 
       {/* HEADER */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex justify-between">
+      <div className="flex flex-col justify-between gap-4 rounded-2xl bg-[#274C5A] p-5 text-white shadow-sm shadow-[#274C5A]/20 sm:flex-row sm:items-start">
         <div>
-          <h1 className="text-xl font-semibold text-white">
+          <div className="mb-2 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide">
+            Project CAD
+          </div>
+          <h1 className="text-xl font-black text-white">
             Case {getCaseDisplayCode(caseData)}
           </h1>
-          <p className="text-sm text-gray-300">{getCaseDisplayTitle(caseData)}</p>
-          <p className="text-sm text-gray-400">
-            Status: <span className="text-green-400">{caseData.status}</span>
+          <p className="mt-1 text-sm font-medium text-white/78">{getCaseDisplayTitle(caseData)}</p>
+          <p className="mt-1 text-sm font-medium text-white/70">
+            Status: <span className="font-black text-emerald-200">{caseData.status}</span>
           </p>
         </div>
         <button
           onClick={handleEpcr}
-          className="px-4 py-2 rounded bg-purple-600 text-white"
+          className={primaryButtonClass}
         >
           {epcr ? "View ePCR" : "Create ePCR"}
         </button>
       </div>
 
       {/* STATUS + TIMELINE */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
+      <div className={`${cardClass} space-y-4`}>
         <StatusButtons
   caseId={caseData.id}
   currentStatus={caseData.status}
@@ -289,12 +296,12 @@ export default function CaseDetailsPage({
       </Section>
       {/* PATIENT LOCATION */}
 {caseData.location && (
-  <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-    <h3 className="text-sm font-semibold text-gray-200 mb-3">
+  <div className={cardClass}>
+    <h3 className="mb-3 text-sm font-black text-[#274C5A]">
       Patient Location
     </h3>
 
-    <div className="w-full h-[350px] rounded overflow-hidden">
+    <div className="h-[350px] w-full overflow-hidden rounded-xl border border-[#86A7B2]/25">
 <Map
   caseLat={caseData.location.lat}
   caseLng={caseData.location.lng}
@@ -310,12 +317,12 @@ export default function CaseDetailsPage({
 )}
 {/* DESTINATION LOCATION */}
 {caseData.destination && caseData.location && (
-  <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-    <h3 className="text-sm font-semibold text-gray-200 mb-3">
+  <div className={cardClass}>
+    <h3 className="mb-3 text-sm font-black text-[#274C5A]">
       Destination ({caseData.destination.type})
     </h3>
 
-    <div className="w-full h-[350px] rounded overflow-hidden">
+    <div className="h-[350px] w-full overflow-hidden rounded-xl border border-[#86A7B2]/25">
       <Map
         caseLat={caseData.location.lat}
         caseLng={caseData.location.lng}
@@ -363,15 +370,15 @@ type SectionProps = {
 
 function Section({ title, edit, onEdit, onSave, onCancel, children }: SectionProps) {
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-4">
-      <div className="flex justify-between">
-        <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
+    <div className="space-y-4 rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+      <div className="flex justify-between gap-3">
+        <h3 className="text-sm font-black text-[#274C5A]">{title}</h3>
         {!edit ? (
-          <button onClick={onEdit} className="text-xs text-blue-400">Edit</button>
+          <button onClick={onEdit} className="text-xs font-black text-[#274C5A]">Edit</button>
         ) : (
-          <div className="flex gap-3 text-xs">
-            <button onClick={onSave} className="text-green-400">Save</button>
-            <button onClick={onCancel} className="text-gray-400">Cancel</button>
+          <div className="flex gap-3 text-xs font-black">
+            <button onClick={onSave} className="text-emerald-700">Save</button>
+            <button onClick={onCancel} className="text-[#7F7F7F]">Cancel</button>
           </div>
         )}
       </div>
@@ -381,7 +388,7 @@ function Section({ title, edit, onEdit, onSave, onCancel, children }: SectionPro
 }
 
 function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-4 text-sm">{children}</div>;
+  return <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">{children}</div>;
 }
 
 function Field({
@@ -401,16 +408,16 @@ function Field({
 }) {
   return (
     <div className={colSpan ? "col-span-2" : ""}>
-      <label className="text-gray-400">{label}</label>
+      <label className="text-sm font-bold text-[#7F7F7F]">{label}</label>
       {edit ? (
         <input
           type={type}
-          className="w-full mt-1 p-2 rounded bg-slate-800 text-white border border-slate-700"
+          className="mt-1 w-full rounded-xl border border-[#86A7B2]/35 bg-white px-3 py-2 text-[#274C5A] outline-none transition focus:border-[#274C5A] focus:ring-4 focus:ring-[#274C5A]/10"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
         />
       ) : (
-        <p className="text-white">{value || "—"}</p>
+        <p className="text-[#274C5A]">{value || "-"}</p>
       )}
     </div>
   );

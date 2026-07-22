@@ -44,21 +44,21 @@ function inspectorName(user: any) {
 }
 
 function statusTone(status: string) {
-  if (status === "checked") return "border-emerald-500/30 bg-emerald-500/10";
-  if (status === "some") return "border-amber-500/40 bg-amber-500/10";
-  if (status === "missing" || status === "not_available") return "border-red-500/40 bg-red-500/10";
-  return "border-white/10 bg-white/[0.03]";
+  if (status === "checked") return "border-emerald-500/30 bg-emerald-50";
+  if (status === "some") return "border-amber-500/40 bg-amber-50";
+  if (status === "missing" || status === "not_available") return "border-red-500/40 bg-red-50";
+  return "border-[#86A7B2]/25 bg-white";
 }
 
 function vehicleSeverityBadge(item: ReadinessChecklistItem) {
   if (item.vehicleSeverity === "red") {
-    return <span className="badge bg-red-500/10 text-red-200">Red Vehicle</span>;
+    return <span className="badge border-red-500/20 bg-red-500/10 text-red-700">Red Vehicle</span>;
   }
   if (item.vehicleSeverity === "yellow") {
-    return <span className="badge bg-amber-500/10 text-amber-200">Yellow Vehicle</span>;
+    return <span className="badge border-amber-500/20 bg-amber-500/10 text-amber-700">Yellow Vehicle</span>;
   }
   if (item.vehicleSeverity === "green") {
-    return <span className="badge bg-emerald-500/10 text-emerald-200">Green Vehicle</span>;
+    return <span className="badge border-emerald-500/20 bg-emerald-500/10 text-emerald-700">Green Vehicle</span>;
   }
   return null;
 }
@@ -166,19 +166,19 @@ function ItemRow({
   return (
     <div
       id={`checklist-item-${item.id}`}
-      className={`scroll-mt-28 rounded-xl border p-3 ${
-        hasIssue ? "border-red-400 bg-red-500/10 ring-1 ring-red-400/50" : statusTone(item.status)
+      className={`scroll-mt-28 rounded-xl border p-3 shadow-sm shadow-[#274C5A]/5 ${
+        hasIssue ? "border-red-400 bg-red-50 ring-2 ring-red-400/30" : statusTone(item.status)
       }`}
     >
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_190px_130px_1fr]">
         <div>
-          <div className="font-semibold text-white">{item.label}</div>
+          <div className="font-bold text-[#274C5A]">{item.label}</div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
             {vehicleSeverityBadge(item)}
-            {item.critical && <span className="badge bg-rose-500/10 text-rose-200">V Item</span>}
-            {item.manualVerify && <span className="badge bg-blue-500/10 text-blue-200">Manual</span>}
+            {item.critical && <span className="badge border-rose-500/20 bg-rose-500/10 text-rose-700">V Item</span>}
+            {item.manualVerify && <span className="badge border-[#274C5A]/20 bg-[#274C5A]/10 text-[#274C5A]">Manual</span>}
             {item.serviceLevels?.length ? (
-              <span className="badge bg-amber-500/10 text-amber-200">
+              <span className="badge border-amber-500/20 bg-amber-500/10 text-amber-700">
                 {item.serviceLevels.join(", ")}
               </span>
             ) : null}
@@ -187,7 +187,7 @@ function ItemRow({
         </div>
 
         <select
-          className={`select ${hasIssue && item.status === "unchecked" ? "border-red-400 bg-red-500/10" : ""}`}
+          className={`select ${hasIssue && item.status === "unchecked" ? "border-red-400 bg-red-50" : ""}`}
           value={item.status}
           onChange={(e) => {
             const status = e.target.value as ReadinessChecklistItem["status"];
@@ -209,7 +209,7 @@ function ItemRow({
 
         {needsQty ? (
           <input
-            className={`input ${hasIssue && (item.status === "checked" || item.status === "some") ? "border-red-400 bg-red-500/10" : ""}`}
+            className={`input ${hasIssue && (item.status === "checked" || item.status === "some") ? "border-red-400 bg-red-50" : ""}`}
             type="number"
             min="0"
             step="any"
@@ -413,6 +413,14 @@ export default function NewProjectChecklistPage({
   const grouped = useMemo(() => groupItems(stepItems), [stepItems]);
   const readiness = useMemo(() => calculateReadiness(items), [items]);
   const extraStockItems = useMemo(() => getExtraStockItems(items), [items]);
+  const cardClass = "rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5";
+  const metricCardClass = "rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-4";
+  const labelClass = "text-sm font-bold text-[#274C5A]";
+  const mutedTextClass = "text-sm text-[#7F7F7F]";
+  const primaryButtonClass =
+    "inline-flex items-center justify-center rounded-xl bg-[#274C5A] px-4 py-2.5 text-sm font-black text-white shadow-sm shadow-[#274C5A]/20 transition hover:bg-[#1f3f4c] disabled:cursor-not-allowed disabled:opacity-50";
+  const secondaryButtonClass =
+    "inline-flex items-center justify-center rounded-xl border border-[#86A7B2]/35 bg-white px-4 py-2.5 text-sm font-bold text-[#274C5A] transition hover:border-[#274C5A]/40 hover:bg-[#f8fbfc] disabled:cursor-not-allowed disabled:opacity-50";
   const issueItemIds = useMemo(
     () => new Set(validationIssues.map((issue) => issue.itemId)),
     [validationIssues]
@@ -659,47 +667,52 @@ export default function NewProjectChecklistPage({
   }
 
   if (userLoading || permLoading || projectLoading) {
-    return <div className="card-modern">Loading checklist wizard...</div>;
+    return <div className={cardClass}>Loading checklist wizard...</div>;
   }
 
   if (!project) {
     return (
-      <div className="card-modern max-w-2xl">
-        <h2 className="text-xl font-bold text-white">Project not found</h2>
-        <p className="mt-2 text-slate-400">This readiness checklist needs a valid project.</p>
+      <div className={`${cardClass} max-w-2xl`}>
+        <h2 className="text-xl font-black text-[#274C5A]">Project not found</h2>
+        <p className="mt-2 text-[#7F7F7F]">This readiness checklist needs a valid project.</p>
       </div>
     );
   }
 
   if (!can("readiness_checklists", "create")) {
     return (
-      <div className="card-modern max-w-2xl">
-        <h2 className="text-xl font-bold text-white">Access denied</h2>
-        <p className="mt-2 text-slate-400">You do not have permission to create readiness checklists.</p>
+      <div className={`${cardClass} max-w-2xl`}>
+        <h2 className="text-xl font-black text-[#274C5A]">Access denied</h2>
+        <p className="mt-2 text-[#7F7F7F]">You do not have permission to create readiness checklists.</p>
       </div>
     );
   }
 
   return (
     <div ref={pageTopRef} className="mx-auto max-w-7xl space-y-5">
+      <div className="rounded-2xl bg-[#274C5A] p-5 text-white shadow-sm shadow-[#274C5A]/20">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <div className="mb-2 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide">
+            HCAD Readiness
+          </div>
+          <h2 className="text-xl font-black text-white">
             New EMS {checklistPhase === "closing" ? "Closing" : "Readiness"} Checklist
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm font-medium text-white/78">
             Wizard based on Lazem medical readiness standards.
           </p>
         </div>
         <Link
-          className="btn-secondary"
+          className="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/16"
           href={isManualMode || isB2CMode ? "/missions" : `/projects/${params.projectId}/checklists`}
         >
           Back
         </Link>
       </div>
+      </div>
 
-      <div className="card-modern overflow-x-auto">
+      <div className={`${cardClass} overflow-x-auto`}>
         <div className="flex min-w-[760px] items-center gap-2">
           {wizardSteps.map((label, index) => (
             <div key={label} className="flex flex-1 items-center gap-2">
@@ -708,37 +721,37 @@ export default function NewProjectChecklistPage({
                   index < step
                     ? "bg-emerald-500 text-white"
                     : index === step
-                    ? "bg-blue-500 text-white"
-                    : "bg-slate-800 text-slate-400"
+                    ? "bg-[#274C5A] text-white"
+                    : "bg-[#f8fbfc] text-[#7F7F7F] ring-1 ring-[#86A7B2]/25"
                 }`}
               >
                 {index < step ? "OK" : index + 1}
               </div>
-              <span className={`text-xs font-bold ${index === step ? "text-white" : "text-slate-500"}`}>
+              <span className={`text-xs font-bold ${index === step ? "text-[#274C5A]" : "text-[#7F7F7F]"}`}>
                 {label}
               </span>
-              {index < wizardSteps.length - 1 && <div className="h-px flex-1 bg-white/10" />}
+              {index < wizardSteps.length - 1 && <div className="h-px flex-1 bg-[#86A7B2]/25" />}
             </div>
           ))}
         </div>
       </div>
 
       {error && (
-        <div ref={errorRef} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-100">
+        <div ref={errorRef} className="rounded-xl border border-red-500/40 bg-red-50 p-4 text-sm font-semibold text-red-700">
           {error}
         </div>
       )}
 
       {validationIssues.length > 0 && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+        <div className="rounded-2xl border border-amber-500/35 bg-amber-50 p-4 shadow-sm shadow-amber-950/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-black text-amber-100">Checklist items need attention</h3>
-              <p className="mt-1 text-sm text-amber-100/80">
+              <h3 className="font-black text-amber-900">Checklist items need attention</h3>
+              <p className="mt-1 text-sm font-medium text-amber-800">
                 Fix the listed items. After one is solved, the wizard will move you to the next issue.
               </p>
             </div>
-            <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-black text-amber-100">
+            <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-800">
               {validationIssues.length} item{validationIssues.length === 1 ? "" : "s"}
             </span>
           </div>
@@ -746,13 +759,13 @@ export default function NewProjectChecklistPage({
             {validationIssues.map((issue) => (
               <div
                 key={`${issue.itemId}-${issue.message}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/40 p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-white p-3"
               >
                 <div>
-                  <div className="font-semibold text-white">{issue.label}</div>
-                  <div className="text-sm text-amber-100/80">{issue.message}</div>
+                  <div className="font-bold text-[#274C5A]">{issue.label}</div>
+                  <div className="text-sm text-amber-800">{issue.message}</div>
                 </div>
-                <button type="button" className="btn-secondary" onClick={() => focusValidationIssue(issue)}>
+                <button type="button" className={secondaryButtonClass} onClick={() => focusValidationIssue(issue)}>
                   Go to item
                 </button>
               </div>
@@ -762,16 +775,16 @@ export default function NewProjectChecklistPage({
       )}
 
       {extraStockPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-blue-400/40 bg-slate-950 p-5 shadow-2xl shadow-blue-950/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#274C5A]/55 p-4 backdrop-blur-sm">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#86A7B2]/35 bg-white p-5 shadow-2xl shadow-[#274C5A]/20">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-black text-white">Extra stock entered</h3>
-                <p className="mt-1 text-sm text-slate-300">
+                <h3 className="text-lg font-black text-[#274C5A]">Extra stock entered</h3>
+                <p className="mt-1 text-sm text-[#7F7F7F]">
                   These quantities are above the checklist minimum. Confirm to continue, or review the inputs.
                 </p>
               </div>
-              <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-100">
+              <span className="rounded-full border border-[#274C5A]/20 bg-[#274C5A]/10 px-3 py-1 text-xs font-black text-[#274C5A]">
                 {extraStockPrompt.items.length} item{extraStockPrompt.items.length === 1 ? "" : "s"}
               </span>
             </div>
@@ -780,18 +793,18 @@ export default function NewProjectChecklistPage({
               {extraStockPrompt.items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-3"
                 >
                   <div>
-                    <div className="font-semibold text-white">{item.label}</div>
-                    <div className="text-sm text-slate-400">
+                    <div className="font-bold text-[#274C5A]">{item.label}</div>
+                    <div className="text-sm text-[#7F7F7F]">
                       Entered {item.actualQty || 0} / Minimum {item.minQty}
                       {item.unit ? ` ${item.unit}` : ""}
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="btn-secondary"
+                    className={secondaryButtonClass}
                     onClick={() => {
                       setExtraStockPrompt(null);
                       focusValidationIssue({
@@ -808,10 +821,10 @@ export default function NewProjectChecklistPage({
             </div>
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={reviewExtraStockInputs}>
+              <button type="button" className={secondaryButtonClass} onClick={reviewExtraStockInputs}>
                 Need to review inputs
               </button>
-              <button type="button" className="btn-primary" onClick={continueAfterExtraStockConfirm}>
+              <button type="button" className={primaryButtonClass} onClick={continueAfterExtraStockConfirm}>
                 Confirm and continue
               </button>
             </div>
@@ -820,10 +833,10 @@ export default function NewProjectChecklistPage({
       )}
 
       {step === 0 && (
-        <section className="card-modern space-y-5">
+        <section className={`${cardClass} space-y-5`}>
           <div>
-            <h3 className="text-lg font-black text-white">Info</h3>
-            <p className="text-sm text-slate-400">
+            <h3 className="text-lg font-black text-[#274C5A]">Info</h3>
+            <p className={mutedTextClass}>
               Inspector details come from the logged-in HCAD account.
             </p>
           </div>
@@ -831,7 +844,7 @@ export default function NewProjectChecklistPage({
             {isManualMode && (
               <>
                 <label className="space-y-2 lg:col-span-2">
-                  <span className="text-sm font-semibold text-slate-300">Project</span>
+                  <span className={labelClass}>Project</span>
                   <select
                     className="select"
                     value={selectedProjectId}
@@ -847,7 +860,7 @@ export default function NewProjectChecklistPage({
                 </label>
                 {!selectedProjectId && (
                   <label className="space-y-2">
-                    <span className="text-sm font-semibold text-slate-300">Manual Project Name</span>
+                    <span className={labelClass}>Manual Project Name</span>
                     <input
                       className="input"
                       value={manualProjectName}
@@ -858,22 +871,22 @@ export default function NewProjectChecklistPage({
                 )}
               </>
             )}
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-sm text-slate-400">Inspector</div>
-              <div className="mt-1 font-bold text-white">{inspectorName(user) || "-"}</div>
+            <div className={metricCardClass}>
+              <div className="text-sm text-[#7F7F7F]">Inspector</div>
+              <div className="mt-1 font-bold text-[#274C5A]">{inspectorName(user) || "-"}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-sm text-slate-400">Employee ID</div>
-              <div className="mt-1 font-bold text-white">
+            <div className={metricCardClass}>
+              <div className="text-sm text-[#7F7F7F]">Employee ID</div>
+              <div className="mt-1 font-bold text-[#274C5A]">
                 {user?.employeeId || user?.employeeID || user?.badgeNo || "Not available"}
               </div>
             </div>
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-slate-300">Riyadh Date</span>
+              <span className={labelClass}>Riyadh Date</span>
               <input className="input" type="date" value={dateKey} onChange={(e) => setDateKey(e.target.value)} />
             </label>
             <label className="space-y-2 lg:col-span-2">
-              <span className="text-sm font-semibold text-slate-300">Assigned Mission / Unit</span>
+              <span className={labelClass}>Assigned Mission / Unit</span>
               <select className="select" value={missionId} onChange={(e) => setMissionId(e.target.value)}>
                 <option value="">
                   {isManualMode ? "Optional: select active mission" : "Select active mission"}
@@ -888,7 +901,7 @@ export default function NewProjectChecklistPage({
             {isManualMode && !missionId && (
               <>
                 <label className="space-y-2">
-                  <span className="text-sm font-semibold text-slate-300">Manual Mission Name</span>
+                  <span className={labelClass}>Manual Mission Name</span>
                   <input
                     className="input"
                     value={manualMissionLabel}
@@ -897,7 +910,7 @@ export default function NewProjectChecklistPage({
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-semibold text-slate-300">Unit ID</span>
+                  <span className={labelClass}>Unit ID</span>
                   <input
                     className="input"
                     value={manualUnitId}
@@ -906,7 +919,7 @@ export default function NewProjectChecklistPage({
                   />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-sm font-semibold text-slate-300">Unit Display Code</span>
+                  <span className={labelClass}>Unit Display Code</span>
                   <input
                     className="input"
                     value={manualUnitCode}
@@ -917,7 +930,7 @@ export default function NewProjectChecklistPage({
               </>
             )}
             <label className="space-y-2">
-              <span className="text-sm font-semibold text-slate-300">Shift</span>
+              <span className={labelClass}>Shift</span>
               <select className="select" value={shiftKey} onChange={(e) => setShiftKey(e.target.value)}>
                 {SHIFT_OPTIONS.map((shift) => (
                   <option key={shift} value={shift}>{shift}</option>
@@ -929,10 +942,10 @@ export default function NewProjectChecklistPage({
       )}
 
       {currentStepLabel === "Service" && (
-        <section className="card-modern space-y-5">
+        <section className={`${cardClass} space-y-5`}>
           <div>
-            <h3 className="text-lg font-black text-white">Service</h3>
-            <p className="text-sm text-slate-400">The selected service level controls the official checklist items for this category.</p>
+            <h3 className="text-lg font-black text-[#274C5A]">Service</h3>
+            <p className={mutedTextClass}>The selected service level controls the official checklist items for this category.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             {SERVICE_TYPES.map((type) => (
@@ -941,11 +954,11 @@ export default function NewProjectChecklistPage({
                 type="button"
                 onClick={() => setServiceType(type)}
                 className={`rounded-xl border p-6 text-left transition ${
-                  serviceType === type ? "border-blue-400 bg-blue-500/10" : "border-white/10 bg-white/[0.03] hover:border-blue-400/60"
+                  serviceType === type ? "border-[#274C5A] bg-[#274C5A]/10 shadow-sm shadow-[#274C5A]/10" : "border-[#86A7B2]/25 bg-[#f8fbfc] hover:border-[#274C5A]/45"
                 }`}
               >
-                <div className="text-2xl font-black text-white">{type}</div>
-                <div className="mt-2 text-sm text-slate-400">
+                <div className="text-2xl font-black text-[#274C5A]">{type}</div>
+                <div className="mt-2 text-sm text-[#7F7F7F]">
                   {getServiceDescription(type)}
                 </div>
               </button>
@@ -955,10 +968,10 @@ export default function NewProjectChecklistPage({
       )}
 
       {currentStepLabel === "Deploy" && (
-        <section className="card-modern space-y-5">
+        <section className={`${cardClass} space-y-5`}>
           <div>
-            <h3 className="text-lg font-black text-white">Deploy</h3>
-            <p className="text-sm text-slate-400">The category controls the wizard path and which official standards are loaded.</p>
+            <h3 className="text-lg font-black text-[#274C5A]">Deploy</h3>
+            <p className={mutedTextClass}>The category controls the wizard path and which official standards are loaded.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             {DEPLOYMENT_TYPES.map((type) => (
@@ -967,11 +980,11 @@ export default function NewProjectChecklistPage({
                 type="button"
                 onClick={() => setDeploymentType(type)}
                 className={`rounded-xl border p-6 text-left transition ${
-                  deploymentType === type ? "border-blue-400 bg-blue-500/10" : "border-white/10 bg-white/[0.03] hover:border-blue-400/60"
+                  deploymentType === type ? "border-[#274C5A] bg-[#274C5A]/10 shadow-sm shadow-[#274C5A]/10" : "border-[#86A7B2]/25 bg-[#f8fbfc] hover:border-[#274C5A]/45"
                 }`}
               >
-                <div className="text-xl font-black text-white">{type}</div>
-                <div className="mt-2 text-sm text-slate-400">
+                <div className="text-xl font-black text-[#274C5A]">{type}</div>
+                <div className="mt-2 text-sm text-[#7F7F7F]">
                   {type === "Ambulance"
                     ? "Opening, vehicle, red bag, medication, and kit readiness."
                     : type === "Ambulance + Clinic"
@@ -988,24 +1001,24 @@ export default function NewProjectChecklistPage({
 
       {stepItems.length > 0 && currentStepLabel !== "Submit" && (
         <section className="space-y-4">
-          <div className="card-modern flex flex-wrap items-center justify-between gap-3">
+          <div className={`${cardClass} flex flex-wrap items-center justify-between gap-3`}>
             <div>
-              <h3 className="text-lg font-black text-white">{currentStepLabel}</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg font-black text-[#274C5A]">{currentStepLabel}</h3>
+              <p className={mutedTextClass}>
                 Critical and manual items must be answered individually. Check All Eligible skips them.
               </p>
             </div>
-            <button type="button" className="btn-secondary" onClick={checkStepEligible}>
+            <button type="button" className={secondaryButtonClass} onClick={checkStepEligible}>
               Check All Eligible
             </button>
           </div>
 
           {Object.entries(grouped).map(([section, groups]) => (
-            <div key={section} className="card-modern space-y-4">
-              <h4 className="text-base font-black text-white">{section}</h4>
+            <div key={section} className={`${cardClass} space-y-4`}>
+              <h4 className="text-base font-black text-[#274C5A]">{section}</h4>
               {Object.entries(groups).map(([group, groupItems]) => (
                 <div key={group} className="space-y-2">
-                  <h5 className="text-sm font-bold uppercase tracking-wide text-slate-400">{group}</h5>
+                  <h5 className="text-sm font-bold uppercase tracking-wide text-[#7F7F7F]">{group}</h5>
                   {groupItems.map((item) => (
                     <ItemRow
                       key={item.id}
@@ -1023,31 +1036,31 @@ export default function NewProjectChecklistPage({
 
       {currentStepLabel === "Submit" && (
         <section className="space-y-4">
-          <div className="card-modern grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className={`${cardClass} grid grid-cols-1 gap-4 md:grid-cols-4`}>
             <div>
-              <div className="text-sm text-slate-400">Result</div>
-              <div className="mt-1 text-2xl font-black text-white">{readiness.result}</div>
+              <div className="text-sm text-[#7F7F7F]">Result</div>
+              <div className="mt-1 text-2xl font-black text-[#274C5A]">{readiness.result}</div>
             </div>
             <div>
-              <div className="text-sm text-slate-400">Readiness Score</div>
-              <div className="mt-1 text-2xl font-black text-white">{readiness.readinessScore}%</div>
+              <div className="text-sm text-[#7F7F7F]">Readiness Score</div>
+              <div className="mt-1 text-2xl font-black text-[#274C5A]">{readiness.readinessScore}%</div>
             </div>
             <div>
-              <div className="text-sm text-slate-400">No / Some</div>
-              <div className="mt-1 text-2xl font-black text-white">
+              <div className="text-sm text-[#7F7F7F]">No / Some</div>
+              <div className="mt-1 text-2xl font-black text-[#274C5A]">
                 {readiness.missingItems.length} / {readiness.someItems.length}
               </div>
             </div>
             <div>
-              <div className="text-sm text-slate-400">Vehicle Red / Shortages</div>
-              <div className="mt-1 text-2xl font-black text-white">
+              <div className="text-sm text-[#7F7F7F]">Vehicle Red / Shortages</div>
+              <div className="mt-1 text-2xl font-black text-[#274C5A]">
                 {readiness.vehicleRedIssues.length} / {readiness.shortageIssues.length}
               </div>
             </div>
           </div>
 
-          <div className="card-modern">
-            <h3 className="font-black text-white">Issue Summary</h3>
+          <div className={cardClass}>
+            <h3 className="font-black text-[#274C5A]">Issue Summary</h3>
             <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
               {[
                 ...readiness.vehicleRedIssues,
@@ -1059,16 +1072,16 @@ export default function NewProjectChecklistPage({
               ]
                 .filter((item, index, all) => all.findIndex((entry) => entry.id === item.id) === index)
                 .map((item) => (
-                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="font-semibold text-white">{item.label}</div>
-                    <div className="mt-1 text-sm text-slate-400">
+                  <div key={item.id} className={metricCardClass}>
+                    <div className="font-bold text-[#274C5A]">{item.label}</div>
+                    <div className="mt-1 text-sm text-[#7F7F7F]">
                       {statusLabel(item.status)}
                       {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
                     </div>
                   </div>
                 ))}
               {readiness.readinessScore === 100 && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-100">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 p-3 text-emerald-700">
                   No readiness issues found.
                 </div>
               )}
@@ -1076,23 +1089,23 @@ export default function NewProjectChecklistPage({
           </div>
 
           {extraStockItems.length > 0 && (
-            <div className="card-modern border-blue-500/30 bg-blue-500/5">
+            <div className={`${cardClass} border-[#274C5A]/30 bg-[#274C5A]/5`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-black text-white">Extra Stock</h3>
-                  <p className="mt-1 text-sm text-slate-400">
+                  <h3 className="font-black text-[#274C5A]">Extra Stock</h3>
+                  <p className="mt-1 text-sm text-[#7F7F7F]">
                     These quantities are above the checklist minimum and will be submitted as recorded.
                   </p>
                 </div>
-                <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-100">
+                <span className="rounded-full border border-[#274C5A]/20 bg-[#274C5A]/10 px-3 py-1 text-xs font-black text-[#274C5A]">
                   {extraStockItems.length} item{extraStockItems.length === 1 ? "" : "s"}
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {extraStockItems.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="font-semibold text-white">{item.label}</div>
-                    <div className="mt-1 text-sm text-slate-400">
+                  <div key={item.id} className={metricCardClass}>
+                    <div className="font-bold text-[#274C5A]">{item.label}</div>
+                    <div className="mt-1 text-sm text-[#7F7F7F]">
                       Entered {item.actualQty || 0} / Minimum {item.minQty}
                       {item.unit ? ` ${item.unit}` : ""}
                     </div>
@@ -1102,8 +1115,8 @@ export default function NewProjectChecklistPage({
             </div>
           )}
 
-          <label className="card-modern block space-y-2">
-            <span className="text-sm font-semibold text-slate-300">Checklist Notes</span>
+          <label className={`${cardClass} block space-y-2`}>
+            <span className={labelClass}>Checklist Notes</span>
             <textarea className="input min-h-[120px]" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
         </section>
@@ -1111,7 +1124,7 @@ export default function NewProjectChecklistPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
-          className="btn-secondary"
+          className={secondaryButtonClass}
           disabled={step === 0 || saving}
           onClick={() => {
             setError("");
@@ -1122,12 +1135,12 @@ export default function NewProjectChecklistPage({
         </button>
 
         <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" disabled={saving || !selectedMission} onClick={() => save("draft")}>
+          <button className={secondaryButtonClass} disabled={saving || !selectedMission} onClick={() => save("draft")}>
             {saving ? "Saving..." : "Save Draft"}
           </button>
           {currentStepLabel !== "Submit" ? (
             <button
-              className="btn-primary"
+              className={primaryButtonClass}
               disabled={saving}
               onClick={() => {
                 if (validateStep()) setStep((current) => current + 1);
@@ -1136,7 +1149,7 @@ export default function NewProjectChecklistPage({
               Continue
             </button>
           ) : (
-            <button className="btn-primary" disabled={saving || !selectedMission} onClick={() => save("submitted")}>
+            <button className={primaryButtonClass} disabled={saving || !selectedMission} onClick={() => save("submitted")}>
               {saving ? "Submitting..." : "Submit"}
             </button>
           )}

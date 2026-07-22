@@ -265,20 +265,31 @@ export default function Dashboard() {
 return (
   <PermissionGuard module="dashboards" action="timeline" showMessage={true}>
     <div className="page-shell">
-      <div className="page-header"><div><h1 className="page-title">Dispatch Dashboard</h1><p className="page-subtitle">Live operational dashboard. Click any case card to open the unified case page directly.</p></div><Link className="btn-primary" href="/call-intake">New Case / Call Intake</Link></div>
+      <div className="overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-xl shadow-[#274C5A]/10">
+        <div className="flex flex-col gap-5 border-b border-[#86A7B2]/20 bg-gradient-to-r from-[#274C5A] to-[#315f70] p-6 text-white md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black text-white">
+              HCAD Command Center
+            </div>
+            <h1 className="text-3xl font-black tracking-tight text-white">Dispatch Dashboard</h1>
+            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#d7e4e8]">Live operational dashboard. Click any case card to open the unified case page directly.</p>
+          </div>
+          <Link className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-black text-[#274C5A] shadow-lg shadow-black/10 transition hover:bg-[#eef5f7]" href="/call-intake">New Case / Call Intake</Link>
+        </div>
+      </div>
 
       {/* FILTERS */}
-      <div className="card-modern">
+      <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
         <div className="mb-3">
-          <h2 className="text-lg font-bold dark:text-white">Filters</h2>
-          <p className="text-sm text-gray-400">
+          <h2 className="text-lg font-black text-[#274C5A]">Filters</h2>
+          <p className="text-sm font-medium text-[#7F7F7F]">
             Filter dashboard by project and case date.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+            <label className="mb-1 block text-sm font-bold text-[#274C5A]">
               Project
             </label>
             <select
@@ -296,7 +307,7 @@ return (
           </div>
 
           <div>
-            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+            <label className="mb-1 block text-sm font-bold text-[#274C5A]">
               Start Date
             </label>
             <input
@@ -308,7 +319,7 @@ return (
           </div>
 
           <div>
-            <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+            <label className="mb-1 block text-sm font-bold text-[#274C5A]">
               End Date
             </label>
             <input
@@ -332,62 +343,62 @@ return (
 
       {/* KPI */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card-modern">
-          <h3 className="text-lg font-bold">Total Cases</h3>
-          <p className="text-4xl font-extrabold">{totalCases}</p>
+        <div className="rounded-2xl border border-[#274C5A]/20 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
+          <h3 className="text-lg font-black">Total Cases</h3>
+          <p className="mt-2 text-4xl font-extrabold">{totalCases}</p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">Active</h3>
-          <p className="text-2xl font-bold text-blue-600">{activeCases}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Active</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{activeCases}</p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">Unreceived from team</h3>
-          <p className="text-2xl font-bold text-blue-600">{unreceivedCases}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Unreceived from team</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{unreceivedCases}</p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">EnRoute</h3>
-          <p className="text-2xl font-bold text-blue-600">{enRouteCases}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">EnRoute</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{enRouteCases}</p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">OnScene</h3>
-          <p className="text-2xl font-bold text-blue-600">{onSceneCases}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">OnScene</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{onSceneCases}</p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">Transporting</h3>
-          <p className="text-2xl font-bold text-orange-600">
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Transporting</h3>
+          <p className="mt-2 text-2xl font-black text-[#ef7b00]">
             {transportingCases}
           </p>
-          <p className="text-gray-400">
+          <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
             Hospital: {transportingHospitalCases} - Clinic: {transportingClinicCases}
           </p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">Treated</h3>
-          <p className="text-2xl font-bold text-blue-600">{closedCases}</p>
-          <p className="text-gray-400">
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Treated</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{closedCases}</p>
+          <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
             Hospital: {closedHospitalCases} - Clinic: {closedClinicCases}
           </p>
         </div>
 
-        <div className="card-modern">
-          <h3 className="text-sm text-gray-400">Ambulances</h3>
-          <p className="text-2xl font-bold text-purple-600">
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Ambulances</h3>
+          <p className="mt-2 text-2xl font-black text-[#86A7B2]">
             {totalAmbulances}
           </p>
         </div>
       </div>
 
       {/* TIMELINE HEADER */}
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap rounded-2xl border border-[#86A7B2]/20 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
         <div>
-          <h2 className="text-xl font-bold text-white">Cases Timeline</h2>
-          <p className="text-sm text-gray-400">
+          <h2 className="text-xl font-black text-[#274C5A]">Cases Timeline</h2>
+          <p className="text-sm font-medium text-[#7F7F7F]">
             Showing {visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""}
             {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
           </p>
@@ -407,14 +418,14 @@ return (
           <Link
             href={`/cases/${c.id}`}
             key={c.id}
-            className="card-modern block transition hover:border-blue-400/60"
+            className="block rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5 transition hover:border-[#274C5A]/50 hover:shadow-lg hover:shadow-[#274C5A]/10"
           >
             <div className="mb-3">
-              <h2 className="text-xl font-bold">
+              <h2 className="text-xl font-black text-[#274C5A]">
                 {getMatchedEpcrId(c)} — {getMatchedProjectName(c)}
               </h2>
 
-              <p className="text-gray-400">
+              <p className="text-sm font-medium text-[#7F7F7F]">
                 Date & Time: {formatCaseDate(c)}
               </p>
             </div>

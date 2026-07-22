@@ -11,15 +11,15 @@ export function StatsTable({ title, data, colorMap = {} }: StatsTableProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="bg-[#0F172A] border border-gray-700 rounded p-4 text-gray-400">
+      <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 text-sm font-semibold text-[#7F7F7F] shadow-sm shadow-[#274C5A]/5">
         {title} – No data
       </div>
     );
   }
 
   return (
-    <div className="bg-[#0F172A] border border-gray-700 rounded">
-      <div className="px-4 py-2 border-b border-gray-700 font-semibold">
+    <div className="overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-sm shadow-[#274C5A]/5">
+      <div className="border-b border-[#86A7B2]/25 bg-[#f8fbfc] px-4 py-3 font-black text-[#274C5A]">
         {title}
       </div>
 
@@ -27,18 +27,18 @@ export function StatsTable({ title, data, colorMap = {} }: StatsTableProps) {
         <tbody>
           {entries.map(([key, count]) => {
             const color =
-              colorMap[key] || "bg-gray-500/10 text-gray-300";
+              colorMap[key] || "bg-[#86A7B2]/20 text-[#274C5A]";
 
             return (
-              <tr key={key} className="border-t border-gray-800">
+              <tr key={key} className="border-t border-[#86A7B2]/20 hover:bg-[#f8fbfc]">
                 <td className="px-4 py-2">
                   <span
-                    className={`inline-block px-2 py-1 rounded text-xs ${color}`}
+                    className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${color}`}
                   >
                     {key}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-right font-semibold">
+                <td className="px-4 py-2 text-right font-black text-[#274C5A]">
                   {count}
                 </td>
               </tr>

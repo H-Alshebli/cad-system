@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
@@ -16,6 +16,11 @@ export default function AppShell({
   const pathname = usePathname();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    document.documentElement.classList.remove("dark");
+    localStorage.setItem("theme", "light");
+  }, []);
+
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
@@ -25,7 +30,7 @@ export default function AppShell({
   }
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-slate-50 text-slate-950 dark:bg-[#07111f] dark:text-slate-100">
+    <div className="fixed inset-0 flex overflow-hidden bg-[#eef4f6] text-[#274C5A]">
       {/* Desktop Sidebar */}
       <aside className="relative z-30 hidden h-screen w-[288px] min-w-[288px] shrink-0 overflow-hidden lg:block">
         <Sidebar />
@@ -49,32 +54,24 @@ export default function AppShell({
       </div>
 
       {/* Main Content */}
-      <main className="relative z-10 h-screen min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 text-slate-950 dark:bg-[#07111f] dark:text-slate-100">
-        <div
-          className="pointer-events-none fixed inset-0 hidden dark:block"
-          style={{
-            background:
-              "radial-gradient(circle at top left, rgba(37,99,235,0.16), transparent 34rem), radial-gradient(circle at top right, rgba(14,165,233,0.08), transparent 30rem), #07111f",
-          }}
-        />
-
+      <main className="relative z-10 h-screen min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#eef4f6] text-[#274C5A]">
         <div className="relative z-10">
           <EnvironmentBanner />
 
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-[#07111f]/95">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#86A7B2]/25 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-3 py-2 text-sm font-bold text-[#274C5A]"
               aria-label="Open menu"
             >
-              ☰
+              Menu
             </button>
 
             <div className="text-center">
-              <div className="text-sm font-bold text-slate-900 dark:text-white">
+              <div className="text-sm font-bold text-[#274C5A]">
                 Lazem HCAD
               </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="text-[11px] text-[#7F7F7F]">
                 Command Center
               </div>
             </div>

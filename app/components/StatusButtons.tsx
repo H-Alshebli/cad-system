@@ -370,7 +370,7 @@ export default function StatusButtons({
   ============================= */
   return (
     <div>
-      <h3 className="font-bold mb-2 text-white">Update Status</h3>
+      <h3 className="mb-2 font-black text-[#274C5A]">Update Status</h3>
 
       <div className="grid grid-cols-2 gap-3 max-w-md">
         {STATUSES.map((s) => (
@@ -378,10 +378,10 @@ export default function StatusButtons({
             key={s}
             disabled={isFinalStatus}
             onClick={() => updateStatus(s)}
-            className={`py-2 rounded text-white font-medium transition ${
+            className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
               currentStatus === s
-                ? "bg-green-600"
-                : "bg-blue-600 hover:bg-blue-700"
+                ? "bg-emerald-600 text-white"
+                : "border border-[#86A7B2]/35 bg-white text-[#274C5A] hover:border-[#274C5A]/45 hover:bg-[#f8fbfc]"
             } ${
               isFinalStatus
                 ? "opacity-50 cursor-not-allowed"
@@ -394,7 +394,7 @@ export default function StatusButtons({
       </div>
 
       {currentStatus === "Cancelled" && (
-        <div className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
           This CAD case has been cancelled. Status changes are locked.
         </div>
       )}
@@ -404,18 +404,18 @@ export default function StatusButtons({
       ============================= */}
       {showB2CConfirm && resolvedB2CDestination && (
         <Modal>
-          <h2 className="text-lg font-bold mb-4 text-center">
+          <h2 className="mb-4 text-center text-lg font-black text-[#274C5A]">
             Confirm Transporting
           </h2>
 
-          <p className="text-sm text-gray-300 mb-4 text-center">
+          <p className="mb-4 text-center text-sm text-[#7F7F7F]">
             This is a B2C case. The destination will be taken from the B2C
             request.
           </p>
 
-          <div className="rounded bg-slate-800 border border-slate-700 p-4 mb-4">
-            <div className="text-xs text-gray-400 mb-1">Destination Hospital</div>
-            <div className="font-bold text-white">
+          <div className="mb-4 rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-4">
+            <div className="mb-1 text-xs font-bold text-[#7F7F7F]">Destination Hospital</div>
+            <div className="font-black text-[#274C5A]">
               {resolvedB2CDestination.hospitalName ||
                 resolvedB2CDestination.name}
             </div>
@@ -425,14 +425,14 @@ export default function StatusButtons({
                 href={resolvedB2CDestination.googleMapLink}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-block text-sm text-blue-300 underline"
+                className="mt-2 inline-block text-sm font-bold text-[#274C5A] underline"
               >
                 Open Destination Map
               </a>
             )}
 
             {resolvedB2CDestination.floor && (
-              <div className="mt-2 text-xs text-gray-400">
+              <div className="mt-2 text-xs text-[#7F7F7F]">
                 Floor: {resolvedB2CDestination.floor}
               </div>
             )}
@@ -440,14 +440,14 @@ export default function StatusButtons({
 
           <button
             onClick={confirmB2CTransporting}
-            className="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded mb-2"
+            className="mb-2 w-full rounded-xl bg-[#274C5A] p-2 font-bold text-white hover:bg-[#1f3f4c]"
           >
             Confirm Transporting
           </button>
 
           <button
             onClick={() => setShowB2CConfirm(false)}
-            className="w-full mt-2 text-sm text-gray-300 hover:text-white"
+            className="mt-2 w-full text-sm font-bold text-[#7F7F7F] hover:text-[#274C5A]"
           >
             Cancel
           </button>
@@ -459,25 +459,25 @@ export default function StatusButtons({
       ============================= */}
       {showTypePopup && (
         <Modal>
-          <h2 className="text-lg font-bold mb-4">Transporting To?</h2>
+          <h2 className="mb-4 text-lg font-black text-[#274C5A]">Transporting To?</h2>
 
           <button
             onClick={() => openDestinationList("hospital")}
-            className="w-full bg-blue-600 hover:bg-blue-700 p-2 rounded mb-2"
+            className="mb-2 w-full rounded-xl bg-[#274C5A] p-2 font-bold text-white hover:bg-[#1f3f4c]"
           >
             Hospital
           </button>
 
           <button
             onClick={() => openDestinationList("clinic")}
-            className="w-full bg-green-600 hover:bg-green-700 p-2 rounded"
+            className="w-full rounded-xl bg-emerald-600 p-2 font-bold text-white hover:bg-emerald-700"
           >
             Clinic
           </button>
 
           <button
             onClick={() => setShowTypePopup(false)}
-            className="w-full mt-4 text-sm text-gray-300 hover:text-white"
+            className="mt-4 w-full text-sm font-bold text-[#7F7F7F] hover:text-[#274C5A]"
           >
             Cancel
           </button>
@@ -489,17 +489,17 @@ export default function StatusButtons({
       ============================= */}
       {showDestinationList && (
         <Modal>
-          <h2 className="text-lg font-bold mb-4 text-center">
+          <h2 className="mb-4 text-center text-lg font-black text-[#274C5A]">
             Select Project Destination
           </h2>
 
-          <p className="text-xs text-gray-400 mb-3 text-center">
+          <p className="mb-3 text-center text-xs text-[#7F7F7F]">
             Showing only destinations registered on this project.
           </p>
 
           <div className="max-h-64 overflow-y-auto space-y-2">
             {filteredProjectDestinations.length === 0 ? (
-              <div className="p-3 rounded bg-red-950/40 border border-red-700 text-red-300 text-sm">
+              <div className="rounded-xl border border-red-500/30 bg-red-50 p-3 text-sm font-semibold text-red-700">
                 No {destinationType} registered for this project.
               </div>
             ) : (
@@ -515,8 +515,8 @@ export default function StatusButtons({
                     onClick={() => selectDestination(d)}
                     className={`w-full text-left p-3 rounded border transition ${
                       hasLocation
-                        ? "bg-blue-600 hover:bg-blue-700 border-blue-500 text-white"
-                        : "bg-red-950/40 border-red-700 text-red-300 cursor-not-allowed"
+                        ? "border-[#274C5A]/30 bg-[#274C5A] text-white hover:bg-[#1f3f4c]"
+                        : "cursor-not-allowed border-red-500/30 bg-red-50 text-red-700"
                     }`}
                   >
                     <div className="font-semibold">{d.name}</div>
@@ -527,7 +527,7 @@ export default function StatusButtons({
                     </div>
 
                     {!hasLocation && (
-                      <div className="text-xs text-red-300 mt-1">
+                      <div className="mt-1 text-xs text-red-700">
                         Missing location coordinates
                       </div>
                     )}
@@ -542,7 +542,7 @@ export default function StatusButtons({
               setShowDestinationList(false);
               setDestinationType(null);
             }}
-            className="w-full mt-4 text-sm text-gray-300 hover:text-white"
+            className="mt-4 w-full text-sm font-bold text-[#7F7F7F] hover:text-[#274C5A]"
           >
             Cancel
           </button>
@@ -557,8 +557,8 @@ export default function StatusButtons({
 ============================= */
 function Modal({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700 p-6 rounded-lg w-96 max-w-[90vw] text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#274C5A]/55 p-4 backdrop-blur-sm">
+      <div className="w-96 max-w-[90vw] rounded-2xl border border-[#86A7B2]/35 bg-white p-6 text-[#274C5A] shadow-2xl shadow-[#274C5A]/20">
         {children}
       </div>
     </div>

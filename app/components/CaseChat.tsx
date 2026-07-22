@@ -176,26 +176,26 @@ const effectiveDisabled =
 
 
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 flex flex-col h-[380px]">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-gray-200">
+    <div className="flex h-[380px] flex-col rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-black text-[#274C5A]">
           Case Chat
         </h2>
 
         {!uid ? (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs font-semibold text-[#7F7F7F]">
             Not signed in
           </span>
         ) : user?.active === false ? (
-          <span className="text-xs text-red-400">
+          <span className="text-xs font-semibold text-red-700">
             Inactive user
           </span>
         ) : user ? (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs font-semibold text-[#7F7F7F]">
             {user.name} • {user.role}
           </span>
         ) : (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs font-semibold text-[#7F7F7F]">
             Loading user…
           </span>
         )}
@@ -204,7 +204,7 @@ const effectiveDisabled =
       {/* MESSAGES */}
       <div ref={messagesBoxRef} className="flex-1 overflow-y-auto space-y-3 pr-2">
         {messages.length === 0 && (
-          <div className="text-sm text-gray-400 text-center mt-10">
+          <div className="mt-10 text-center text-sm font-semibold text-[#7F7F7F]">
             No messages yet
           </div>
         )}
@@ -220,8 +220,8 @@ const effectiveDisabled =
               <div
                 className={`max-w-[75%] rounded-2xl px-4 py-3 shadow ${
                   isMe
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-800 text-gray-100 border border-slate-700"
+                    ? "bg-[#274C5A] text-white"
+                    : "border border-[#86A7B2]/25 bg-[#f8fbfc] text-[#274C5A]"
                 }`}
               >
                 <div className="flex justify-between text-[11px] opacity-80 mb-1">
@@ -241,7 +241,7 @@ const effectiveDisabled =
       </div>
 
       {/* INPUT */}
-      <div className="flex gap-2 mt-3">
+      <div className="mt-3 flex gap-2">
         <textarea
           value={text}
           disabled={effectiveDisabled}
@@ -257,14 +257,15 @@ const effectiveDisabled =
           }
           rows={1}
           className="flex-1 px-4 py-2 rounded-xl resize-none
-            bg-slate-800 text-white border border-slate-700
+            bg-white text-[#274C5A] border border-[#86A7B2]/35
+            focus:border-[#274C5A] focus:outline-none focus:ring-4 focus:ring-[#274C5A]/10
             disabled:opacity-50"
         />
 
         <button
           onClick={sendMessage}
           disabled={effectiveDisabled}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 rounded-xl"
+          className="rounded-xl bg-[#274C5A] px-4 font-bold text-white hover:bg-[#1f3f4c] disabled:bg-[#7F7F7F]"
         >
           Send
         </button>
