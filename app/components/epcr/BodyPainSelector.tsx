@@ -70,24 +70,24 @@ const BodyPainSelector = forwardRef(function BodyPainSelector(
   return (
     <div
       ref={containerRef}
-      className="border border-gray-700 rounded-lg bg-[#020617] p-4"
+      className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
     >
       {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-sm text-gray-300">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-[#274C5A]">
           Click on body areas to select pain locations
         </span>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Selected:</span>
-          <span className="text-xs px-2 py-1 rounded bg-[#0F172A] border border-gray-700 max-w-[280px] truncate">
+          <span className="text-xs font-black text-[#607482]">Selected:</span>
+          <span className="max-w-[280px] truncate rounded-full border border-[#c8dce2] bg-white px-2 py-1 text-xs font-semibold text-[#274C5A]">
             {values.length ? values.join(", ") : "—"}
           </span>
 
           <button
             type="button"
             onClick={() => onChange([])}
-            className="text-xs px-2 py-1 rounded border border-gray-700 hover:bg-[#0F172A]"
+            className="rounded-full border border-[#c8dce2] bg-white px-2 py-1 text-xs font-black text-[#274C5A] hover:border-[#74cdda]"
           >
             Clear
           </button>
@@ -96,14 +96,14 @@ const BodyPainSelector = forwardRef(function BodyPainSelector(
 
       {/* SVG BODY */}
       <svg viewBox="0 0 460 350" className="w-full">
-        <text x="115" y="14" fill="#9CA3AF" fontSize="10">
+        <text x="115" y="14" fill="#607482" fontSize="10">
           FRONT
         </text>
-        <text x="315" y="14" fill="#9CA3AF" fontSize="10">
+        <text x="315" y="14" fill="#607482" fontSize="10">
           BACK
         </text>
 
-        <g opacity="0.25" fill="#94A3B8">
+        <g opacity="0.28" fill="#74CDDA">
           <rect x="90" y="20" width="90" height="300" rx="40" />
           <rect x="290" y="20" width="90" height="300" rx="40" />
         </g>
@@ -122,17 +122,17 @@ const BodyPainSelector = forwardRef(function BodyPainSelector(
                 cursor="pointer"
                 fill={
                   active
-                    ? "rgba(59,130,246,0.45)"
-                    : "rgba(148,163,184,0.15)"
+                    ? "rgba(39,76,90,0.38)"
+                    : "rgba(116,205,218,0.16)"
                 }
-                stroke={active ? "#60A5FA" : "rgba(148,163,184,0.35)"}
+                stroke={active ? "#274C5A" : "rgba(39,76,90,0.25)"}
                 strokeWidth={active ? 2 : 1}
               />
               <text
                 x={a.x + 4}
                 y={a.y + 14}
                 fontSize="9"
-                fill={active ? "#BFDBFE" : "#94A3B8"}
+                fill={active ? "#123746" : "#607482"}
                 pointerEvents="none"
               >
                 {a.label}

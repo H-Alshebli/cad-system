@@ -875,11 +875,23 @@ patientInfo.chiefComplaints.forEach((complaint) => {
   }, [data, patientInfo, narrativeVitals, outcome, transferTeam, time]);
 
   if (loading) {
-    return <div className="p-6 text-white">Loading ePCR...</div>;
+    return (
+      <div className="mx-auto max-w-5xl p-6">
+        <div className="rounded-2xl border border-[#d8e6ea] bg-white p-6 text-sm font-semibold text-[#274C5A] shadow-sm">
+          Loading ePCR...
+        </div>
+      </div>
+    );
   }
 
   if (!data) {
-    return <div className="p-6 text-white">ePCR not found</div>;
+    return (
+      <div className="mx-auto max-w-5xl p-6">
+        <div className="rounded-2xl border border-[#d8e6ea] bg-white p-6 text-sm font-semibold text-[#274C5A] shadow-sm">
+          ePCR not found
+        </div>
+      </div>
+    );
   }
 
   const canFinalize = missing.length === 0;
@@ -948,19 +960,33 @@ patientInfo.chiefComplaints.forEach((complaint) => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-white space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">ePCR</h1>
+    <div className="mx-auto max-w-6xl space-y-6 p-6 text-[#123746]">
+      <div className="rounded-2xl border border-[#d8e6ea] bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+              Patient Care Report
+            </p>
+            <h1 className="mt-1 text-3xl font-black text-[#123746]">ePCR</h1>
+            <p className="mt-1 text-sm font-semibold text-[#607482]">
+              Clinical documentation, outcome, signatures, and transfer timeline.
+            </p>
+          </div>
         {locked ? (
-          <span className="text-sm px-3 py-1 rounded bg-green-700">Locked</span>
+            <span className="rounded-full bg-[#dff8ed] px-3 py-1 text-xs font-black text-[#137a4a]">
+              Locked
+            </span>
         ) : (
-          <span className="text-sm px-3 py-1 rounded bg-yellow-700">Draft</span>
+            <span className="rounded-full bg-[#fff4d6] px-3 py-1 text-xs font-black text-[#9a6700]">
+              Draft
+            </span>
         )}
+        </div>
       </div>
 
       <button
         onClick={() => router.back()}
-        className="px-6 py-2 rounded border border-gray-600"
+        className="rounded-xl border border-[#c8dce2] bg-white px-6 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
       >
         Back
       </button>
@@ -970,7 +996,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           <>
             <button
               onClick={saveDraft}
-              className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+              className="rounded-xl bg-[#274C5A] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
             >
               Save Draft
             </button>
@@ -978,7 +1004,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
             <button
               onClick={finalize}
               disabled={!canFinalize}
-              className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+              className="rounded-xl bg-[#137a4a] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#137a4a]/15 transition hover:bg-[#0f633c] disabled:cursor-not-allowed disabled:bg-[#9aaab2]"
             >
               Finalize ePCR
             </button>
@@ -987,21 +1013,21 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
         <button
           onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
-          className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+          className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-4 py-2.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
         >
           Refusal of Treatment Form
         </button>
 
         <button
           onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
-          className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+          className="rounded-xl border border-[#b9ecf2] bg-[#effbfc] px-4 py-2.5 text-sm font-black text-[#166575] transition hover:bg-[#ddf6f9]"
         >
           Data Sharing Consent Form
         </button>
 
         <button
           onClick={exportPdf}
-          className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+          className="rounded-xl border border-[#c8dce2] bg-white px-4 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
         >
           Export Professional PDF
         </button>
@@ -1009,7 +1035,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
       {!locked && missing.length > 0 && (
         <Section title="Missing Required Fields">
-          <ul className="list-disc ml-6 text-sm text-yellow-200">
+          <ul className="ml-6 list-disc text-sm font-semibold text-[#9a6700]">
             {missing.map((x) => (
               <li key={x}>{x}</li>
             ))}
@@ -1460,9 +1486,9 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       {narrativeVitals.vitalsList.map((vital, idx) => (
         <div
           key={idx}
-          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
+          className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
         >
-          <div className="text-sm font-semibold text-gray-300">
+          <div className="text-sm font-black text-[#274C5A]">
             Vital Set #{idx + 1}
           </div>
 
@@ -1592,7 +1618,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           {!locked && (
             <div className="flex gap-2">
               <button
-                className="border border-gray-600 px-3 py-1 rounded"
+                className="rounded-xl border border-[#c8dce2] bg-white px-3 py-1.5 text-sm font-black text-[#274C5A] transition hover:border-[#74cdda]"
                 onClick={() =>
                   setData((prev) => {
                     const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1611,7 +1637,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
               {narrativeVitals.vitalsList.length > 1 && (
                 <button
-                  className="border border-gray-600 px-3 py-1 rounded"
+                  className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-3 py-1.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
                   onClick={() =>
                     setData((prev) => {
                       const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1637,9 +1663,9 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       {narrativeVitals.medications.map((item, idx) => (
         <div
           key={idx}
-          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
+          className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
         >
-          <div className="text-sm font-semibold text-gray-300">
+          <div className="text-sm font-black text-[#274C5A]">
             Medication #{idx + 1}
           </div>
 
@@ -1711,7 +1737,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           {!locked && (
             <div className="flex gap-2">
               <button
-                className="border border-gray-600 px-3 py-1 rounded"
+                className="rounded-xl border border-[#c8dce2] bg-white px-3 py-1.5 text-sm font-black text-[#274C5A] transition hover:border-[#74cdda]"
                 onClick={() =>
                   setData((prev) => {
                     const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1730,7 +1756,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
               {narrativeVitals.medications.length > 1 && (
                 <button
-                  className="border border-gray-600 px-3 py-1 rounded"
+                  className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-3 py-1.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
                   onClick={() =>
                     setData((prev) => {
                       const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1756,9 +1782,9 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       {narrativeVitals.consumables.map((item, idx) => (
         <div
           key={idx}
-          className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-3"
+          className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
         >
-          <div className="text-sm font-semibold text-gray-300">
+          <div className="text-sm font-black text-[#274C5A]">
             Consumable #{idx + 1}
           </div>
 
@@ -1830,7 +1856,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           {!locked && (
             <div className="flex gap-2">
               <button
-                className="border border-gray-600 px-3 py-1 rounded"
+                className="rounded-xl border border-[#c8dce2] bg-white px-3 py-1.5 text-sm font-black text-[#274C5A] transition hover:border-[#74cdda]"
                 onClick={() =>
                   setData((prev) => {
                     const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1849,7 +1875,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
               {narrativeVitals.consumables.length > 1 && (
                 <button
-                  className="border border-gray-600 px-3 py-1 rounded"
+                  className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-3 py-1.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
                   onClick={() =>
                     setData((prev) => {
                       const nv = prev?.narrativeVitals ?? emptyNarrativeVitals();
@@ -1980,9 +2006,9 @@ patientInfo.chiefComplaints.forEach((complaint) => {
         {transferTeam.members.map((mem, idx) => (
           <div
             key={idx}
-            className="border border-gray-700 rounded-lg p-4 bg-[#0B1220] space-y-4"
+            className="space-y-4 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
           >
-            <div className="text-sm font-semibold text-gray-200">
+            <div className="text-sm font-black text-[#274C5A]">
               Paramedic #{idx + 1}
             </div>
 
@@ -2181,7 +2207,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           <>
             <button
               onClick={saveDraft}
-              className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700"
+              className="rounded-xl bg-[#274C5A] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
             >
               Save Draft
             </button>
@@ -2189,7 +2215,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
             <button
               onClick={finalize}
               disabled={!canFinalize}
-              className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-40"
+              className="rounded-xl bg-[#137a4a] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#137a4a]/15 transition hover:bg-[#0f633c] disabled:cursor-not-allowed disabled:bg-[#9aaab2]"
             >
               Finalize ePCR
             </button>
@@ -2198,28 +2224,28 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
         <button
           onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
-          className="px-4 py-2 rounded bg-red-700 hover:bg-red-800 border border-red-500"
+          className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-4 py-2.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
         >
           Refusal of Treatment Form
         </button>
 
         <button
           onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
-          className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-800 border border-cyan-500"
+          className="rounded-xl border border-[#b9ecf2] bg-[#effbfc] px-4 py-2.5 text-sm font-black text-[#166575] transition hover:bg-[#ddf6f9]"
         >
           Data Sharing Consent Form
         </button>
 
         <button
           onClick={exportPdf}
-          className="px-4 py-2 bg-slate-800 border border-gray-600 rounded"
+          className="rounded-xl border border-[#c8dce2] bg-white px-4 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
         >
           Export Professional PDF
         </button>
 
         <button
           onClick={() => router.back()}
-          className="px-6 py-2 rounded border border-gray-600"
+          className="rounded-xl border border-[#c8dce2] bg-white px-6 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
         >
           Back
         </button>
@@ -2240,15 +2266,19 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-gray-700 rounded-lg p-6 bg-[#0F172A] space-y-4">
-      <h2 className="text-xl font-bold">{title}</h2>
+    <div className="space-y-4 rounded-2xl border border-[#d8e6ea] bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-black text-[#123746]">{title}</h2>
       {children}
     </div>
   );
 }
 
 function SectionInnerTitle({ children }: { children: React.ReactNode }) {
-  return <div className="mt-6 mb-2 text-sm font-semibold text-gray-300">{children}</div>;
+  return (
+    <div className="mb-2 mt-6 text-sm font-black uppercase tracking-[0.14em] text-[#274C5A]">
+      {children}
+    </div>
+  );
 }
 
 function Input({
@@ -2257,10 +2287,10 @@ function Input({
 }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1 block text-sm font-black text-[#274C5A]">{label}</label>
       <input
         {...props}
-        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+        className="w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-2.5 text-sm font-semibold text-[#123746] outline-none transition placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white disabled:bg-[#edf3f5] disabled:text-[#607482]"
       />
     </div>
   );
@@ -2272,10 +2302,10 @@ function Textarea({
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1 block text-sm font-black text-[#274C5A]">{label}</label>
       <textarea
         {...props}
-        className="w-full h-24 p-2 rounded bg-[#020617] border border-gray-700"
+        className="h-24 w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-2.5 text-sm font-semibold text-[#123746] outline-none transition placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white disabled:bg-[#edf3f5] disabled:text-[#607482]"
       />
     </div>
   );
@@ -2291,10 +2321,10 @@ function Select({
 }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1 block text-sm font-black text-[#274C5A]">{label}</label>
       <select
         {...props}
-        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+        className="w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-2.5 text-sm font-semibold text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white disabled:bg-[#edf3f5] disabled:text-[#607482]"
       >
         <option value="">Select</option>
         {children}
@@ -2323,10 +2353,13 @@ function MultiCheckbox({
 
   return (
     <div className="space-y-2">
-      <div className="text-sm font-semibold">{title}</div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="text-sm font-black text-[#274C5A]">{title}</div>
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {options.map((opt) => (
-          <label key={opt} className="flex items-center gap-2 text-sm">
+          <label
+            key={opt}
+            className="flex items-center gap-2 rounded-xl border border-[#d8e6ea] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746]"
+          >
             <input
               type="checkbox"
               disabled={disabled}
@@ -2393,11 +2426,14 @@ function ChiefComplaintSelector({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm font-semibold">{title}</div>
+      <div className="text-sm font-black text-[#274C5A]">{title}</div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {options.map((complaint) => (
-          <label key={complaint} className="flex items-center gap-2 text-sm">
+          <label
+            key={complaint}
+            className="flex items-center gap-2 rounded-xl border border-[#d8e6ea] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746]"
+          >
             <input
               type="checkbox"
               disabled={disabled}
@@ -2416,17 +2452,17 @@ function ChiefComplaintSelector({
         return (
           <div
             key={complaint}
-            className="rounded-lg border border-gray-700 bg-[#0B1220] p-4 space-y-3"
+            className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
           >
-            <div className="text-sm font-semibold text-gray-200">
+            <div className="text-sm font-black text-[#274C5A]">
               {complaint} *
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
               {detailOptions.map((detail) => (
                 <label
                   key={`${complaint}-${detail}`}
-                  className="flex items-center gap-2 text-sm"
+                  className="flex items-center gap-2 rounded-xl border border-[#d8e6ea] bg-white px-3 py-2 text-sm font-semibold text-[#123746]"
                 >
                   <input
                     type="checkbox"
@@ -2465,7 +2501,7 @@ function TimeField({
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm">{label}</label>
+      <label className="block text-sm font-black text-[#274C5A]">{label}</label>
 
       <div className="flex gap-2">
         <input
@@ -2473,14 +2509,14 @@ function TimeField({
           disabled={disabled}
           value={value.timeHHMM}
           onChange={(e) => onChange({ timeHHMM: e.target.value })}
-          className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
+          className="flex-1 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-2.5 text-sm font-semibold text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white disabled:bg-[#edf3f5] disabled:text-[#607482]"
         />
 
         {!disabled && (
           <button
             type="button"
             onClick={setNow}
-            className="px-3 rounded bg-gray-700 text-sm"
+            className="rounded-xl bg-[#274C5A] px-3 text-sm font-black text-white hover:bg-[#1d3b47]"
           >
             Now
           </button>
@@ -2510,7 +2546,7 @@ function TimeMini({
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm">{label}</label>
+      <label className="block text-sm font-black text-[#274C5A]">{label}</label>
 
       <div className="flex gap-2">
         <input
@@ -2518,14 +2554,14 @@ function TimeMini({
           disabled={disabled}
           value={value.timeHHMM}
           onChange={(e) => onChange({ timeHHMM: e.target.value })}
-          className="flex-1 p-2 rounded bg-[#020617] border border-gray-700"
+          className="flex-1 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-2.5 text-sm font-semibold text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white disabled:bg-[#edf3f5] disabled:text-[#607482]"
         />
 
         {!disabled && (
           <button
             type="button"
             onClick={setNow}
-            className="px-3 rounded bg-gray-700 text-sm"
+            className="rounded-xl bg-[#274C5A] px-3 text-sm font-black text-white hover:bg-[#1d3b47]"
           >
             Now
           </button>
@@ -2611,14 +2647,14 @@ function SignatureBox({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm">{label}</label>
+      <label className="text-sm font-black text-[#274C5A]">{label}</label>
 
-      <div className="border border-gray-700 rounded bg-[#020617] p-2">
+      <div className="rounded-2xl border border-[#c8dce2] bg-[#f7fbfc] p-2">
         <canvas
           ref={canvasRef}
           width={400}
           height={150}
-          className="w-full bg-black rounded"
+          className="w-full rounded-xl bg-white"
           onMouseDown={start}
           onMouseUp={end}
           onMouseMove={draw}
@@ -2632,7 +2668,7 @@ function SignatureBox({
         <button
           type="button"
           onClick={clear}
-          className="text-xs underline text-gray-400"
+          className="text-xs font-black text-[#607482] underline"
         >
           Clear signature
         </button>
