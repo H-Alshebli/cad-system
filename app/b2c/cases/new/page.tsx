@@ -671,12 +671,12 @@ async function submitB2C() {
     <div className="page-shell">
       <div className="page-header">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-950/20">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#274C5A] text-white shadow-lg shadow-[#274C5A]/15">
             <ClipboardList size={24} />
           </div>
 
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black uppercase tracking-wide text-[#166575]">
               B2C Request Intake
             </div>
 
@@ -764,7 +764,7 @@ async function submitB2C() {
             </div>
 
             {isEmergencyRefer997 && (
-              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700 dark:text-red-200">
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm font-semibold text-red-700 ">
                 This request should be referred to 997 and closed.
               </div>
             )}
@@ -875,7 +875,7 @@ async function submitB2C() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="card-soft space-y-4">
-                <h3 className="text-base font-black text-slate-950 dark:text-white">
+                <h3 className="text-base font-black text-[#123746]">
                   Pickup Point
                 </h3>
 
@@ -929,7 +929,7 @@ async function submitB2C() {
               </div>
 
               <div className="card-soft space-y-4">
-                <h3 className="text-base font-black text-slate-950 dark:text-white">
+                <h3 className="text-base font-black text-[#123746]">
                   Destination
                 </h3>
 
@@ -1097,8 +1097,8 @@ async function submitB2C() {
                       onClick={() => toggleRequirement(item)}
                       className={
                         active
-                          ? "rounded-2xl bg-blue-600 px-4 py-2 text-sm font-black text-white"
-                          : "rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+                          ? "rounded-2xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white"
+                          : "rounded-2xl border border-[#c8dce2] bg-white px-4 py-2 text-sm font-bold text-[#274C5A] hover:border-[#74cdda] hover:bg-[#f7fbfc]"
                       }
                     >
                       {item}
@@ -1265,14 +1265,14 @@ async function submitB2C() {
               </button>
 
               {form.paymentLinkSentViaWhatsApp && (
-                <span className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                <span className="rounded-2xl border border-[#137a4a]/20 bg-[#dff8ed] px-4 py-2 text-sm font-black text-[#137a4a] ">
                   Sent via WhatsApp
                 </span>
               )}
             </div>
 
             <div className="card-soft">
-              <label className="mb-3 block text-sm font-black text-slate-950 dark:text-white">
+              <label className="mb-3 block text-sm font-black text-[#123746]">
                 Has payment been confirmed?
               </label>
 
@@ -1409,18 +1409,18 @@ async function submitB2C() {
         </Field>
 
         {selectedAmbulance ? (
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 ">
             <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
               Selected Ambulance
             </div>
 
-            <div className="text-lg font-black text-slate-950 dark:text-white">
+            <div className="text-lg font-black text-[#123746]">
               {selectedAmbulance.code ||
                 selectedAmbulance.name ||
                 selectedAmbulance.id}
             </div>
 
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-sm text-[#607482]">
               {selectedAmbulance.type ||
                 selectedAmbulance.vehicleType ||
                 "Ambulance"}
@@ -1434,17 +1434,17 @@ async function submitB2C() {
           />
         )}
 
-        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 ">
           <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
             Team Assigned to Ambulance
           </div>
 
           {assignment.assignedTeamGroup ? (
-            <div className="mb-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-700 dark:text-blue-300">
+            <div className="mb-4 rounded-2xl border border-[#b9ecf2] bg-[#effbfc] px-4 py-3 text-sm font-black text-[#166575] ">
               {assignment.assignedTeamGroup}
             </div>
           ) : (
-            <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-200">
+            <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 ">
               No team group is linked to this ambulance.
             </div>
           )}
@@ -1454,26 +1454,26 @@ async function submitB2C() {
               {assignment.assignedUserIds.map((userId) => (
                 <div
                   key={userId}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#0b1220]"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 "
                 >
                   <div>
-                    <div className="text-sm font-black text-slate-950 dark:text-white">
+                    <div className="text-sm font-black text-[#123746]">
                       {getUserDisplayName(userId)}
                     </div>
 
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                    <div className="text-xs text-[#607482]">
                       {userId}
                     </div>
                   </div>
 
-                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300">
+                  <span className="rounded-full border border-[#137a4a]/20 bg-[#dff8ed] px-2.5 py-1 text-xs font-black text-[#137a4a] ">
                     Assigned
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-200">
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 ">
               No paramedics are linked to this ambulance. Please update the
               ambulance profile or select another unit.
             </div>
@@ -1564,11 +1564,11 @@ function CancellationModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-slate-950 p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-3xl border border-[#d8e6ea] bg-white p-6 shadow-2xl shadow-[#274C5A]/10">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black text-white">Cancel Intake</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
+            <h2 className="text-xl font-black text-[#123746]">Cancel Intake</h2>
+            <p className="mt-1 text-sm leading-6 text-[#607482]">
               Save this call as cancelled. The information entered so far will
               be kept for reporting, and no CAD case will be created.
             </p>
@@ -1576,7 +1576,7 @@ function CancellationModal({
 
           <button
             type="button"
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+            className="rounded-xl p-2 text-[#607482] transition hover:bg-[#f7fbfc] hover:text-[#274C5A]"
             onClick={onClose}
             disabled={saving}
             aria-label="Close cancellation dialog"
@@ -1625,7 +1625,7 @@ function CancellationModal({
 
           <button
             type="button"
-            className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-2xl bg-[#b42318] px-4 py-2 text-sm font-black text-white transition hover:bg-[#912018] disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onConfirm}
             disabled={saving}
           >
@@ -1648,17 +1648,17 @@ function SectionTitle({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#b9ecf2] bg-[#effbfc] text-[#166575] ">
         {icon}
       </div>
 
       <div>
-        <h2 className="text-lg font-black text-slate-950 dark:text-white">
+        <h2 className="text-lg font-black text-[#123746]">
           {title}
         </h2>
 
         {subtitle && (
-          <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-sm leading-6 text-[#607482]">
             {subtitle}
           </p>
         )}
@@ -1693,8 +1693,8 @@ function Notice({
 }) {
   const classes =
     type === "warning"
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200"
-      : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-200";
+      ? "border-amber-500/20 bg-amber-500/10 text-amber-700 "
+      : "border-red-500/20 bg-red-500/10 text-red-700 ";
 
   return (
     <div className={`mt-5 rounded-2xl border p-4 text-sm ${classes}`}>
@@ -1703,3 +1703,4 @@ function Notice({
     </div>
   );
 }
+

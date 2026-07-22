@@ -858,7 +858,7 @@ export default function B2CRequestDetailsPage({
 
           {canCancelRequest && !editMode && (
             <button
-              className="btn-secondary border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-300"
+              className="btn-secondary border border-red-500/40 text-red-600 hover:bg-red-500/10 "
               onClick={openCancelModal}
             >
               <X size={16} />
@@ -1165,7 +1165,7 @@ export default function B2CRequestDetailsPage({
                   value={request.hasMedicalReport}
                 />
 
-                <div className="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+                <div className="border-b border-slate-100 py-2 last:border-0 ">
                   <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
                     Medical Report Attachments
                   </div>
@@ -1361,7 +1361,7 @@ export default function B2CRequestDetailsPage({
               }
             />
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600  ">
               {request.cadCaseId
                 ? request.tripType === "Round Trip"
                   ? request.returnCadCaseId
@@ -1374,7 +1374,7 @@ export default function B2CRequestDetailsPage({
             </div>
 
             {!request.cadCaseId && withinOneHour && cadReady && (
-              <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
+              <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-700 ">
                 This trip is within one hour. CAD should be activated now.
               </div>
             )}
@@ -1476,12 +1476,12 @@ export default function B2CRequestDetailsPage({
                 />
 
                 {assignment.unitId && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 ">
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
                       Team Group
                     </div>
 
-                    <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+                    <div className="mt-1 text-sm font-black text-slate-950 ">
                       {assignment.assignedTeamGroup || "—"}
                     </div>
 
@@ -1494,7 +1494,7 @@ export default function B2CRequestDetailsPage({
                         assignment.assignedUserIds.map((userId) => (
                           <div
                             key={userId}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 dark:border-slate-800 dark:bg-[#0b1220] dark:text-white"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900  "
                           >
                             {getUserDisplayName(userId)}
                           </div>
@@ -1638,20 +1638,20 @@ function CancelRequestModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-      <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0b1220]">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl ">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black text-slate-950 dark:text-white">
+            <h2 className="text-xl font-black text-slate-950 ">
               Cancel B2C Request
             </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-500 ">
               This action keeps the request in the system as Cancelled. It will not be deleted.
             </p>
           </div>
 
           <button
             type="button"
-            className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="rounded-xl p-2 text-[#607482] hover:bg-[#f7fbfc]"
             disabled={saving}
             onClick={onClose}
             aria-label="Close cancellation dialog"
@@ -1688,7 +1688,7 @@ function CancelRequestModal({
             />
           )}
 
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 ">
             {request?.cadCaseId
               ? "If the CAD team has not started the service, the linked CAD case will also become Cancelled."
               : "No CAD case has been created for this request."}
@@ -1706,7 +1706,7 @@ function CancelRequestModal({
           </button>
           <button
             type="button"
-            className="btn-secondary border border-red-500/40 bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-300"
+            className="btn-secondary border border-red-500/40 bg-red-500/10 text-red-700 hover:bg-red-500/20 "
             disabled={saving}
             onClick={onConfirm}
           >
@@ -1730,8 +1730,8 @@ function Section({
 }) {
   return (
     <section className="card-modern">
-      <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
-        <span className="text-blue-500">{icon}</span>
+      <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-slate-600 ">
+        <span className="text-[#166575]">{icon}</span>
         {title}
       </div>
 
@@ -1742,12 +1742,12 @@ function Section({
 
 function Info({ label, value }: { label: string; value: any }) {
   return (
-    <div className="border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+    <div className="border-b border-slate-100 py-2 last:border-0 ">
       <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
         {label}
       </div>
 
-      <div className="mt-1 break-words text-sm font-semibold text-slate-900 dark:text-white">
+      <div className="mt-1 break-words text-sm font-semibold text-slate-900 ">
         {value || "—"}
       </div>
     </div>
@@ -1770,7 +1770,7 @@ function MedicalReportLinks({
             href={file.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm font-bold text-blue-700 transition hover:bg-blue-500/20 dark:text-blue-300"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-[#b9ecf2] bg-[#effbfc] px-4 py-3 text-sm font-bold text-[#166575] transition hover:bg-[#ddf6f9] "
           >
             <span className="flex min-w-0 items-center gap-2">
               <FileText size={16} className="shrink-0" />
@@ -1788,14 +1788,14 @@ function MedicalReportLinks({
 
   if (Array.isArray(fallbackNames) && fallbackNames.length > 0) {
     return (
-      <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+      <div className="mt-1 text-sm font-semibold text-slate-900 ">
         {fallbackNames.join(", ")}
       </div>
     );
   }
 
   return (
-    <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+    <div className="mt-1 text-sm font-semibold text-slate-900 ">
       —
     </div>
   );
@@ -1803,12 +1803,12 @@ function MedicalReportLinks({
 
 function StatusBadge({ label, value }: { label: string; value: any }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-0 ">
       <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
         {label}
       </div>
 
-      <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-black text-blue-700 dark:text-blue-300">
+      <span className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-2.5 py-1 text-xs font-black text-[#166575] ">
         {value || "—"}
       </span>
     </div>
@@ -1893,3 +1893,5 @@ function EditSelect({
     </div>
   );
 }
+
+

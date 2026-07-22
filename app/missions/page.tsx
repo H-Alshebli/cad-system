@@ -181,11 +181,11 @@ export default function MyMissionsPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-white">
+            <h2 className="text-lg font-black text-[#123746]">
               Upcoming B2C Requests
             </h2>
 
-            <p className="text-sm text-slate-400">
+            <p className="text-sm font-semibold text-[#607482]">
               These requests are for preparation only. Click View Request to
               review and acknowledge the request.
             </p>
@@ -196,7 +196,7 @@ export default function MyMissionsPage() {
 
         <div className="table-modern overflow-x-auto">
           <table className="w-full min-w-[1150px] text-left">
-            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-[#d8e6ea] bg-[#f7fbfc] text-xs uppercase tracking-wide text-[#607482]">
               <tr>
                 <th className="px-4 py-3">Request</th>
                 <th className="px-4 py-3">Patient</th>
@@ -211,30 +211,30 @@ export default function MyMissionsPage() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#e1ebef]">
               {upcomingB2CRequests.map((request) => (
-                <tr key={request.id} className="hover:bg-white/[0.03]">
-                  <td className="px-4 py-3 font-semibold text-white">
+                <tr key={request.id} className="hover:bg-[#f7fbfc]">
+                  <td className="px-4 py-3 font-semibold text-[#123746]">
                     {getB2CRequestDisplay(request)}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-[#274C5A]">
                     {request.patientName || "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-[#274C5A]">
                     {request.pickupText || "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-[#274C5A]">
                     {request.destinationText || "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-[#274C5A]">
                     {formatDate(request.requestedTransportAt)}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-[#274C5A]">
                     {request.plannedAssignment?.unitCode ||
                       request.plannedAssignment?.unitName ||
                       getUnitDisplayName(request.plannedAssignment) ||
@@ -272,7 +272,7 @@ export default function MyMissionsPage() {
                 <tr>
                   <td
                     colSpan={10}
-                    className="px-4 py-10 text-center text-slate-400"
+                    className="px-4 py-10 text-center font-semibold text-[#607482]"
                   >
                     No upcoming B2C requests assigned.
                   </td>
@@ -286,18 +286,18 @@ export default function MyMissionsPage() {
       <section className="mt-8 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-white">
+            <h2 className="text-lg font-black text-[#123746]">
               Active CAD Missions
             </h2>
 
-            <p className="text-sm text-slate-400">
+            <p className="text-sm font-semibold text-[#607482]">
               These are active CAD cases assigned to your team. For B2C cases,
               you can still review the original request.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-300">
+            <label className="flex items-center gap-2 text-sm font-semibold text-[#274C5A]">
               <input
                 type="checkbox"
                 checked={showClosedMissions}
@@ -312,7 +312,7 @@ export default function MyMissionsPage() {
 
         <div className="table-modern overflow-x-auto">
           <table className="w-full min-w-[1050px] text-left">
-            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-[#d8e6ea] bg-[#f7fbfc] text-xs uppercase tracking-wide text-[#607482]">
               <tr>
                 <th className="px-4 py-3">Case</th>
                 <th className="px-4 py-3">Source</th>
@@ -325,7 +325,7 @@ export default function MyMissionsPage() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#e1ebef]">
               {activeMissions.map((item) => {
                 const b2cRequestId = getB2CRequestIdFromCase(item);
                 const showViewRequest = isB2CCase(item) && b2cRequestId;
@@ -336,8 +336,8 @@ export default function MyMissionsPage() {
                 const checklistProjectId = isB2CCase(item) ? "_b2c" : item.projectId;
 
                 return (
-                  <tr key={item.id} className="hover:bg-white/[0.03]">
-                    <td className="px-4 py-3 font-semibold text-white">
+                  <tr key={item.id} className="hover:bg-[#f7fbfc]">
+                    <td className="px-4 py-3 font-semibold text-[#123746]">
                       {getCaseDisplayCode(item)}
                       <div className="mt-1 text-xs font-normal text-slate-500">
                         {getCaseDisplayTitle(item)}
@@ -350,11 +350,11 @@ export default function MyMissionsPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-3 text-slate-300">
+                    <td className="px-4 py-3 text-[#274C5A]">
                       {item.chiefComplaint || item.serviceType || "—"}
                     </td>
 
-                    <td className="px-4 py-3 text-slate-300">
+                    <td className="px-4 py-3 text-[#274C5A]">
                       {item.pickup?.text ||
                         item.pickupText ||
                         item.location?.text ||
@@ -368,7 +368,7 @@ export default function MyMissionsPage() {
                       </span>
                     </td>
 
-                    <td className="px-4 py-3 text-slate-300">
+                    <td className="px-4 py-3 text-[#274C5A]">
                       {item.acknowledged
                         ? `Acknowledged by ${
                             item.acknowledgedByName ||
@@ -418,7 +418,7 @@ export default function MyMissionsPage() {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-4 py-10 text-center text-slate-400"
+                    className="px-4 py-10 text-center font-semibold text-[#607482]"
                   >
                     No active CAD missions found.
                   </td>
@@ -431,3 +431,4 @@ export default function MyMissionsPage() {
     </div>
   );
 }
+

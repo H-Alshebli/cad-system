@@ -224,7 +224,7 @@ export default function B2CRequestsPage() {
       </div>
 
       {filteredRequests.length === 0 ? (
-        <div className="card-modern text-slate-500 dark:text-slate-400">
+        <div className="card-modern text-slate-500 ">
           No B2C requests found.
         </div>
       ) : (
@@ -233,7 +233,7 @@ export default function B2CRequestsPage() {
             <button
               key={request.id}
               onClick={() => router.push(`/b2c/requests/${request.id}`)}
-              className="card-modern w-full text-left transition hover:border-blue-500/40 hover:shadow-blue-950/10"
+              className="card-modern w-full text-left transition hover:border-[#74cdda] hover:shadow-[#274C5A]/10"
             >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
@@ -245,8 +245,8 @@ export default function B2CRequestsPage() {
                     <span
                       className={
                         request.paymentStatus === "Paid"
-                          ? "rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-300"
-                          : "rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-black text-amber-700 dark:text-amber-300"
+                          ? "rounded-full border border-[#137a4a]/20 bg-[#dff8ed] px-2.5 py-1 text-xs font-black text-[#137a4a] "
+                          : "rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-black text-amber-700 "
                       }
                     >
                       {request.paymentStatus || "Pending"}
@@ -255,32 +255,32 @@ export default function B2CRequestsPage() {
                     <span
                       className={
                         request.cadCaseId
-                          ? "rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-black text-blue-700 dark:text-blue-300"
-                          : "rounded-full border border-slate-500/20 bg-slate-500/10 px-2.5 py-1 text-xs font-black text-slate-600 dark:text-slate-300"
+                          ? "rounded-full border border-[#b9ecf2] bg-[#effbfc] px-2.5 py-1 text-xs font-black text-[#166575] "
+                          : "rounded-full border border-slate-500/20 bg-slate-500/10 px-2.5 py-1 text-xs font-black text-slate-600 "
                       }
                     >
                       {request.cadCaseId ? "CAD Created" : "CAD Not Created"}
                     </span>
 
                     {request.requestStatus === "Cancelled" && (
-                      <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-black text-red-700 dark:text-red-300">
+                      <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-black text-red-700 ">
                         {formatCancellationStage(request.cancellationStage)}
                       </span>
                     )}
 
                     {request.requestStatus === "Cancelled" &&
                       request.refundStatus && (
-                        <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-xs font-black text-violet-700 dark:text-violet-300">
+                        <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-xs font-black text-violet-700 ">
                           Refund: {request.refundStatus}
                         </span>
                       )}
                   </div>
 
-                  <h2 className="text-lg font-black text-slate-950 dark:text-white">
+                  <h2 className="text-lg font-black text-slate-950 ">
                     {getB2CRequestDisplay(request)}
                   </h2>
 
-                  <div className="mt-2 grid grid-cols-1 gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4 dark:text-slate-300">
+                  <div className="mt-2 grid grid-cols-1 gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4 ">
                     <InfoLine
                       icon={<UserRound size={15} />}
                       label="Customer"
@@ -310,7 +310,7 @@ export default function B2CRequestsPage() {
                     />
                   </div>
 
-                  <div className="mt-3 grid grid-cols-1 gap-3 text-sm text-slate-500 md:grid-cols-2 dark:text-slate-400">
+                  <div className="mt-3 grid grid-cols-1 gap-3 text-sm text-slate-500 md:grid-cols-2 ">
                     <InfoLine
                       icon={<FileText size={15} />}
                       label="Pickup"
@@ -334,13 +334,13 @@ export default function B2CRequestsPage() {
                 </div>
 
                 <div className="flex shrink-0 flex-col gap-2 xl:w-48">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 ">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-400">
                       <CreditCard size={14} />
                       Payment
                     </div>
 
-                    <div className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+                    <div className="mt-1 text-sm font-black text-slate-950 ">
                       {request.price ? `${request.price} SAR` : "—"}
                     </div>
                   </div>
@@ -361,11 +361,11 @@ export default function B2CRequestsPage() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="card-modern">
-      <div className="text-sm font-bold text-slate-500 dark:text-slate-400">
+      <div className="text-sm font-bold text-slate-500 ">
         {label}
       </div>
 
-      <div className="mt-2 text-3xl font-black text-slate-950 dark:text-white">
+      <div className="mt-2 text-3xl font-black text-slate-950 ">
         {value}
       </div>
     </div>
@@ -383,14 +383,14 @@ function InfoLine({
 }) {
   return (
     <div className="flex min-w-0 items-start gap-2">
-      <span className="mt-0.5 text-blue-500">{icon}</span>
+      <span className="mt-0.5 text-[#166575]">{icon}</span>
 
       <div className="min-w-0">
         <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
           {label}
         </div>
 
-        <div className="truncate font-semibold text-slate-800 dark:text-slate-100">
+        <div className="truncate font-semibold text-slate-800 ">
           {value || "—"}
         </div>
       </div>
@@ -483,3 +483,5 @@ function formatDate(value: any) {
 
   return new Date(timestamp).toLocaleString();
 }
+
+

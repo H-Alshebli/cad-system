@@ -142,9 +142,9 @@ export default function MissionAcknowledgePage({
     return (
       <div className="page-shell">
         <div className="card-modern max-w-2xl">
-          <h1 className="text-2xl font-bold text-white">Access denied</h1>
+          <h1 className="text-2xl font-black text-[#123746]">Access denied</h1>
 
-          <p className="mt-2 text-slate-400">
+          <p className="mt-2 text-sm font-semibold text-[#607482]">
             You are not assigned to this mission and cannot view its details.
           </p>
 
@@ -245,15 +245,15 @@ export default function MissionAcknowledgePage({
         <div className="card-modern max-w-3xl">
           <span className="badge">Active CAD Mission</span>
 
-          <h2 className="mt-4 text-2xl font-bold text-white">
+          <h2 className="mt-4 text-2xl font-black text-[#123746]">
             Case {getCaseDisplayCode(caseData)}
           </h2>
 
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm font-semibold text-[#607482]">
             {getCaseDisplayTitle(caseData) || (isB2C ? customerName : caseData.projectName || "Project Case")}
           </p>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-slate-300 md:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-3 text-sm font-semibold text-[#274C5A] md:grid-cols-2">
             <p>
               <span className="text-slate-500">Source:</span>{" "}
               {caseData.sourceType || caseData.caseType || "PROJECT"}
@@ -289,8 +289,8 @@ export default function MissionAcknowledgePage({
             </p>
           </div>
 
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm">
-            <div className="font-semibold text-white">Readiness Checklist</div>
+          <div className="mt-4 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4 text-sm">
+            <div className="font-black text-[#123746]">Readiness Checklist</div>
 
             {checklistRequired ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -343,7 +343,7 @@ export default function MissionAcknowledgePage({
             )}
           </div>
 
-          <p className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
+          <p className="mt-5 rounded-2xl border border-[#b9ecf2] bg-[#effbfc] p-4 text-sm font-semibold text-[#166575]">
             By clicking the button below, the system will record that you
             received this active CAD mission. After acknowledgement, you can open
             the full CAD case details.
@@ -375,11 +375,11 @@ export default function MissionAcknowledgePage({
           <div className="card-modern space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-2xl font-black text-[#123746]">
                   Case {getCaseDisplayCode(caseData)}
                 </h2>
 
-                <p className="text-sm text-slate-400">
+                <p className="text-sm font-semibold text-[#607482]">
                   {getCaseDisplayTitle(caseData) || (isB2C ? customerName : caseData.projectName || "Project Case")}
                 </p>
               </div>
@@ -389,7 +389,7 @@ export default function MissionAcknowledgePage({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 text-sm font-semibold text-[#274C5A] md:grid-cols-2">
               <p>
                 <span className="text-slate-500">Patient:</span> {patientName}
               </p>
@@ -416,10 +416,10 @@ export default function MissionAcknowledgePage({
               </p>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <h3 className="font-semibold text-white">Notes</h3>
+            <div className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+              <h3 className="font-black text-[#123746]">Notes</h3>
 
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm font-semibold text-[#274C5A]">
                 {caseData.notes || caseData.paramedicNote || "No notes."}
               </p>
             </div>
@@ -441,11 +441,11 @@ export default function MissionAcknowledgePage({
           </div>
 
           <div className="card-modern">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-black text-[#123746]">
               Mission Acknowledgement
             </h3>
 
-            <div className="mt-4 space-y-2 text-sm text-slate-300">
+            <div className="mt-4 space-y-2 text-sm font-semibold text-[#274C5A]">
               <p>
                 <span className="text-slate-500">Acknowledged:</span>{" "}
                 {acknowledged ? "Yes" : "No"}
@@ -461,14 +461,14 @@ export default function MissionAcknowledgePage({
             </div>
 
             {isB2C && b2cRequestId && (
-              <div className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-100">
+              <div className="mt-5 rounded-2xl border border-[#b9ecf2] bg-[#effbfc] p-4 text-sm font-semibold text-[#166575]">
                 This CAD mission came from a B2C request. Use “View Original
                 Request” if you need the full booking and preparation details.
               </div>
             )}
 
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm">
-              <h4 className="font-semibold text-white">Readiness Checklist</h4>
+            <div className="mt-5 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4 text-sm">
+              <h4 className="font-black text-[#123746]">Readiness Checklist</h4>
 
               {checklistRequired ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">

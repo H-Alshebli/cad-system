@@ -45,38 +45,35 @@ body {
 
 @layer components {
   .page-shell {
-    @apply w-full space-y-6 text-slate-950 dark:text-slate-100;
+    @apply w-full space-y-6 text-[#123746];
   }
 
   .page-header {
-    @apply flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between
-    dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-xl dark:shadow-black/20;
+    @apply flex flex-col gap-4 rounded-3xl border border-[#d8e6ea] bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between;
   }
 
   .page-title {
-    @apply text-2xl font-black tracking-tight text-slate-950 dark:text-white;
+    @apply text-2xl font-black tracking-tight text-[#123746];
   }
 
   .page-subtitle {
-    @apply max-w-4xl text-sm leading-6 text-slate-500 dark:text-slate-400;
+    @apply max-w-4xl text-sm font-semibold leading-6 text-[#607482];
   }
 
   .card-modern {
-    @apply rounded-3xl border border-slate-200 bg-white p-5 shadow-sm
-    dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-xl dark:shadow-black/20;
+    @apply rounded-3xl border border-[#d8e6ea] bg-white p-5 shadow-sm;
   }
 
   .card-soft {
-    @apply rounded-3xl border border-slate-200 bg-slate-50 p-5
-    dark:border-slate-800 dark:bg-[#111827];
+    @apply rounded-3xl border border-[#d8e6ea] bg-[#f7fbfc] p-5;
   }
 
   .input,
   .select,
   .textarea {
-    @apply w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition
-    focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10
-    dark:border-slate-700 dark:bg-[#020817] dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400 dark:focus:ring-blue-500/20;
+    @apply w-full rounded-2xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2.5 text-sm font-semibold text-[#123746] placeholder:text-[#8aa0aa] outline-none transition
+    focus:border-[#74cdda] focus:bg-white focus:ring-4 focus:ring-[#74cdda]/20
+    disabled:bg-[#edf3f5] disabled:text-[#607482];
   }
 
   .textarea {
@@ -84,50 +81,46 @@ body {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-950/20 transition
-    hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50
-    dark:bg-blue-600 dark:hover:bg-blue-500;
+    @apply inline-flex items-center justify-center rounded-2xl bg-[#274C5A] px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition
+    hover:bg-[#1d3b47] disabled:cursor-not-allowed disabled:bg-[#9aaab2] disabled:shadow-none;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 transition
-    hover:bg-slate-100
-    dark:border-slate-700 dark:bg-[#111827] dark:text-slate-100 dark:hover:bg-slate-800;
+    @apply inline-flex items-center justify-center rounded-2xl border border-[#c8dce2] bg-white px-4 py-2.5 text-sm font-bold text-[#274C5A] transition
+    hover:border-[#74cdda] hover:bg-[#f7fbfc];
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-red-700;
+    @apply inline-flex items-center justify-center rounded-2xl bg-[#b42318] px-4 py-2.5 text-sm font-black text-white transition hover:bg-[#912018];
   }
 
   .table-modern {
-    @apply w-full overflow-hidden rounded-3xl border border-slate-200 bg-white text-sm shadow-sm
-    dark:border-slate-800 dark:bg-[#0b1220];
+    @apply w-full overflow-hidden rounded-3xl border border-[#d8e6ea] bg-white text-sm shadow-sm;
   }
 
   .badge {
-    @apply inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-slate-600
-    dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200;
+    @apply inline-flex rounded-full border border-[#c8dce2] bg-[#f7fbfc] px-2.5 py-1 text-xs font-black uppercase tracking-wide text-[#274C5A];
   }
 
   .section-title {
-    @apply text-lg font-black text-slate-950 dark:text-white;
+    @apply text-lg font-black text-[#123746];
   }
 
   .section-subtitle {
-    @apply text-sm leading-6 text-slate-500 dark:text-slate-400;
+    @apply text-sm font-semibold leading-6 text-[#607482];
   }
 
   .field-label {
-    @apply mb-2 block text-sm font-bold text-slate-600 dark:text-slate-300;
+    @apply mb-2 block text-sm font-bold text-[#274C5A];
   }
 
   .notice-warning {
     @apply rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800
-    dark:text-amber-200;
+    font-semibold;
   }
 
   .notice-danger {
     @apply rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-800
-    dark:text-red-200;
+    font-semibold;
   }
 }
