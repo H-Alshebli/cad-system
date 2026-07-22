@@ -86,6 +86,51 @@ function quantityValidationMessage(item: ReadinessChecklistItem) {
   return "";
 }
 
+type ValidationIssue = {
+  itemId: string;
+  label: string;
+  message: string;
+};
+
+type ExtraStockPrompt = {
+  action: "continue" | "submit";
+  items: ReadinessChecklistItem[];
+} | null;
+
+function getExtraStockItems(items: ReadinessChecklistItem[]) {
+  return items.filter((item) => {
+    const minimum = Number(item.minQty || 0);
+    const actual = Number(item.actualQty || 0);
+    return item.status === "checked" && minimum > 0 && actual > minimum;
+  });
+}
+
+function getValidationIssues(items: ReadinessChecklistItem[]) {
+  const issues: ValidationIssue[] = [];
+
+  items.forEach((item) => {
+    if (item.status === "unchecked") {
+      issues.push({
+        itemId: item.id,
+        label: item.label,
+        message: `${item.label}: select Yes, No, Some, or N/A before continuing.`,
+      });
+      return;
+    }
+
+    const quantityMessage = quantityValidationMessage(item);
+    if (quantityMessage) {
+      issues.push({
+        itemId: item.id,
+        label: item.label,
+        message: quantityMessage,
+      });
+    }
+  });
+
+  return issues;
+}
+
 function statusLabel(status: ReadinessChecklistItem["status"]) {
   if (status === "checked") return "Yes";
   if (status === "missing") return "No";
@@ -109,15 +154,22 @@ function groupItems(items: ReadinessChecklistItem[]) {
 
 function ItemRow({
   item,
+  hasIssue = false,
   onChange,
 }: {
   item: ReadinessChecklistItem;
+  hasIssue?: boolean;
   onChange: (patch: Partial<ReadinessChecklistItem>) => void;
 }) {
   const needsQty = needsQuantity(item);
 
   return (
-    <div className={`rounded-xl border p-3 ${statusTone(item.status)}`}>
+    <div
+      id={`checklist-item-${item.id}`}
+      className={`scroll-mt-28 rounded-xl border p-3 ${
+        hasIssue ? "border-red-400 bg-red-500/10 ring-1 ring-red-400/50" : statusTone(item.status)
+      }`}
+    >
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_190px_130px_1fr]">
         <div>
           <div className="font-semibold text-white">{item.label}</div>
@@ -135,7 +187,7 @@ function ItemRow({
         </div>
 
         <select
-          className="select"
+          className={`select ${hasIssue && item.status === "unchecked" ? "border-red-400 bg-red-500/10" : ""}`}
           value={item.status}
           onChange={(e) => {
             const status = e.target.value as ReadinessChecklistItem["status"];
@@ -157,15 +209,23 @@ function ItemRow({
 
         {needsQty ? (
           <input
-            className="input"
+            className={`input ${hasIssue && (item.status === "checked" || item.status === "some") ? "border-red-400 bg-red-500/10" : ""}`}
             type="number"
             min="0"
+            step="any"
             value={item.actualQty ?? ""}
-            onChange={(e) =>
-              onChange({
-                actualQty: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
+            onChange={(e) => {
+              const rawValue = e.target.value.trim();
+              if (rawValue === "") {
+                onChange({ actualQty: undefined });
+                return;
+              }
+
+              const nextQty = Number(rawValue);
+              if (Number.isFinite(nextQty) && nextQty >= 0) {
+                onChange({ actualQty: nextQty });
+              }
+            }}
             placeholder={item.inputType === "psi" ? "PSI" : item.inputType === "fuel" ? "%" : "Qty"}
           />
         ) : (
@@ -220,6 +280,9 @@ export default function NewProjectChecklistPage({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [activeIssueItemId, setActiveIssueItemId] = useState("");
+  const [extraStockPrompt, setExtraStockPrompt] = useState<ExtraStockPrompt>(null);
   const pageTopRef = useRef<HTMLDivElement | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
 
@@ -349,6 +412,26 @@ export default function NewProjectChecklistPage({
   );
   const grouped = useMemo(() => groupItems(stepItems), [stepItems]);
   const readiness = useMemo(() => calculateReadiness(items), [items]);
+  const extraStockItems = useMemo(() => getExtraStockItems(items), [items]);
+  const issueItemIds = useMemo(
+    () => new Set(validationIssues.map((issue) => issue.itemId)),
+    [validationIssues]
+  );
+
+  useEffect(() => {
+    if (validationIssues.length === 0 || !activeIssueItemId) return;
+    const currentIssues = getValidationIssues(stepItems);
+    const currentIssueIds = new Set(currentIssues.map((issue) => issue.itemId));
+    if (currentIssueIds.has(activeIssueItemId)) return;
+    setValidationIssues(currentIssues);
+    const nextIssue = currentIssues[0];
+    if (nextIssue) {
+      setActiveIssueItemId(nextIssue.itemId);
+      window.setTimeout(() => scrollToChecklistItem(nextIssue.itemId), 120);
+    } else {
+      setActiveIssueItemId("");
+    }
+  }, [items, stepItems, validationIssues.length, activeIssueItemId]);
 
   function missionOptionLabel(mission: any) {
     return [
@@ -365,6 +448,77 @@ export default function NewProjectChecklistPage({
     );
   }
 
+  function scrollToChecklistItem(itemId: string) {
+    document
+      .getElementById(`checklist-item-${itemId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function getStepIndexForItem(itemId: string) {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item) return step;
+    const label = wizardSteps.find((entry) => getStepKeyForWizardLabel(entry) === item.step);
+    return label ? wizardSteps.indexOf(label) : step;
+  }
+
+  function focusValidationIssue(issue: ValidationIssue) {
+    setActiveIssueItemId(issue.itemId);
+    const targetStep = getStepIndexForItem(issue.itemId);
+    if (targetStep !== step) {
+      setStep(targetStep);
+      window.setTimeout(() => scrollToChecklistItem(issue.itemId), 250);
+      return;
+    }
+    scrollToChecklistItem(issue.itemId);
+  }
+
+  function setStepValidationIssues(issues: ValidationIssue[]) {
+    setValidationIssues(issues);
+    setError(
+      issues.length === 1
+        ? "Fix this checklist item before continuing."
+        : `Fix ${issues.length} checklist items before continuing.`
+    );
+    if (issues[0]) {
+      setActiveIssueItemId(issues[0].itemId);
+      const targetStep = getStepIndexForItem(issues[0].itemId);
+      if (targetStep !== step) {
+        setStep(targetStep);
+      }
+      window.setTimeout(() => scrollToChecklistItem(issues[0].itemId), 250);
+    }
+  }
+
+  function showExtraStockPrompt(extraItems: ReadinessChecklistItem[], action: "continue" | "submit") {
+    if (extraItems.length === 0) return false;
+    setExtraStockPrompt({ action, items: extraItems });
+    return true;
+  }
+
+  function reviewExtraStockInputs() {
+    const firstItem = extraStockPrompt?.items[0];
+    setExtraStockPrompt(null);
+    if (firstItem) {
+      focusValidationIssue({
+        itemId: firstItem.id,
+        label: firstItem.label,
+        message: `${firstItem.label}: review the entered extra stock quantity.`,
+      });
+    }
+  }
+
+  function continueAfterExtraStockConfirm() {
+    const action = extraStockPrompt?.action;
+    setExtraStockPrompt(null);
+    if (action === "continue") {
+      setStep((current) => current + 1);
+      return;
+    }
+    if (action === "submit") {
+      void save("submitted", true);
+    }
+  }
+
   function checkStepEligible() {
     const ids = new Set(stepItems.map((item) => item.id));
     setItems((prev) =>
@@ -376,6 +530,7 @@ export default function NewProjectChecklistPage({
 
   function validateStep() {
     setError("");
+    setValidationIssues([]);
     if (step === 0) {
       if (!shiftKey || !dateKey) {
         setError("Select Riyadh date and shift.");
@@ -408,24 +563,18 @@ export default function NewProjectChecklistPage({
       return false;
     }
     if (stepItems.length > 0) {
-      const quantityError = stepItems.map(quantityValidationMessage).find(Boolean);
-      if (quantityError) {
-        setError(quantityError);
+      const issues = getValidationIssues(stepItems);
+      if (issues.length > 0) {
+        setStepValidationIssues(issues);
         return false;
       }
 
-      const unansweredBlockingVehicle = stepItems.filter(
-        (item) => item.vehicleSeverity === "red" && item.status === "unchecked"
-      );
-      if (unansweredBlockingVehicle.length > 0) {
-        setError(`Answer red vehicle items first: ${unansweredBlockingVehicle.map((item) => item.label).join(", ")}`);
-        return false;
-      }
+      if (showExtraStockPrompt(getExtraStockItems(stepItems), "continue")) return false;
     }
     return true;
   }
 
-  async function save(status: "draft" | "submitted") {
+  async function save(status: "draft" | "submitted", skipExtraStockPrompt = false) {
     if (!user) return;
     if (!can("readiness_checklists", "create")) {
       alert("You do not have permission to create readiness checklists.");
@@ -457,16 +606,13 @@ export default function NewProjectChecklistPage({
       return;
     }
     if (status === "submitted") {
-      const quantityError = items.map(quantityValidationMessage).find(Boolean);
-      if (quantityError) {
-        alert(quantityError);
+      const issues = getValidationIssues(items);
+      if (issues.length > 0) {
+        setStepValidationIssues(issues);
         return;
       }
-      const unansweredBlockingVehicle = items.filter(
-          (item) => item.vehicleSeverity === "red" && item.status === "unchecked"
-      );
-      if (unansweredBlockingVehicle.length > 0) {
-        alert(`Answer red vehicle items first: ${unansweredBlockingVehicle.map((item) => item.label).join(", ")}`);
+
+      if (!skipExtraStockPrompt && showExtraStockPrompt(getExtraStockItems(items), "submit")) {
         return;
       }
     }
@@ -580,6 +726,96 @@ export default function NewProjectChecklistPage({
       {error && (
         <div ref={errorRef} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-100">
           {error}
+        </div>
+      )}
+
+      {validationIssues.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-black text-amber-100">Checklist items need attention</h3>
+              <p className="mt-1 text-sm text-amber-100/80">
+                Fix the listed items. After one is solved, the wizard will move you to the next issue.
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-black text-amber-100">
+              {validationIssues.length} item{validationIssues.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {validationIssues.map((issue) => (
+              <div
+                key={`${issue.itemId}-${issue.message}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/40 p-3"
+              >
+                <div>
+                  <div className="font-semibold text-white">{issue.label}</div>
+                  <div className="text-sm text-amber-100/80">{issue.message}</div>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => focusValidationIssue(issue)}>
+                  Go to item
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {extraStockPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-blue-400/40 bg-slate-950 p-5 shadow-2xl shadow-blue-950/40">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-white">Extra stock entered</h3>
+                <p className="mt-1 text-sm text-slate-300">
+                  These quantities are above the checklist minimum. Confirm to continue, or review the inputs.
+                </p>
+              </div>
+              <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-100">
+                {extraStockPrompt.items.length} item{extraStockPrompt.items.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {extraStockPrompt.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                >
+                  <div>
+                    <div className="font-semibold text-white">{item.label}</div>
+                    <div className="text-sm text-slate-400">
+                      Entered {item.actualQty || 0} / Minimum {item.minQty}
+                      {item.unit ? ` ${item.unit}` : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setExtraStockPrompt(null);
+                      focusValidationIssue({
+                        itemId: item.id,
+                        label: item.label,
+                        message: `${item.label}: review the entered extra stock quantity.`,
+                      });
+                    }}
+                  >
+                    Review item
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={reviewExtraStockInputs}>
+                Need to review inputs
+              </button>
+              <button type="button" className="btn-primary" onClick={continueAfterExtraStockConfirm}>
+                Confirm and continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -771,7 +1007,12 @@ export default function NewProjectChecklistPage({
                 <div key={group} className="space-y-2">
                   <h5 className="text-sm font-bold uppercase tracking-wide text-slate-400">{group}</h5>
                   {groupItems.map((item) => (
-                    <ItemRow key={item.id} item={item} onChange={(patch) => updateItem(item.id, patch)} />
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      hasIssue={issueItemIds.has(item.id)}
+                      onChange={(patch) => updateItem(item.id, patch)}
+                    />
                   ))}
                 </div>
               ))}
@@ -833,6 +1074,33 @@ export default function NewProjectChecklistPage({
               )}
             </div>
           </div>
+
+          {extraStockItems.length > 0 && (
+            <div className="card-modern border-blue-500/30 bg-blue-500/5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-white">Extra Stock</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    These quantities are above the checklist minimum and will be submitted as recorded.
+                  </p>
+                </div>
+                <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-100">
+                  {extraStockItems.length} item{extraStockItems.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {extraStockItems.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="font-semibold text-white">{item.label}</div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      Entered {item.actualQty || 0} / Minimum {item.minQty}
+                      {item.unit ? ` ${item.unit}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <label className="card-modern block space-y-2">
             <span className="text-sm font-semibold text-slate-300">Checklist Notes</span>
