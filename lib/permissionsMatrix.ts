@@ -91,6 +91,8 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "view_sensitive",
   ],
 
+  submissions: ["view", "export"],
+
   ambulances: ["view", "create", "edit", "assign", "archive", "delete"],
 
   destinations: ["view", "create", "edit", "delete"],
@@ -132,6 +134,7 @@ export const MODULE_LABELS: Record<string, string> = {
   crew_profile: "Crew Profile",
   readiness_checklists: "Readiness Checklists",
   epcr: "ePCR",
+  submissions: "Submissions",
   ambulances: "Ambulances",
   destinations: "Hospitals / Destinations",
   clinics: "Clinics",
@@ -180,6 +183,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   epcr:
     "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
+
+  submissions:
+    "Case and ePCR submission review, consolidated visibility, and export access.",
 
   ambulances:
     "Ambulance list, creation, editing, project assignment, team assignment, GPS, and archiving.",
@@ -288,6 +294,7 @@ export const PERMISSION_GROUPS = [
       "crew_profile",
       "readiness_checklists",
       "epcr",
+      "submissions",
     ],
   },
   {

@@ -175,6 +175,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       icon: <BarChart3 size={18} />,
       visible: isAdmin || can(permissions, "dashboards", "epcr"),
     },
+    {
+      href: "/submissions",
+      label: "Submissions",
+      icon: <ClipboardList size={18} />,
+      visible: isAdmin || can(permissions, "submissions", "view"),
+    },
   ];
 
   const managementItems: NavItem[] = [

@@ -207,25 +207,25 @@ function statusBadge(status?: string) {
   const value = status || "-";
 
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium";
+    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-black";
 
   if (value.toLowerCase().includes("closed")) {
-    return `${base} bg-green-500/10 text-green-300 border border-green-500/20`;
+    return `${base} border-emerald-500/25 bg-emerald-500/10 text-emerald-700`;
   }
 
   if (value.toLowerCase().includes("draft")) {
-    return `${base} bg-yellow-500/10 text-yellow-300 border border-yellow-500/20`;
+    return `${base} border-amber-500/25 bg-amber-500/10 text-amber-700`;
   }
 
   if (value.toLowerCase().includes("final")) {
-    return `${base} bg-blue-500/10 text-blue-300 border border-blue-500/20`;
+    return `${base} border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]`;
   }
 
   if (value.toLowerCase().includes("not created")) {
-    return `${base} bg-red-500/10 text-red-300 border border-red-500/20`;
+    return `${base} border-rose-500/25 bg-rose-500/10 text-rose-700`;
   }
 
-  return `${base} bg-gray-500/10 text-gray-300 border border-gray-500/20`;
+  return `${base} border-[#86A7B2]/30 bg-[#86A7B2]/12 text-[#274C5A]`;
 }
 
 function cleanExportValue(value: unknown): string {
@@ -521,51 +521,51 @@ export default function CaseEpcrSubmissionsTable({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-6 text-gray-300">
+      <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-6 text-[#274C5A] shadow-sm">
         Loading submissions...
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-none space-y-4">
       <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
-          <p className="text-sm text-gray-400">Total Cases</p>
-          <p className="mt-2 text-2xl font-bold text-white">{totalCases}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-[#7F7F7F]">Total Cases</p>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{totalCases}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
-          <p className="text-sm text-gray-400">With ePCR</p>
-          <p className="mt-2 text-2xl font-bold text-white">{totalWithEpcr}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-[#7F7F7F]">With ePCR</p>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{totalWithEpcr}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
-          <p className="text-sm text-gray-400">Without ePCR</p>
-          <p className="mt-2 text-2xl font-bold text-white">
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-[#7F7F7F]">Without ePCR</p>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">
             {totalWithoutEpcr}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
-          <p className="text-sm text-gray-400">Closed Cases</p>
-          <p className="mt-2 text-2xl font-bold text-white">{totalClosed}</p>
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-[#7F7F7F]">Closed Cases</p>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{totalClosed}</p>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-4">
-        <div className="grid gap-3 md:grid-cols-4">
+      <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 xl:grid-cols-[minmax(320px,1fr)_220px_220px_180px]">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search case, ePCR, patient, project..."
-            className="rounded-xl border border-white/10 bg-[#111827] px-4 py-2 text-sm text-white outline-none placeholder:text-gray-500 focus:border-blue-500"
+            className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none placeholder:text-[#7F7F7F] focus:border-[#274C5A]"
           />
 
           <select
             value={caseStatusFilter}
             onChange={(e) => setCaseStatusFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-[#111827] px-4 py-2 text-sm text-white outline-none focus:border-blue-500"
+            className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#274C5A]"
           >
             <option value="all">All Case Statuses</option>
             {caseStatuses.map((status) => (
@@ -578,7 +578,7 @@ export default function CaseEpcrSubmissionsTable({
           <select
             value={epcrStatusFilter}
             onChange={(e) => setEpcrStatusFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-[#111827] px-4 py-2 text-sm text-white outline-none focus:border-blue-500"
+            className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#274C5A]"
           >
             <option value="all">All ePCR Statuses</option>
             {epcrStatuses.map((status) => (
@@ -590,17 +590,17 @@ export default function CaseEpcrSubmissionsTable({
 
           <button
             onClick={() => exportToCsv(filteredRows)}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white shadow-sm shadow-[#274C5A]/20 transition hover:bg-[#1f3f4c]"
           >
             Export Full CSV
           </button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220]">
+      <div className="overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/5 text-xs uppercase text-gray-400">
+          <table className="min-w-[1720px] text-left text-sm">
+            <thead className="border-b border-[#86A7B2]/25 bg-[#f8fbfc] text-xs uppercase text-[#7F7F7F]">
               <tr>
                 <th className="px-4 py-3">Case Ref</th>
                 <th className="px-4 py-3">ePCR Ref</th>
@@ -619,57 +619,55 @@ export default function CaseEpcrSubmissionsTable({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-[#86A7B2]/20">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={14} className="px-4 py-8 text-center text-[#7F7F7F]">
                     No submissions found.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map(({ caseItem, epcr }) => (
-                  <tr key={caseItem.id} className="hover:bg-white/[0.03]">
-                    <td className="whitespace-nowrap px-4 py-4 text-white">
-                      <div className="font-medium">
+                  <tr key={caseItem.id} className="hover:bg-[#f8fbfc]">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
+                      <div className="font-black">
                         {getCaseDisplayCode(caseItem)}
                       </div>
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-4">
                       {epcr ? (
-                        <>
-                          <div className="font-medium text-blue-300">
-                            {shortTechnicalId(epcr.epcrId || epcr.id, "EPCR")}
-                          </div>
-                        </>
+                        <div className="font-black text-[#166575]">
+                          {shortTechnicalId(epcr.epcrId || epcr.id, "EPCR")}
+                        </div>
                       ) : (
-                        <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs text-red-300">
+                        <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-xs font-black text-rose-700">
                           Not Created
                         </span>
                       )}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {getProjectName(caseItem, epcr)}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {getPatientName(caseItem, epcr)}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {epcr?.patientInfo?.age || "-"}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {epcr?.patientInfo?.gender || "-"}
                     </td>
 
-                    <td className="min-w-[220px] px-4 py-4 text-gray-300">
+                    <td className="min-w-[260px] px-4 py-4 text-[#274C5A]">
                       {getChiefComplaint(caseItem, epcr)}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {getTriage(caseItem, epcr)}
                     </td>
 
@@ -685,28 +683,28 @@ export default function CaseEpcrSubmissionsTable({
                       </span>
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {formatDate(caseItem.createdAt)}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-4 text-gray-300">
+                    <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       <div className="space-y-1 text-xs">
                         <div>
                           Moving:{" "}
-                          <span className="text-white">
+                          <span className="font-bold text-[#274C5A]">
                             {epcr?.time?.movingTime?.timeHHMM || "-"}
                           </span>
                         </div>
                         <div>
                           Arrival PT:{" "}
-                          <span className="text-white">
+                          <span className="font-bold text-[#274C5A]">
                             {epcr?.time?.arrivalToPTTime?.timeHHMM || "-"}
                           </span>
                         </div>
                       </div>
                     </td>
 
-                    <td className="min-w-[180px] px-4 py-4 text-gray-300">
+                    <td className="min-w-[220px] px-4 py-4 text-[#274C5A]">
                       {getDestination(caseItem, epcr)}
                     </td>
 
@@ -714,7 +712,7 @@ export default function CaseEpcrSubmissionsTable({
                       <div className="flex justify-end gap-2">
                         <Link
                           href={`/cases/${caseItem.id}`}
-                          className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-200 hover:bg-white/10"
+                          className="rounded-lg border border-[#86A7B2]/30 px-3 py-1.5 text-xs font-bold text-[#274C5A] transition hover:bg-[#f8fbfc]"
                         >
                           View Case
                         </Link>
@@ -722,14 +720,14 @@ export default function CaseEpcrSubmissionsTable({
                         {epcr ? (
                           <Link
                             href={`/epcr/${epcr.id}`}
-                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500"
+                            className="rounded-lg bg-[#274C5A] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#1f3f4c]"
                           >
                             View ePCR
                           </Link>
                         ) : (
                           <Link
                             href={`/epcr/new?caseId=${caseItem.id}`}
-                            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-500"
+                            className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-800"
                           >
                             Create ePCR
                           </Link>

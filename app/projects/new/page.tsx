@@ -560,31 +560,31 @@ export default function NewProjectPage() {
   };
 
   const inputClass =
-    "w-full h-11 rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500";
+    "w-full h-11 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 text-sm font-semibold text-[#123746] placeholder:text-[#8aa0aa] outline-none transition focus:border-[#74cdda] focus:bg-white focus:ring-4 focus:ring-[#74cdda]/20";
 
   const selectClass = inputClass;
 
   const textareaClass =
-    "w-full rounded-lg border border-slate-700 bg-[#0b1220] px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500";
+    "w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-3 text-sm font-semibold text-[#123746] placeholder:text-[#8aa0aa] outline-none transition focus:border-[#74cdda] focus:bg-white focus:ring-4 focus:ring-[#74cdda]/20";
 
-  const labelClass = "mb-1.5 block text-xs font-medium text-slate-300";
+  const labelClass = "mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-[#274C5A]";
 
   const cardClass =
-    "rounded-2xl border border-slate-800 bg-[#111827] p-4 md:p-5 shadow-sm";
+    "rounded-2xl border border-[#d8e6ea] bg-white p-4 shadow-sm md:p-5";
 
   const dropdownButtonClass =
-    "flex w-full items-center justify-between rounded-lg border border-slate-700 bg-[#0b1220] px-3 py-2.5 text-left text-sm text-white transition hover:border-blue-500";
+    "flex w-full items-center justify-between rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2.5 text-left text-sm font-semibold text-[#123746] transition hover:border-[#74cdda] hover:bg-white";
 
   const dropdownPanelClass =
-    "absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-700 bg-[#0b1220] shadow-2xl";
+    "absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[#d8e6ea] bg-white shadow-2xl shadow-[#274C5A]/10";
 
   return (
     <PermissionGuard module="projects" action="create" showMessage={true}>
-      <div className="min-h-screen bg-[#030712] p-6">
+      <div className="min-h-screen bg-[#f3f8fa] p-6">
         <div className="w-full max-w-none space-y-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">New Project</h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <h1 className="text-3xl font-black text-[#123746]">New Project</h1>
+            <p className="mt-1 text-sm font-semibold text-[#607482]">
               Create the project, assign team, assign free ambulances, assign
               crew under each ambulance, and register allowed hospitals.
             </p>
@@ -592,7 +592,7 @@ export default function NewProjectPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className={cardClass}>
-              <h2 className="mb-4 text-sm font-semibold text-white">
+              <h2 className="mb-4 text-sm font-black text-[#123746]">
                 Basic Information
               </h2>
 
@@ -618,7 +618,7 @@ export default function NewProjectPage() {
             </div>
 
             <div className={cardClass}>
-              <h2 className="mb-4 text-sm font-semibold text-white">
+              <h2 className="mb-4 text-sm font-black text-[#123746]">
                 Project / Site Details
               </h2>
 
@@ -685,22 +685,22 @@ export default function NewProjectPage() {
             <div className={cardClass}>
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className="text-sm font-black text-[#123746]">
                     Assigned Team
                   </h2>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs font-semibold text-[#607482]">
                     Select team members from a dropdown list.
                   </p>
                 </div>
 
-                <div className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300">
+                <div className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
                   {selectedUsers.length} selected
                 </div>
               </div>
 
               {selectedUsers.length > 0 && (
-                <div className="mb-3 rounded-xl border border-slate-700 bg-[#0b1220] p-3">
-                  <p className="mb-2 text-xs text-slate-400">Selected Team</p>
+                <div className="mb-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+                  <p className="mb-2 text-xs font-semibold text-[#607482]">Selected Team</p>
 
                   <div className="flex flex-wrap gap-2">
                     {selectedUsers.map((u) => (
@@ -708,7 +708,7 @@ export default function NewProjectPage() {
                         key={u.id}
                         type="button"
                         onClick={() => removeSelectedUser(u.id)}
-                        className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-200 transition hover:bg-red-500/20 hover:text-red-200"
+                        className="rounded-full border border-[#b9ecf2] bg-white px-3 py-1 text-xs font-black text-[#166575] transition hover:border-[#ffc9c9] hover:bg-[#fff1f1] hover:text-[#b42318]"
                       >
                         {getUserName(u)} ×
                       </button>
@@ -729,31 +729,31 @@ export default function NewProjectPage() {
                       : "Select team members"}
                   </span>
 
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs font-semibold text-[#607482]">
                     {teamDropdownOpen ? "▲" : "▼"}
                   </span>
                 </button>
 
                 {teamDropdownOpen && (
                   <div className={dropdownPanelClass}>
-                    <div className="border-b border-slate-700 p-3">
+                    <div className="border-b border-[#d8e6ea] p-3">
                       <input
                         value={teamSearch}
                         onChange={(e) => setTeamSearch(e.target.value)}
                         placeholder="Search by name, role, or email..."
-                        className="w-full rounded-lg border border-slate-700 bg-[#111827] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                        className="w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746] outline-none placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white"
                       />
                     </div>
 
                     <div className="max-h-[320px] overflow-y-auto">
                       {groupedFilteredUsers.length === 0 ? (
-                        <div className="p-4 text-sm text-slate-400">
+                        <div className="p-4 text-sm font-semibold text-[#607482]">
                           No team members found.
                         </div>
                       ) : (
                         groupedFilteredUsers.map(([group, list]) => (
                           <div key={group}>
-                            <div className="sticky top-0 z-10 border-b border-slate-800 bg-[#0f172a] px-3 py-2 text-xs font-semibold text-slate-300">
+                            <div className="sticky top-0 z-10 border-b border-[#d8e6ea] bg-[#effbfc] px-3 py-2 text-xs font-black text-[#274C5A]">
                               {group}
                             </div>
 
@@ -763,10 +763,10 @@ export default function NewProjectPage() {
                               return (
                                 <label
                                   key={u.id}
-                                  className={`flex cursor-pointer items-center gap-3 border-b border-slate-800 p-3 transition last:border-b-0 ${
+                                  className={`flex cursor-pointer items-center gap-3 border-b border-[#e1ebef] p-3 transition last:border-b-0 ${
                                     checked
-                                      ? "bg-blue-500/10"
-                                      : "hover:bg-slate-800/70"
+                                      ? "bg-[#effbfc]"
+                                      : "hover:bg-[#f7fbfc]"
                                   }`}
                                 >
                                   <input
@@ -776,11 +776,11 @@ export default function NewProjectPage() {
                                   />
 
                                   <span className="min-w-0">
-                                    <span className="block truncate text-sm font-medium text-white">
+                                    <span className="block truncate text-sm font-black text-[#123746]">
                                       {getUserName(u)}
                                     </span>
 
-                                    <span className="block truncate text-xs text-slate-400">
+                                    <span className="block truncate text-xs font-semibold text-[#607482]">
                                       {getUserRole(u)}
                                     </span>
                                   </span>
@@ -792,11 +792,11 @@ export default function NewProjectPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-700 p-3">
+                    <div className="flex items-center justify-between border-t border-[#d8e6ea] p-3">
                       <button
                         type="button"
                         onClick={clearSelectedUsers}
-                        className="text-xs font-medium text-red-300 hover:text-red-200"
+                        className="text-xs font-black text-[#b42318] hover:text-[#912018]"
                       >
                         Clear
                       </button>
@@ -804,7 +804,7 @@ export default function NewProjectPage() {
                       <button
                         type="button"
                         onClick={() => setTeamDropdownOpen(false)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        className="rounded-xl bg-[#274C5A] px-3 py-1.5 text-xs font-black text-white hover:bg-[#1d3b47]"
                       >
                         Done
                       </button>
@@ -818,23 +818,23 @@ export default function NewProjectPage() {
             <div className={cardClass}>
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className="text-sm font-black text-[#123746]">
                     Project Ambulances
                   </h2>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs font-semibold text-[#607482]">
                     All ambulances are visible. Only free ambulances can be
                     selected.
                   </p>
                 </div>
 
-                <div className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300">
+                <div className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
                   {selectedAmbulanceIds.length} selected
                 </div>
               </div>
 
               {selectedAmbulances.length > 0 && (
-                <div className="mb-3 rounded-xl border border-slate-700 bg-[#0b1220] p-3">
-                  <p className="mb-2 text-xs text-slate-400">
+                <div className="mb-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+                  <p className="mb-2 text-xs font-semibold text-[#607482]">
                     Selected Ambulances
                   </p>
 
@@ -844,7 +844,7 @@ export default function NewProjectPage() {
                         key={amb.id}
                         type="button"
                         onClick={() => removeSelectedAmbulance(amb.id)}
-                        className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-200 transition hover:bg-red-500/20 hover:text-red-200"
+                        className="rounded-full border border-[#b9ecf2] bg-white px-3 py-1 text-xs font-black text-[#166575] transition hover:border-[#ffc9c9] hover:bg-[#fff1f1] hover:text-[#b42318]"
                       >
                         {getAmbulanceLabel(amb)} ×
                       </button>
@@ -865,25 +865,25 @@ export default function NewProjectPage() {
                       : "Select ambulances"}
                   </span>
 
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs font-semibold text-[#607482]">
                     {ambulanceDropdownOpen ? "▲" : "▼"}
                   </span>
                 </button>
 
                 {ambulanceDropdownOpen && (
                   <div className={dropdownPanelClass}>
-                    <div className="border-b border-slate-700 p-3">
+                    <div className="border-b border-[#d8e6ea] p-3">
                       <input
                         value={ambulanceSearch}
                         onChange={(e) => setAmbulanceSearch(e.target.value)}
                         placeholder="Search ambulance by code, location, status, or project..."
-                        className="w-full rounded-lg border border-slate-700 bg-[#111827] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                        className="w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746] outline-none placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white"
                       />
                     </div>
 
                     <div className="max-h-[320px] overflow-y-auto">
                       {filteredAmbulances.length === 0 ? (
-                        <div className="p-4 text-sm text-slate-400">
+                        <div className="p-4 text-sm font-semibold text-[#607482]">
                           No ambulances found.
                         </div>
                       ) : (
@@ -899,12 +899,12 @@ export default function NewProjectPage() {
                               type="button"
                               disabled={!free}
                               onClick={() => toggleAmbulance(amb)}
-                              className={`flex w-full items-start gap-3 border-b border-slate-800 p-3 text-left transition last:border-b-0 ${
+                              className={`flex w-full items-start gap-3 border-b border-[#e1ebef] p-3 text-left transition last:border-b-0 ${
                                 selected
-                                  ? "bg-blue-500/10"
+                                  ? "bg-[#effbfc]"
                                   : free
-                                  ? "hover:bg-slate-800/70"
-                                  : "bg-red-950/20 cursor-not-allowed opacity-80"
+                                  ? "hover:bg-[#f7fbfc]"
+                                  : "bg-[#fff1f1] cursor-not-allowed opacity-80"
                               }`}
                             >
                               <input
@@ -917,15 +917,15 @@ export default function NewProjectPage() {
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="truncate text-sm font-medium text-white">
+                                  <p className="truncate text-sm font-black text-[#123746]">
                                     {getAmbulanceLabel(amb)}
                                   </p>
 
                                   <span
                                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
                                       free
-                                        ? "bg-green-500/15 text-green-400"
-                                        : "bg-red-500/15 text-red-300"
+                                        ? "bg-[#dff8ed] text-[#137a4a]"
+                                        : "bg-[#ffe3e3] text-[#b42318]"
                                     }`}
                                   >
                                     {free
@@ -934,12 +934,12 @@ export default function NewProjectPage() {
                                   </span>
                                 </div>
 
-                                <p className="mt-1 truncate text-xs text-slate-400">
+                                <p className="mt-1 truncate text-xs font-semibold text-[#607482]">
                                   {amb.location || "No location"}
                                 </p>
 
                                 {!free && (
-                                  <p className="mt-1 text-xs text-red-300">
+                                  <p className="mt-1 text-xs font-semibold text-[#b42318]">
                                     {amb.currentCase || amb.currentCaseId
                                       ? "Busy on active case"
                                       : amb.assignedProjectId || amb.projectId
@@ -956,11 +956,11 @@ export default function NewProjectPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-700 p-3">
+                    <div className="flex items-center justify-between border-t border-[#d8e6ea] p-3">
                       <button
                         type="button"
                         onClick={clearSelectedAmbulances}
-                        className="text-xs font-medium text-red-300 hover:text-red-200"
+                        className="text-xs font-black text-[#b42318] hover:text-[#912018]"
                       >
                         Clear
                       </button>
@@ -968,7 +968,7 @@ export default function NewProjectPage() {
                       <button
                         type="button"
                         onClick={() => setAmbulanceDropdownOpen(false)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        className="rounded-xl bg-[#274C5A] px-3 py-1.5 text-xs font-black text-white hover:bg-[#1d3b47]"
                       >
                         Done
                       </button>
@@ -983,17 +983,17 @@ export default function NewProjectPage() {
           {selectedAmbulances.length > 0 && (
             <div className={cardClass}>
               <div className="mb-4">
-                <h2 className="text-sm font-semibold text-white">
+                <h2 className="text-sm font-black text-[#123746]">
                   Ambulance Crew Assignment
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs font-semibold text-[#607482]">
                   Assign crew members under each selected ambulance. The crew
                   list comes from the Assigned Team selected above.
                 </p>
               </div>
 
               {selectedUsers.length === 0 ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-[#9a6700] font-semibold">
                   Select team members first, then choose who belongs to each
                   ambulance.
                 </div>
@@ -1005,19 +1005,19 @@ export default function NewProjectPage() {
                     return (
                       <div
                         key={amb.id}
-                        className="rounded-xl border border-slate-700 bg-[#0b1220] p-4"
+                        className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
                       >
                         <div className="mb-3 flex items-start justify-between gap-3">
                           <div>
-                            <h3 className="text-sm font-semibold text-white">
+                            <h3 className="text-sm font-black text-[#123746]">
                               {getAmbulanceLabel(amb)}
                             </h3>
-                            <p className="mt-1 text-xs text-slate-400">
+                            <p className="mt-1 text-xs font-semibold text-[#607482]">
                               {amb.location || "No location"}
                             </p>
                           </div>
 
-                          <div className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300">
+                          <div className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
                             {getCrewUserIdsForAmbulance(amb.id).length} crew
                           </div>
                         </div>
@@ -1058,7 +1058,7 @@ export default function NewProjectPage() {
                                 onClick={() =>
                                   removeCrewMemberRow(amb.id, index)
                                 }
-                                className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-medium text-red-300 hover:bg-red-500/10"
+                                className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-3 py-2 text-xs font-black text-[#b42318] hover:bg-[#ffe3e3]"
                               >
                                 Remove
                               </button>
@@ -1069,7 +1069,7 @@ export default function NewProjectPage() {
                         <button
                           type="button"
                           onClick={() => addCrewMemberRow(amb.id)}
-                          className="mt-3 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                          className="mt-3 rounded-xl border border-[#c8dce2] bg-white px-3 py-2 text-xs font-black text-[#274C5A] hover:border-[#74cdda] hover:bg-[#f7fbfc]"
                         >
                           + Add Crew Member
                         </button>
@@ -1087,23 +1087,23 @@ export default function NewProjectPage() {
             <div className={cardClass}>
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className="text-sm font-black text-[#123746]">
                     Project Hospitals
                   </h2>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs font-semibold text-[#607482]">
                     These hospitals will appear when the case status changes to
                     Transporting.
                   </p>
                 </div>
 
-                <div className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300">
+                <div className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
                   {selectedHospitalIds.length} selected
                 </div>
               </div>
 
               {selectedHospitals.length > 0 && (
-                <div className="mb-3 rounded-xl border border-slate-700 bg-[#0b1220] p-3">
-                  <p className="mb-2 text-xs text-slate-400">
+                <div className="mb-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+                  <p className="mb-2 text-xs font-semibold text-[#607482]">
                     Selected Hospitals
                   </p>
 
@@ -1113,7 +1113,7 @@ export default function NewProjectPage() {
                         key={hospital.id}
                         type="button"
                         onClick={() => removeSelectedHospital(hospital.id)}
-                        className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-200 transition hover:bg-red-500/20 hover:text-red-200"
+                        className="rounded-full border border-[#b9ecf2] bg-white px-3 py-1 text-xs font-black text-[#166575] transition hover:border-[#ffc9c9] hover:bg-[#fff1f1] hover:text-[#b42318]"
                       >
                         {hospital.name || hospital.id} ×
                       </button>
@@ -1134,25 +1134,25 @@ export default function NewProjectPage() {
                       : "Select hospitals"}
                   </span>
 
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs font-semibold text-[#607482]">
                     {hospitalDropdownOpen ? "▲" : "▼"}
                   </span>
                 </button>
 
                 {hospitalDropdownOpen && (
                   <div className={dropdownPanelClass}>
-                    <div className="border-b border-slate-700 p-3">
+                    <div className="border-b border-[#d8e6ea] p-3">
                       <input
                         value={hospitalSearch}
                         onChange={(e) => setHospitalSearch(e.target.value)}
                         placeholder="Search hospital by name or address..."
-                        className="w-full rounded-lg border border-slate-700 bg-[#111827] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-500"
+                        className="w-full rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746] outline-none placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white"
                       />
                     </div>
 
                     <div className="max-h-[320px] overflow-y-auto">
                       {filteredHospitals.length === 0 ? (
-                        <div className="p-4 text-sm text-slate-400">
+                        <div className="p-4 text-sm font-semibold text-[#607482]">
                           No hospitals found.
                         </div>
                       ) : (
@@ -1166,10 +1166,10 @@ export default function NewProjectPage() {
                               key={hospital.id}
                               type="button"
                               onClick={() => toggleHospital(hospital.id)}
-                              className={`flex w-full items-start gap-3 border-b border-slate-800 p-3 text-left transition last:border-b-0 ${
+                              className={`flex w-full items-start gap-3 border-b border-[#e1ebef] p-3 text-left transition last:border-b-0 ${
                                 selected
-                                  ? "bg-blue-500/10"
-                                  : "hover:bg-slate-800/70"
+                                  ? "bg-[#effbfc]"
+                                  : "hover:bg-[#f7fbfc]"
                               }`}
                             >
                               <input
@@ -1180,11 +1180,11 @@ export default function NewProjectPage() {
                               />
 
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-white">
+                                <p className="truncate text-sm font-black text-[#123746]">
                                   {hospital.name || hospital.id}
                                 </p>
 
-                                <p className="mt-1 truncate text-xs text-slate-400">
+                                <p className="mt-1 truncate text-xs font-semibold text-[#607482]">
                                   {hospital.address || "No address"}
                                 </p>
                               </div>
@@ -1194,11 +1194,11 @@ export default function NewProjectPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-700 p-3">
+                    <div className="flex items-center justify-between border-t border-[#d8e6ea] p-3">
                       <button
                         type="button"
                         onClick={() => setSelectedHospitalIds([])}
-                        className="text-xs font-medium text-red-300 hover:text-red-200"
+                        className="text-xs font-black text-[#b42318] hover:text-[#912018]"
                       >
                         Clear
                       </button>
@@ -1206,7 +1206,7 @@ export default function NewProjectPage() {
                       <button
                         type="button"
                         onClick={() => setHospitalDropdownOpen(false)}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        className="rounded-xl bg-[#274C5A] px-3 py-1.5 text-xs font-black text-white hover:bg-[#1d3b47]"
                       >
                         Done
                       </button>
@@ -1218,7 +1218,7 @@ export default function NewProjectPage() {
 
             {/* MEDICAL / ORGANIZER INFO */}
             <div className={cardClass}>
-              <h2 className="mb-4 text-sm font-semibold text-white">
+              <h2 className="mb-4 text-sm font-black text-[#123746]">
                 Medical / Organizer Information
               </h2>
 
@@ -1290,7 +1290,7 @@ export default function NewProjectPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={createProject}
-                className="rounded-lg bg-[#2f3d59] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b4c6d]"
+                className="rounded-xl bg-[#274C5A] px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
               >
                 Save Project
               </button>
@@ -1298,7 +1298,7 @@ export default function NewProjectPage() {
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/5"
+                className="rounded-xl border border-[#c8dce2] bg-white px-4 py-2.5 text-sm font-bold text-[#274C5A] transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
               >
                 Cancel
               </button>
@@ -1309,3 +1309,4 @@ export default function NewProjectPage() {
     </PermissionGuard>
   );
 }
+

@@ -28,10 +28,11 @@ const TRIAGE_LEVELS = [
 ];
 
 const FieldLabel = ({ text }: { text: string }) => (
-  <label className="text-sm text-gray-300 font-medium mb-1 block">{text}</label>
+  <label className="mb-1 block text-sm font-black text-[#274C5A]">{text}</label>
 );
 
-const inputClass = "w-full h-11 px-3 rounded bg-[#0f1625] text-white border border-gray-700 focus:outline-none focus:border-blue-500";
+const inputClass =
+  "w-full h-11 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 text-sm font-semibold text-[#123746] outline-none transition placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:bg-white focus:ring-4 focus:ring-[#74cdda]/20 disabled:bg-[#edf3f5] disabled:text-[#607482]";
 
 function extractLatLngFromGoogleMaps(url: string) {
   const patterns = [/q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/, /@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/];
@@ -281,20 +282,20 @@ if (unitType === "ambulance") {
 
           <div><FieldLabel text="Patient Name" /><input className={inputClass} value={patientName} onChange={(e) => setPatientName(e.target.value)} /></div>
 
-          <div className="border border-gray-700 rounded-lg p-4 space-y-3">
-            <h3 className="text-white text-sm font-semibold">Location</h3>
+          <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+            <h3 className="text-sm font-black text-[#123746]">Location</h3>
             <div><FieldLabel text="Location Description *" /><input className={inputClass} value={locationText} onChange={(e) => setLocationText(e.target.value)} /></div>
             <div><FieldLabel text="Google Maps Link (Auto-Pin)" /><input className={inputClass} value={mapLink} onChange={(e) => { const value = e.target.value; setMapLink(value); const coords = extractLatLngFromGoogleMaps(value); if (coords) { setLat(coords.lat); setLng(coords.lng); setIsFromMapLink(true); } }} /></div>
             <div className="grid grid-cols-2 gap-3">
               <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Latitude" disabled={isFromMapLink} value={lat ?? ""} onChange={(e) => setLat(e.target.value ? Number(e.target.value) : null)} />
               <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Longitude" disabled={isFromMapLink} value={lng ?? ""} onChange={(e) => setLng(e.target.value ? Number(e.target.value) : null)} />
             </div>
-            {googleMapLink && <a href={googleMapLink} target="_blank" className="text-sm text-blue-400 underline">Open in Google Maps</a>}
+            {googleMapLink && <a href={googleMapLink} target="_blank" className="text-sm font-black text-[#166575] underline">Open in Google Maps</a>}
           </div>
 
-          <div className="border border-gray-700 rounded-lg p-4 space-y-3">
-            <h3 className="text-white text-sm font-semibold">Assign Unit</h3>
-            <div className="flex gap-6 text-white text-sm">
+          <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+            <h3 className="text-sm font-black text-[#123746]">Assign Unit</h3>
+            <div className="flex gap-6 text-sm font-semibold text-[#274C5A]">
               {["ambulance", "clinic", "roaming"].map((t) => <label key={t} className="flex items-center gap-2"><input type="radio" checked={unitType === t} onChange={() => { setUnitType(t as any); setSelectedUnitId(""); }} />{t}</label>)}
             </div>
 
@@ -304,10 +305,10 @@ if (unitType === "ambulance") {
                   const busy = isAmbulanceBusy(u);
                   const selected = selectedUnitId === u.id;
                   return (
-                    <button key={u.id} type="button" onClick={() => setSelectedUnitId(u.id)} className={`rounded-lg border p-3 text-left transition ${selected && busy ? "border-red-500 bg-red-950/40" : selected ? "border-blue-500 bg-blue-500/15" : busy ? "border-red-700 bg-red-950/20 hover:border-red-500" : "border-gray-700 bg-[#0f1625] hover:border-blue-500"}`}>
-                      <div className="flex justify-between gap-2"><span className="font-semibold text-white">{u.code || u.id}</span><span className={`text-[10px] rounded-full px-2 py-0.5 ${busy ? "bg-red-500/15 text-red-300" : "bg-green-500/15 text-green-300"}`}>{busy ? "Busy" : "Available"}</span></div>
-                      <div className="mt-1 text-xs text-gray-400">{u.location || "No location"}</div>
-                      {selected && busy && <div className="mt-2 text-xs font-semibold text-red-300">Warning: this ambulance is currently busy, but you can still assign it.</div>}
+                    <button key={u.id} type="button" onClick={() => setSelectedUnitId(u.id)} className={`rounded-2xl border p-3 text-left transition ${selected && busy ? "border-[#b42318] bg-[#fff1f1]" : selected ? "border-[#74cdda] bg-[#effbfc]" : busy ? "border-[#ffc9c9] bg-[#fff8f8] hover:border-[#b42318]" : "border-[#d8e6ea] bg-white hover:border-[#74cdda]"}`}>
+                      <div className="flex justify-between gap-2"><span className="font-black text-[#123746]">{u.code || u.id}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${busy ? "bg-[#ffe3e3] text-[#b42318]" : "bg-[#dff8ed] text-[#137a4a]"}`}>{busy ? "Busy" : "Available"}</span></div>
+                      <div className="mt-1 text-xs font-semibold text-[#607482]">{u.location || "No location"}</div>
+                      {selected && busy && <div className="mt-2 text-xs font-black text-[#b42318]">Warning: this ambulance is currently busy, but you can still assign it.</div>}
                     </button>
                   );
                 })}
@@ -321,13 +322,13 @@ if (unitType === "ambulance") {
               </select>
             )}
 
-            {unitType && units.length === 0 && <p className="text-sm text-gray-400">No units found for this project/type.</p>}
+            {unitType && units.length === 0 && <p className="text-sm font-semibold text-[#607482]">No units found for this project/type.</p>}
           </div>
 
-          <button onClick={createCase} className={`w-full h-11 rounded text-white font-semibold ${selectedAmbulanceBusy ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}>Create Case</button>
+          <button onClick={createCase} className={`h-11 w-full rounded-xl text-sm font-black text-white shadow-lg transition ${selectedAmbulanceBusy ? "bg-[#b42318] shadow-[#b42318]/15 hover:bg-[#912018]" : "bg-[#274C5A] shadow-[#274C5A]/15 hover:bg-[#1d3b47]"}`}>Create Case</button>
         </div>
 
-        <div className="h-[520px] border border-gray-700 rounded-lg overflow-hidden">
+        <div className="h-[520px] overflow-hidden rounded-2xl border border-[#d8e6ea] bg-white shadow-sm">
           <Map
             caseLat={lat ?? undefined}
             caseLng={lng ?? undefined}

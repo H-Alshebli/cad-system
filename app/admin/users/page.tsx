@@ -102,27 +102,42 @@ export default function UsersPage() {
   };
 
   if (loading) {
-    return <div className="p-6 text-gray-400">Loading users...</div>;
+    return (
+      <div className="p-6">
+        <div className="rounded-2xl border border-[#d8e6ea] bg-white p-6 text-sm font-semibold text-[#274C5A] shadow-sm">
+          Loading users...
+        </div>
+      </div>
+    );
   }
 
 return (
   <PermissionGuard module="users" action="view" showMessage={true}>
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-semibold text-white">
-        Users Management
-      </h1>
-      <div className="flex justify-end">
-  <button
-    onClick={exportToExcel}
-    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-sm font-semibold"
-  >
-    Export to Excel
-  </button>
-</div>
+    <div className="space-y-6 p-6">
+      <div className="flex flex-col gap-4 rounded-3xl border border-[#d8e6ea] bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+            Administration
+          </p>
+          <h1 className="mt-1 text-2xl font-black text-[#123746]">
+            Users Management
+          </h1>
+          <p className="mt-1 text-sm font-semibold text-[#607482]">
+            Review users, assign roles, and control active access.
+          </p>
+        </div>
 
-      <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+        <button
+          onClick={exportToExcel}
+          className="inline-flex items-center justify-center rounded-2xl bg-[#274C5A] px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
+        >
+          Export to Excel
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-[#d8e6ea] bg-white shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 text-gray-300">
+          <thead className="border-b border-[#d8e6ea] bg-[#f7fbfc] text-xs uppercase tracking-wide text-[#607482]">
             <tr>
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Email</th>
@@ -135,13 +150,13 @@ return (
             {users.map((u) => (
               <tr
                 key={u.id}
-                className="border-t border-slate-700 hover:bg-slate-800/50"
+                className="border-t border-[#e1ebef] transition hover:bg-[#f7fbfc]"
               >
                 {/* NAME */}
-                <td className="p-3 text-white">{u.name}</td>
+                <td className="p-3 font-black text-[#123746]">{u.name}</td>
 
                 {/* EMAIL */}
-                <td className="p-3 text-gray-300">{u.email}</td>
+                <td className="p-3 font-semibold text-[#274C5A]">{u.email}</td>
 
                 {/* ROLE */}
                 <td className="p-3">
@@ -150,7 +165,7 @@ return (
                     onChange={(e) =>
                       updateRole(u.id, e.target.value)
                     }
-                    className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white"
+                    className="rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white"
                   >
                     {roles.map((r) => (
                       <option key={r} value={r}>
@@ -164,11 +179,11 @@ return (
                 <td className="p-3 text-center">
                   <button
                     onClick={() => toggleActive(u)}
-                    className={`px-3 py-1 rounded text-xs font-semibold
+                    className={`rounded-full border px-3 py-1 text-xs font-black
                       ${
                         u.active
-                          ? "bg-green-600 text-white"
-                          : "bg-gray-600 text-gray-200"
+                          ? "border-[#137a4a]/20 bg-[#dff8ed] text-[#137a4a]"
+                          : "border-[#c8dce2] bg-[#edf3f5] text-[#607482]"
                       }`}
                   >
                     {u.active ? "Active" : "Disabled"}
