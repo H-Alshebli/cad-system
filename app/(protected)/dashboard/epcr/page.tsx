@@ -348,7 +348,7 @@ export default function EpcrDashboardPage() {
     </div>
   </DarkCard>
 
-  <DarkCard title="Executive Insights">
+  {/* <DarkCard title="Executive Insights">
     <div className="space-y-3 text-sm text-[#7F7F7F]">
       <p>
         This dashboard gives management a clearer analytical view of ePCR trends
@@ -363,7 +363,7 @@ export default function EpcrDashboardPage() {
         location heatmaps, and patient outcome metrics.
       </p>
     </div>
-  </DarkCard>
+  </DarkCard> */}
 
   <DarkCard title="Recommended Next Metrics">
     <ul className="space-y-2 text-sm text-[#7F7F7F]">
