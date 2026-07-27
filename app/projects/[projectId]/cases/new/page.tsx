@@ -185,6 +185,21 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
     const projectRef = doc(db, "projects", params.projectId);
     const projectSnap = await getDoc(projectRef);
     const project = projectSnap.exists() ? projectSnap.data() : projectData;
+    const assignedUserIds =
+      unitType === "ambulance" && Array.isArray(selectedUnit?.assignedUserIds)
+        ? Array.from(
+            new Set(
+              selectedUnit.assignedUserIds
+                .map((userId: unknown) => String(userId || "").trim())
+                .filter(Boolean)
+            )
+          )
+        : [];
+
+    if (unitType === "ambulance" && assignedUserIds.length === 0) {
+      alert("The selected ambulance has no assigned team. Assign the team to the ambulance first.");
+      return;
+    }
 
     const caseRef = await addDoc(collection(db, "cases"), {
       sourceType: "PROJECT",
@@ -202,7 +217,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       locationText,
       paymentStatus: "NotRequired",
       dispatchStatus: "Assigned",
-      assignedUserIds: [],
+      assignedUserIds,
       acknowledged: false,
       acknowledgedBy: null,
       acknowledgedAt: null,
