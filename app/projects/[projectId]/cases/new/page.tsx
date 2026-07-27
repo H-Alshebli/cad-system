@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { addDoc, collection, serverTimestamp, Timestamp, onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -239,6 +240,14 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       },
       createdAt: serverTimestamp(),
     });
+    try {
+      await httpsCallable(functions, "notifyCaseAssignment")({
+        caseId: caseRef.id,
+      });
+    } catch (error) {
+      console.error("Mobile assignment notification failed", error);
+      alert("The case was created, but the mobile notification could not be sent.");
+    }
 if (unitType === "ambulance") {
   const projectName =
     project?.projectName ??
