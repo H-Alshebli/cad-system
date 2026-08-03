@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { addDoc, collection, serverTimestamp, Timestamp, onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -185,6 +186,21 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
     const projectRef = doc(db, "projects", params.projectId);
     const projectSnap = await getDoc(projectRef);
     const project = projectSnap.exists() ? projectSnap.data() : projectData;
+    const assignedUserIds =
+      unitType === "ambulance" && Array.isArray(selectedUnit?.assignedUserIds)
+        ? Array.from(
+            new Set(
+              selectedUnit.assignedUserIds
+                .map((userId: unknown) => String(userId || "").trim())
+                .filter(Boolean)
+            )
+          )
+        : [];
+
+    if (unitType === "ambulance" && assignedUserIds.length === 0) {
+      alert("The selected ambulance has no assigned team. Assign the team to the ambulance first.");
+      return;
+    }
 
     const caseRef = await addDoc(collection(db, "cases"), {
       sourceType: "PROJECT",
@@ -202,7 +218,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       locationText,
       paymentStatus: "NotRequired",
       dispatchStatus: "Assigned",
-      assignedUserIds: [],
+      assignedUserIds,
       acknowledged: false,
       acknowledgedBy: null,
       acknowledgedAt: null,
@@ -224,6 +240,14 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       },
       createdAt: serverTimestamp(),
     });
+    try {
+      await httpsCallable(functions, "notifyCaseAssignment")({
+        caseId: caseRef.id,
+      });
+    } catch (error) {
+      console.error("Mobile assignment notification failed", error);
+      alert("The case was created, but the mobile notification could not be sent.");
+    }
 if (unitType === "ambulance") {
   const projectName =
     project?.projectName ??
