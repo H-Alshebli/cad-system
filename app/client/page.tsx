@@ -7,11 +7,11 @@ import {
   onSnapshot,
   query,
   where,
-  documentId,
 } from "firebase/firestore";
+
+import PermissionGuard from "@/app/components/PermissionGuard";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import PermissionGuard from "@/app/components/PermissionGuard";
 
 type Project = {
   id: string;
@@ -33,10 +33,10 @@ function formatDate(value: any) {
     value?.toDate?.() instanceof Date
       ? value.toDate()
       : value
-      ? new Date(value)
-      : null;
+        ? new Date(value)
+        : null;
 
-  if (!date || isNaN(date.getTime())) return "—";
+  if (!date || Number.isNaN(date.getTime())) return "-";
 
   return date.toLocaleString("en-GB", {
     year: "numeric",
@@ -58,7 +58,7 @@ function clientStatus(status?: string) {
     Closed: "Completed",
   };
 
-  return map[status || ""] || status || "—";
+  return map[status || ""] || status || "-";
 }
 
 export default function ClientHomePage() {
@@ -144,17 +144,32 @@ export default function ClientHomePage() {
   const recentCases = cases.slice(0, 5);
 
   if (userLoading || loading) {
-    return <div className="p-6 text-slate-400">Loading client portal...</div>;
+    return (
+      <div className="p-6">
+        <div className="card-modern text-sm font-semibold text-[#274C5A]">
+          Loading client portal...
+        </div>
+      </div>
+    );
   }
 
   return (
     <PermissionGuard module="client_portal" action="view" showMessage={true}>
-      <div className="min-h-screen bg-[#030712] p-6 text-white">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Client Portal</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Create and track your medical service requests.
-          </p>
+      <div className="page-shell p-6">
+        <div className="page-header">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+              Client Portal
+            </p>
+            <h1 className="page-title">Client Portal</h1>
+            <p className="page-subtitle mt-1">
+              Create and track your medical service requests.
+            </p>
+          </div>
+
+          <Link href="/client/cases/new" className="btn-primary">
+            Create New Case
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -164,46 +179,44 @@ export default function ClientHomePage() {
           <Card title="Completed" value={closedCases} />
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-slate-800 bg-[#111827] p-5 xl:col-span-1">
-            <h2 className="mb-3 text-lg font-semibold">Quick Actions</h2>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="card-modern xl:col-span-1">
+            <h2 className="mb-3 text-lg font-black text-[#123746]">
+              Quick Actions
+            </h2>
 
             <div className="space-y-2">
-              <Link
-                href="/client/cases/new"
-                className="block rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold hover:bg-blue-700"
-              >
+              <Link href="/client/cases/new" className="btn-primary w-full">
                 Create New Case
               </Link>
 
-              <Link
-                href="/client/cases"
-                className="block rounded-lg border border-slate-700 px-4 py-3 text-center text-sm font-semibold text-slate-200 hover:bg-white/5"
-              >
+              <Link href="/client/cases" className="btn-secondary w-full">
                 View My Cases
               </Link>
 
               <Link
                 href="/client/dashboard/timeline"
-                className="block rounded-lg border border-slate-700 px-4 py-3 text-center text-sm font-semibold text-slate-200 hover:bg-white/5"
+                className="btn-secondary w-full"
               >
                 Timeline Dashboard
               </Link>
 
               <Link
                 href="/client/dashboard/epcr"
-                className="block rounded-lg border border-slate-700 px-4 py-3 text-center text-sm font-semibold text-slate-200 hover:bg-white/5"
+                className="btn-secondary w-full"
               >
                 ePCR Dashboard
               </Link>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-[#111827] p-5 xl:col-span-2">
-            <h2 className="mb-3 text-lg font-semibold">Recent Cases</h2>
+          <div className="card-modern xl:col-span-2">
+            <h2 className="mb-3 text-lg font-black text-[#123746]">
+              Recent Cases
+            </h2>
 
             {recentCases.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+              <div className="rounded-2xl border border-dashed border-[#c8dce2] bg-[#f7fbfc] p-6 text-center text-sm font-semibold text-[#607482]">
                 No cases submitted yet.
               </div>
             ) : (
@@ -211,19 +224,19 @@ export default function ClientHomePage() {
                 {recentCases.map((c) => (
                   <div
                     key={c.id}
-                    className="rounded-xl border border-slate-800 bg-[#0b1220] p-4"
+                    className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold">
+                        <div className="font-black text-[#123746]">
                           {c.projectName || "Project"}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs font-semibold text-[#607482]">
                           {formatDate(c.createdAt)}
                         </div>
                       </div>
 
-                      <span className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-300">
+                      <span className="rounded-full border border-[#274C5A]/20 bg-[#274C5A]/10 px-3 py-1 text-xs font-black text-[#274C5A]">
                         {clientStatus(c.status)}
                       </span>
                     </div>
@@ -240,9 +253,9 @@ export default function ClientHomePage() {
 
 function Card({ title, value }: { title: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-[#111827] p-5">
-      <div className="text-sm text-slate-400">{title}</div>
-      <div className="mt-2 text-3xl font-bold text-white">{value}</div>
+    <div className="card-modern">
+      <div className="text-sm font-semibold text-[#607482]">{title}</div>
+      <div className="mt-2 text-3xl font-black text-[#123746]">{value}</div>
     </div>
   );
 }

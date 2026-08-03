@@ -70,41 +70,41 @@ type ChartRow = {
 };
 
 const HEALTH_COLORS: Record<string, string> = {
-  Occupational: "bg-blue-500/15 text-blue-400",
-  "Non-Occupational": "bg-purple-500/15 text-purple-400",
-  "General Health Illnesses": "bg-green-500/15 text-green-400",
-  "Unspecified Medical Conditions": "bg-gray-500/15 text-gray-300",
-  Unspecified: "bg-gray-500/15 text-gray-300",
+  Occupational: "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
+  "Non-Occupational": "border-[#86A7B2]/30 bg-[#86A7B2]/12 text-[#274C5A]",
+  "General Health Illnesses": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+  "Unspecified Medical Conditions": "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
+  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
 };
 
 const TRIAGE_COLORS: Record<string, string> = {
-  "Level 1 (Resuscitation)": "bg-red-600/20 text-red-400",
-  "Level 2 (Emergent)": "bg-orange-500/20 text-orange-400",
-  "Level 3 (Urgent)": "bg-yellow-500/20 text-yellow-300",
-  "Level 4 (Less Urgent)": "bg-green-500/20 text-green-400",
-  "Level 5 (Non-Urgent)": "bg-blue-500/20 text-blue-400",
-  "Level 5 (non-urgent)": "bg-blue-500/20 text-blue-400",
-  Death: "bg-black/40 text-red-500",
-  death: "bg-black/40 text-red-500",
-  Unspecified: "bg-gray-500/15 text-gray-300",
+  "Level 1 (Resuscitation)": "border-red-500/25 bg-red-500/10 text-red-800",
+  "Level 2 (Emergent)": "border-orange-500/25 bg-orange-500/10 text-orange-800",
+  "Level 3 (Urgent)": "border-yellow-500/25 bg-yellow-500/10 text-yellow-800",
+  "Level 4 (Less Urgent)": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+  "Level 5 (Non-Urgent)": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
+  "Level 5 (non-urgent)": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
+  Death: "border-red-700/25 bg-red-700/10 text-red-900",
+  death: "border-red-700/25 bg-red-700/10 text-red-900",
+  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
 };
 
 const COMPLAINT_COLORS: Record<string, string> = {
-  "Cardiac complaints": "bg-red-500/15 text-red-400",
-  "Musculoskeletal complaints": "bg-blue-500/15 text-blue-400",
-  "Respiratory complaints": "bg-cyan-500/15 text-cyan-400",
-  "Digestive complaints": "bg-green-500/15 text-green-400",
-  "General medical complaints": "bg-gray-500/15 text-gray-300",
-  Unspecified: "bg-gray-500/15 text-gray-300",
+  "Cardiac complaints": "border-red-500/25 bg-red-500/10 text-red-800",
+  "Musculoskeletal complaints": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
+  "Respiratory complaints": "border-cyan-500/25 bg-cyan-500/10 text-cyan-800",
+  "Digestive complaints": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+  "General medical complaints": "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
+  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
 };
 
 const CHART_COLORS = [
-  "#3b82f6",
-  "#22c55e",
+  "#274C5A",
+  "#86A7B2",
   "#f59e0b",
   "#ef4444",
-  "#a855f7",
   "#06b6d4",
+  "#22c55e",
   "#84cc16",
   "#f97316",
 ];
@@ -124,10 +124,10 @@ const HEALTH_CHART_COLORS: Record<string, string> = {
 };
 
 const tooltipStyle = {
-  backgroundColor: "#0f172a",
-  border: "1px solid rgba(255,255,255,0.1)",
+  backgroundColor: "#ffffff",
+  border: "1px solid #d8e6ea",
   borderRadius: "12px",
-  color: "#fff",
+  color: "#123746",
 };
 
 function getProjectId(e: EpcrItem) {
@@ -340,36 +340,44 @@ export default function ClientEpcrDashboardPage() {
   }, [triageChartData]);
 
   if (userLoading || loading) {
-    return <div className="p-6 text-slate-400">Loading ePCR dashboard...</div>;
+    return (
+      <div className="p-6">
+        <div className="card-modern text-sm font-semibold text-[#274C5A]">
+          Loading ePCR dashboard...
+        </div>
+      </div>
+    );
   }
 
   return (
     <PermissionGuard module="client_dashboards" action="epcr" showMessage={true}>
-      <div className="min-h-screen bg-[#020817] p-6 text-white">
+      <div className="page-shell p-6">
         <div className="w-full space-y-6">
-          {/* HEADER */}
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 p-6 shadow-2xl">
-            <h1 className="text-3xl font-bold tracking-tight">
-              ePCR Analytics Dashboard
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/70">
-              Client-safe analytical view of ePCR activity, project distribution,
-              triage trends, health classifications, complaints, and operational indicators.
-            </p>
-            <p className="mt-2 text-xs text-blue-200/80">
-              Sensitive patient details are hidden from this dashboard.
-            </p>
+          <div className="page-header">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+                Client Analytics
+              </p>
+              <h1 className="page-title">ePCR Analytics Dashboard</h1>
+              <p className="page-subtitle mt-2">
+                Client-safe analytical view of ePCR activity, project distribution,
+                triage trends, health classifications, complaints, and operational indicators.
+              </p>
+              <p className="mt-2 text-xs font-black uppercase tracking-wide text-[#274C5A]/70">
+                Sensitive patient details are hidden from this dashboard.
+              </p>
+            </div>
           </div>
 
           {/* PROJECT FILTER */}
           {projects.length > 0 && (
-            <div className="flex flex-wrap gap-3">
+            <div className="card-modern flex flex-wrap gap-3">
               <button
                 onClick={() => setSelectedProjectId("")}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                className={`rounded-full border px-3 py-1.5 text-sm font-black transition ${
                   !selectedProjectId
-                    ? "border-blue-500 bg-blue-600 text-white"
-                    : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                    ? "border-[#274C5A] bg-[#274C5A] text-white"
+                    : "border-[#c8dce2] bg-white text-[#274C5A] hover:bg-[#f7fbfc]"
                 }`}
               >
                 All Projects
@@ -384,10 +392,10 @@ export default function ClientEpcrDashboardPage() {
                   <button
                     key={project.id}
                     onClick={() => setSelectedProjectId(project.id)}
-                    className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                    className={`rounded-full border px-3 py-1.5 text-sm font-black transition ${
                       selectedProjectId === project.id
-                        ? "border-blue-500 bg-blue-600 text-white"
-                        : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                        ? "border-[#274C5A] bg-[#274C5A] text-white"
+                        : "border-[#c8dce2] bg-white text-[#274C5A] hover:bg-[#f7fbfc]"
                     }`}
                   >
                     {project.projectName || project.client || project.id} ({count})
@@ -484,16 +492,16 @@ export default function ClientEpcrDashboardPage() {
                   <BarChart data={projectChartData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.08)"
+                      stroke="#d8e6ea"
                     />
                     <XAxis
                       dataKey="name"
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                       tickFormatter={(value) => truncateLabel(value, 12)}
                     />
                     <YAxis
                       allowDecimals={false}
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                     />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="value" radius={[8, 8, 0, 0]}>
@@ -515,16 +523,16 @@ export default function ClientEpcrDashboardPage() {
                   <BarChart data={triageChartData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.08)"
+                      stroke="#d8e6ea"
                     />
                     <XAxis
                       dataKey="name"
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                       tickFormatter={(value) => truncateLabel(value, 14)}
                     />
                     <YAxis
                       allowDecimals={false}
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                     />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="value" radius={[8, 8, 0, 0]}>
@@ -578,18 +586,18 @@ export default function ClientEpcrDashboardPage() {
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.08)"
+                      stroke="#d8e6ea"
                     />
                     <XAxis
                       type="number"
                       allowDecimals={false}
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                     />
                     <YAxis
                       type="category"
                       dataKey="name"
                       width={180}
-                      stroke="rgba(255,255,255,0.65)"
+                      stroke="#607482"
                       tickFormatter={(value) => truncateLabel(value, 24)}
                     />
                     <Tooltip contentStyle={tooltipStyle} />
@@ -607,7 +615,7 @@ export default function ClientEpcrDashboardPage() {
             </DarkCard>
 
             <DarkCard title="Client Insights">
-              <div className="space-y-3 text-sm text-white/75">
+              <div className="space-y-3 text-sm font-semibold text-[#607482]">
                 <p>
                   This dashboard provides a client-safe view of ePCR activity
                   across the projects assigned to your account.
@@ -624,13 +632,13 @@ export default function ClientEpcrDashboardPage() {
             </DarkCard>
 
             <DarkCard title="Recommended Next Metrics">
-              <ul className="space-y-2 text-sm text-white/75">
-                <li>• Daily / weekly case trend</li>
-                <li>• Cases by location</li>
-                <li>• Cases by shift</li>
-                <li>• Response time per project</li>
-                <li>• Referral / transport outcomes</li>
-                <li>• Project activity comparison</li>
+              <ul className="space-y-2 text-sm font-semibold text-[#607482]">
+                <li>Daily / weekly case trend</li>
+                <li>Cases by location</li>
+                <li>Cases by shift</li>
+                <li>Response time per project</li>
+                <li>Referral / transport outcomes</li>
+                <li>Project activity comparison</li>
               </ul>
             </DarkCard>
           </div>
@@ -659,11 +667,11 @@ export default function ClientEpcrDashboardPage() {
           {/* PROJECTS TABLE */}
           <DarkCard title="Projects Summary">
             {Object.keys(projectsMap).length === 0 ? (
-              <div className="text-sm text-white/50">No projects linked yet.</div>
+              <div className="text-sm font-semibold text-[#607482]">No projects linked yet.</div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-white/10">
+              <div className="overflow-hidden rounded-2xl border border-[#d8e6ea]">
                 <table className="w-full text-sm">
-                  <thead className="bg-white/5 text-white/60">
+                  <thead className="bg-[#f7fbfc] text-[#607482]">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium">
                         Project Name
@@ -680,10 +688,10 @@ export default function ClientEpcrDashboardPage() {
                       .map(([project, count]) => (
                         <tr
                           key={project}
-                          className="border-t border-white/10 hover:bg-white/5"
+                          className="border-t border-[#e1ebef] hover:bg-[#f7fbfc]"
                         >
                           <td className="px-4 py-3">{project}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-white">
+                          <td className="px-4 py-3 text-right font-black text-[#123746]">
                             {count}
                           </td>
                         </tr>
@@ -707,8 +715,8 @@ function DarkCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
-      <div className="mb-4 text-lg font-semibold text-white">{title}</div>
+    <div className="rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm">
+      <div className="mb-4 text-lg font-black text-[#123746]">{title}</div>
       {children}
     </div>
   );
@@ -724,12 +732,12 @@ function KpiCard({
   subtitle: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
-      <div className="text-sm font-medium text-white/60">{title}</div>
-      <div className="mt-2 break-words text-2xl font-bold text-white">
+    <div className="rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm">
+      <div className="text-sm font-semibold text-[#607482]">{title}</div>
+      <div className="mt-2 break-words text-2xl font-black text-[#123746]">
         {value}
       </div>
-      <div className="mt-2 text-xs text-white/50">{subtitle}</div>
+      <div className="mt-2 text-xs font-semibold text-[#607482]">{subtitle}</div>
     </div>
   );
 }
@@ -744,27 +752,27 @@ function StatsTableLite({
   colorMap: Record<string, string>;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
-      <h2 className="mb-4 text-lg font-semibold text-white">{title}</h2>
+    <div className="rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-black text-[#123746]">{title}</h2>
 
       {rows.length === 0 ? (
-        <div className="text-sm text-white/50">No data.</div>
+        <div className="text-sm font-semibold text-[#607482]">No data.</div>
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
             <div
               key={row.name}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-black/10 px-3 py-2"
+              className="flex items-center justify-between rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] px-3 py-2"
             >
               <span
-                className={`rounded-full px-2 py-1 text-xs ${
-                  colorMap[row.name] || "bg-gray-500/15 text-gray-300"
+                className={`rounded-full border px-2 py-1 text-xs font-black ${
+                  colorMap[row.name] || "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]"
                 }`}
               >
                 {row.name}
               </span>
 
-              <span className="font-semibold text-white">{row.value}</span>
+              <span className="font-black text-[#123746]">{row.value}</span>
             </div>
           ))}
         </div>
@@ -772,3 +780,5 @@ function StatsTableLite({
     </div>
   );
 }
+
+

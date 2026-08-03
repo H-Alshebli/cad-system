@@ -56,13 +56,13 @@ type ClientProject = {
 };
 
 const FieldLabel = ({ text }: { text: string }) => (
-  <label className="text-sm text-gray-300 font-medium mb-1 block">
+  <label className="field-label">
     {text}
   </label>
 );
 
 const inputClass =
-  "w-full h-11 px-3 rounded bg-[#0f1625] text-white border border-gray-700 focus:outline-none focus:border-blue-500";
+  "input";
 
 function extractLatLngFromGoogleMaps(url: string) {
   const patterns = [
@@ -183,13 +183,13 @@ export default function ClientNewCasePage() {
           ...(d.data() as any),
         }));
 
-setProjects(list);
+        setProjects(list);
 
-if (list.length === 1) {
-  setProjectId(list[0].id);
-}
+        if (list.length === 1) {
+          setProjectId(list[0].id);
+        }
 
-setLoadingProjects(false);
+        setLoadingProjects(false);
       },
       (error) => {
         console.error("Client projects listener error:", error);
@@ -420,18 +420,34 @@ setLoadingProjects(false);
   };
 
   if (userLoading || loadingProjects) {
-    return <div className="p-6 text-slate-400">Loading...</div>;
+    return (
+      <div className="p-6">
+        <div className="card-modern text-sm font-semibold text-[#274C5A]">
+          Loading...
+        </div>
+      </div>
+    );
   }
 
   return (
     <PermissionGuard module="client_cases" action="create" showMessage={true}>
-      <div className="p-6 space-y-4">
-        <h1 className="text-xl font-bold text-white">New Case (Project)</h1>
+      <div className="page-shell p-6">
+        <div className="page-header">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+              Client Case
+            </p>
+            <h1 className="page-title">New Case (Project)</h1>
+            <p className="page-subtitle mt-1">
+              Create a case request linked to one of your assigned projects.
+            </p>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#1c2333] border border-gray-700 rounded-lg p-4 space-y-5">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(520px,0.95fr)_minmax(520px,1.05fr)]">
+          <div className="card-modern space-y-5">
             {projects.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-gray-700 p-6 text-center text-sm text-gray-400">
+              <div className="rounded-2xl border border-dashed border-[#c8dce2] bg-[#f7fbfc] p-6 text-center text-sm font-semibold text-[#607482]">
                 No assigned projects found. Please contact Lazem team.
               </div>
             ) : (
@@ -525,8 +541,8 @@ setLoadingProjects(false);
                   />
                 </div>
 
-                <div className="border border-gray-700 rounded-lg p-4 space-y-3">
-                  <h3 className="text-white text-sm font-semibold">
+                <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+                  <h3 className="text-sm font-black text-[#123746]">
                     Location
                   </h3>
 
@@ -589,21 +605,24 @@ setLoadingProjects(false);
                     <a
                       href={googleMapLink}
                       target="_blank"
-                      className="text-sm text-blue-400 underline"
+                      className="text-sm font-bold text-[#274C5A] underline"
                     >
                       Open in Google Maps
                     </a>
                   )}
                 </div>
 
-                <div className="border border-gray-700 rounded-lg p-4 space-y-3">
-                  <h3 className="text-white text-sm font-semibold">
+                <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+                  <h3 className="text-sm font-black text-[#123746]">
                     Assign Unit
                   </h3>
 
-                  <div className="flex gap-6 text-white text-sm">
+                  <div className="flex flex-wrap gap-3 text-sm font-bold text-[#274C5A]">
                     {["ambulance", "clinic", "roaming"].map((type) => (
-                      <label key={type} className="flex items-center gap-2">
+                      <label
+                        key={type}
+                        className="flex items-center gap-2 rounded-full border border-[#c8dce2] bg-white px-3 py-2"
+                      >
                         <input
                           type="radio"
                           checked={unitType === type}
@@ -628,38 +647,38 @@ setLoadingProjects(false);
                             key={u.id}
                             type="button"
                             onClick={() => setSelectedUnitId(u.id)}
-                            className={`rounded-lg border p-3 text-left transition ${
+                            className={`rounded-2xl border p-3 text-left transition ${
                               selected && busy
-                                ? "border-red-500 bg-red-950/40"
+                                ? "border-red-500 bg-red-500/10"
                                 : selected
-                                ? "border-blue-500 bg-blue-500/15"
+                                ? "border-[#274C5A] bg-[#274C5A]/10"
                                 : busy
-                                ? "border-red-700 bg-red-950/20 hover:border-red-500"
-                                : "border-gray-700 bg-[#0f1625] hover:border-blue-500"
+                                ? "border-red-500/35 bg-red-500/8 hover:border-red-500"
+                                : "border-[#d8e6ea] bg-white hover:border-[#74cdda]"
                             }`}
                           >
                             <div className="flex justify-between gap-2">
-                              <span className="font-semibold text-white">
+                              <span className="font-black text-[#123746]">
                                 {u.code || u.id}
                               </span>
 
                               <span
                                 className={`text-[10px] rounded-full px-2 py-0.5 ${
                                   busy
-                                    ? "bg-red-500/15 text-red-300"
-                                    : "bg-green-500/15 text-green-300"
+                                    ? "border border-red-500/25 bg-red-500/10 text-red-800"
+                                    : "border border-emerald-500/25 bg-emerald-500/10 text-emerald-800"
                                 }`}
                               >
                                 {busy ? "Busy" : "Available"}
                               </span>
                             </div>
 
-                            <div className="mt-1 text-xs text-gray-400">
+                            <div className="mt-1 text-xs font-semibold text-[#607482]">
                               {u.location || "No location"}
                             </div>
 
                             {selected && busy && (
-                              <div className="mt-2 text-xs font-semibold text-red-300">
+                              <div className="mt-2 text-xs font-bold text-red-800">
                                 Warning: this ambulance is currently busy, but
                                 you can still assign it.
                               </div>
@@ -686,7 +705,7 @@ setLoadingProjects(false);
                   )}
 
                   {unitType && units.length === 0 && (
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm font-semibold text-[#607482]">
                       No units found for this project/type.
                     </p>
                   )}
@@ -695,10 +714,10 @@ setLoadingProjects(false);
                 <button
                   onClick={createCase}
                   disabled={saving}
-                  className={`w-full h-11 rounded text-white font-semibold disabled:opacity-50 ${
+                  className={`h-11 w-full rounded-2xl text-sm font-black text-white shadow-lg disabled:opacity-50 ${
                     selectedAmbulanceBusy
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-blue-600 hover:bg-blue-700"
+                      ? "bg-red-700 hover:bg-red-800"
+                      : "bg-[#274C5A] hover:bg-[#1d3b47]"
                   }`}
                 >
                   {saving ? "Creating..." : "Create Case"}
@@ -707,7 +726,7 @@ setLoadingProjects(false);
             )}
           </div>
 
-          <div className="h-[520px] border border-gray-700 rounded-lg overflow-hidden">
+          <div className="h-[620px] overflow-hidden rounded-3xl border border-[#d8e6ea] bg-white shadow-sm">
             <Map
               caseLat={lat ?? undefined}
               caseLng={lng ?? undefined}

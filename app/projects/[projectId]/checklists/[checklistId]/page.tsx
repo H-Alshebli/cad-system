@@ -36,20 +36,20 @@ function formatDateTime(value: any) {
 }
 
 function resultClass(result: string) {
-  if (result === "Ready") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
-  if (result === "Ready with Warnings") return "border-amber-500/30 bg-amber-500/10 text-amber-100";
-  return "border-red-500/30 bg-red-500/10 text-red-100";
+  if (result === "Ready") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-800";
+  if (result === "Ready with Warnings") return "border-amber-500/30 bg-amber-500/10 text-amber-800";
+  return "border-red-500/30 bg-red-500/10 text-red-800";
 }
 
 function vehicleSeverityBadge(item: ReadinessChecklistItem) {
   if (item.vehicleSeverity === "red") {
-    return <span className="badge bg-red-500/10 text-red-200">Red Vehicle</span>;
+    return <span className="badge border-red-500/25 bg-red-500/10 text-red-800">Red Vehicle</span>;
   }
   if (item.vehicleSeverity === "yellow") {
-    return <span className="badge bg-amber-500/10 text-amber-200">Yellow Vehicle</span>;
+    return <span className="badge border-amber-500/25 bg-amber-500/10 text-amber-800">Yellow Vehicle</span>;
   }
   if (item.vehicleSeverity === "green") {
-    return <span className="badge bg-emerald-500/10 text-emerald-200">Green Vehicle</span>;
+    return <span className="badge border-emerald-500/25 bg-emerald-500/10 text-emerald-800">Green Vehicle</span>;
   }
   return null;
 }
@@ -256,8 +256,8 @@ export default function ChecklistDetailsPage({
   if (!canViewChecklist(checklist, permissions, user)) {
     return (
       <div className="card-modern max-w-2xl">
-        <h2 className="text-xl font-bold text-white">Access denied</h2>
-        <p className="mt-2 text-slate-400">
+        <h2 className="text-xl font-black text-[#123746]">Access denied</h2>
+        <p className="mt-2 text-sm font-semibold text-[#607482]">
           You do not have permission to view this readiness checklist.
         </p>
       </div>
@@ -265,14 +265,17 @@ export default function ChecklistDetailsPage({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="page-shell">
+      <div className="page-header">
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+            Readiness Review
+          </p>
+          <h2 className="page-title">
             {(checklist.checklistPhase || "opening") === "closing" ? "Closing" : "Readiness"} Checklist{" "}
             {getChecklistMissionDisplay(checklist)}
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="page-subtitle mt-1">
             {checklist.projectName || "Project"} / {getUnitDisplayName({ unitCode: checklist.unitCode, unitId: checklist.unitId }) || "-"} / {checklist.dateKey} / {checklist.shiftKey}
           </p>
         </div>
@@ -296,7 +299,7 @@ export default function ChecklistDetailsPage({
         </div>
       </div>
 
-      <div className={`rounded-xl border p-5 ${resultClass(readiness.result)}`}>
+      <div className={`rounded-3xl border p-5 shadow-sm ${resultClass(readiness.result)}`}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div>
             <div className="text-sm opacity-80">Result</div>
@@ -316,9 +319,9 @@ export default function ChecklistDetailsPage({
           </div>
         </div>
         {canViewTiming && (
-          <div className="card-modern">
-            <div className="text-sm text-slate-400">Checklist Duration</div>
-            <div className="mt-1 font-bold text-white">
+          <div className="mt-4 rounded-2xl border border-white/35 bg-white/65 p-4">
+            <div className="text-sm font-semibold opacity-75">Checklist Duration</div>
+            <div className="mt-1 font-black">
               {formatDuration(checklist.durationSeconds)}
             </div>
           </div>
@@ -327,20 +330,20 @@ export default function ChecklistDetailsPage({
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="card-modern">
-          <div className="text-sm text-slate-400">Inspector</div>
-          <div className="mt-1 font-bold text-white">
+          <div className="text-sm font-semibold text-[#607482]">Inspector</div>
+          <div className="mt-1 font-black text-[#123746]">
             {checklist.inspectorName || checklist.inspectorUserId}
           </div>
         </div>
         <div className="card-modern">
-          <div className="text-sm text-slate-400">Service / Deployment</div>
-          <div className="mt-1 font-bold text-white">
+          <div className="text-sm font-semibold text-[#607482]">Service / Deployment</div>
+          <div className="mt-1 font-black text-[#123746]">
             {checklist.serviceType || "-"} / {checklist.deploymentType || "-"}
           </div>
         </div>
         <div className="card-modern">
-          <div className="text-sm text-slate-400">Issues</div>
-          <div className="mt-1 font-bold text-white">
+          <div className="text-sm font-semibold text-[#607482]">Issues</div>
+          <div className="mt-1 font-black text-[#123746]">
             {readiness.vehicleRedIssues.length} vehicle red,{" "}
             {readiness.vehicleYellowIssues.length} vehicle yellow,{" "}
             {readiness.shortageIssues.length} shortages,{" "}
@@ -352,8 +355,8 @@ export default function ChecklistDetailsPage({
       <div className="card-modern space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="font-black text-white">Review Summary</h3>
-            <p className="mt-1 text-sm text-slate-400">
+            <h3 className="font-black text-[#123746]">Review Summary</h3>
+            <p className="mt-1 text-sm font-semibold text-[#607482]">
               {reviewIssueItems.length === 0
                 ? "No readiness issues found."
                 : `${reviewIssueItems.length} issue${reviewIssueItems.length === 1 ? "" : "s"} require attention.`}
@@ -371,9 +374,9 @@ export default function ChecklistDetailsPage({
         {reviewIssueItems.length > 0 && (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {reviewIssueItems.slice(0, showDetails ? reviewIssueItems.length : 6).map((item) => (
-              <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="font-semibold text-white">{item.label}</div>
-                <div className="mt-1 text-sm text-slate-400">
+              <div key={item.id} className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+                <div className="font-black text-[#123746]">{item.label}</div>
+                <div className="mt-1 text-sm font-semibold text-[#607482]">
                   {statusLabel(item.status)}
                   {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
                   {item.note ? ` / ${item.note}` : ""}
@@ -384,10 +387,10 @@ export default function ChecklistDetailsPage({
         )}
 
         {canReviewSubmitted && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <h3 className="font-black text-white">Supervisor Review</h3>
+          <div className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+            <h3 className="font-black text-[#123746]">Supervisor Review</h3>
             <textarea
-              className="input mt-3 min-h-[100px]"
+              className="textarea mt-3"
               value={reviewNotes}
               onChange={(e) => setReviewNotes(e.target.value)}
               placeholder="Review notes or correction instructions"
@@ -418,7 +421,7 @@ export default function ChecklistDetailsPage({
 
       {editable && (
         <div className="card-modern flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm font-semibold text-[#607482]">
             Check All Eligible skips manual and V-tagged items so they must be verified directly.
           </p>
           <button
@@ -433,7 +436,7 @@ export default function ChecklistDetailsPage({
 
       {(editable || showDetails) && Object.entries(groupedItems).map(([section, sectionItems]) => (
         <section key={section} className="card-modern space-y-3">
-          <h3 className="font-black text-white">{section}</h3>
+          <h3 className="font-black text-[#123746]">{section}</h3>
           <div className="space-y-3">
             {sectionItems.map((item) => {
               const displayItem = classifyReadinessItem(item);
@@ -441,18 +444,18 @@ export default function ChecklistDetailsPage({
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 xl:grid-cols-[1fr_190px_130px_1fr]"
+                  className="grid grid-cols-1 gap-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3 xl:grid-cols-[minmax(320px,1fr)_190px_130px_minmax(260px,1fr)]"
                 >
                 <div>
-                  <div className="font-semibold text-white">{displayItem.label}</div>
+                  <div className="font-black text-[#123746]">{displayItem.label}</div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs">
                     {vehicleSeverityBadge(displayItem)}
-                    {displayItem.critical && <span className="badge bg-rose-500/10 text-rose-200">V Item</span>}
-                    {displayItem.manualVerify && <span className="badge bg-blue-500/10 text-blue-200">Manual</span>}
+                    {displayItem.critical && <span className="badge border-rose-500/25 bg-rose-500/10 text-rose-800">V Item</span>}
+                    {displayItem.manualVerify && <span className="badge border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]">Manual</span>}
                     {displayItem.group && <span className="badge">{displayItem.group}</span>}
                     {displayItem.minQty && <span className="badge">Min {displayItem.minQty}{displayItem.unit ? ` ${displayItem.unit}` : ""}</span>}
                     {displayItem.serviceLevels?.length ? (
-                      <span className="badge bg-amber-500/10 text-amber-200">
+                      <span className="badge border-amber-500/25 bg-amber-500/10 text-amber-800">
                         {displayItem.serviceLevels.join(", ")}
                       </span>
                     ) : null}
@@ -498,8 +501,8 @@ export default function ChecklistDetailsPage({
                       }
                       placeholder={displayItem.inputType === "psi" ? "PSI" : displayItem.inputType === "fuel" ? "%" : "Qty"}
                     />
-                  ) : (
-                    <div className="text-sm text-slate-300">
+                ) : (
+                  <div className="text-sm font-semibold text-[#607482]">
                       {displayItem.actualQty ?? "-"}{displayItem.unit ? ` ${displayItem.unit}` : ""}
                     </div>
                   )
@@ -515,7 +518,7 @@ export default function ChecklistDetailsPage({
                     placeholder="Item note"
                   />
                 ) : (
-                  <div className="text-sm text-slate-300">{item.note || "-"}</div>
+                  <div className="text-sm font-semibold text-[#607482]">{item.note || "-"}</div>
                 )}
                 </div>
               );
@@ -525,15 +528,15 @@ export default function ChecklistDetailsPage({
       ))}
 
       {(editable || showDetails) && <label className="card-modern block space-y-2">
-        <span className="text-sm font-semibold text-slate-300">Checklist Notes</span>
+        <span className="text-sm font-bold text-[#274C5A]">Checklist Notes</span>
         {editable ? (
           <textarea
-            className="input min-h-[120px]"
+            className="textarea min-h-[120px]"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         ) : (
-          <div className="text-sm text-slate-300">{notes || "-"}</div>
+          <div className="text-sm font-semibold text-[#607482]">{notes || "-"}</div>
         )}
       </label>}
 
@@ -544,7 +547,7 @@ export default function ChecklistDetailsPage({
         readiness.insufficientQuantityItems.length > 0 ||
         readiness.criticalIssues.length > 0) && (
         <div className="card-modern space-y-3">
-          <h3 className="font-black text-white">Readiness Issues</h3>
+          <h3 className="font-black text-[#123746]">Readiness Issues</h3>
           {[
             ...readiness.vehicleRedIssues,
             ...readiness.vehicleYellowIssues,
@@ -555,9 +558,9 @@ export default function ChecklistDetailsPage({
           ]
             .filter((item, index, all) => all.findIndex((x) => x.id === item.id) === index)
             .map((item) => (
-              <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="font-semibold text-white">{item.label}</div>
-                <div className="mt-1 text-sm text-slate-400">
+              <div key={item.id} className="rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3">
+                <div className="font-black text-[#123746]">{item.label}</div>
+                <div className="mt-1 text-sm font-semibold text-[#607482]">
                   {statusLabel(item.status)}
                   {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
                   {item.note ? ` / ${item.note}` : ""}
@@ -582,9 +585,9 @@ export default function ChecklistDetailsPage({
 
       {checklist.reviewNotes && checklist.status !== "submitted" && (
         <div className="card-modern">
-          <h3 className="font-black text-white">Review Notes</h3>
-          <p className="mt-2 text-sm text-slate-300">{checklist.reviewNotes}</p>
-          <p className="mt-2 text-xs text-slate-500">
+          <h3 className="font-black text-[#123746]">Review Notes</h3>
+          <p className="mt-2 text-sm font-semibold text-[#607482]">{checklist.reviewNotes}</p>
+          <p className="mt-2 text-xs font-semibold text-[#8aa0aa]">
             {checklist.reviewedByName || checklist.reviewedBy || "-"} / {formatDateTime(checklist.reviewedAt)}
           </p>
         </div>

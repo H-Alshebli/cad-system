@@ -8,9 +8,10 @@ import {
   where,
 } from "firebase/firestore";
 import Link from "next/link";
+
+import PermissionGuard from "@/app/components/PermissionGuard";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import PermissionGuard from "@/app/components/PermissionGuard";
 
 type Project = {
   id: string;
@@ -36,10 +37,10 @@ function formatDate(value: any) {
     value?.toDate?.() instanceof Date
       ? value.toDate()
       : value
-      ? new Date(value)
-      : null;
+        ? new Date(value)
+        : null;
 
-  if (!date || isNaN(date.getTime())) return "—";
+  if (!date || Number.isNaN(date.getTime())) return "-";
 
   return date.toLocaleString("en-GB", {
     year: "numeric",
@@ -61,7 +62,7 @@ function clientStatus(status?: string) {
     Closed: "Completed",
   };
 
-  return map[status || ""] || status || "—";
+  return map[status || ""] || status || "-";
 }
 
 export default function ClientCasesPage() {
@@ -138,104 +139,120 @@ export default function ClientCasesPage() {
 
   const filteredCases = useMemo(() => {
     if (statusFilter === "all") return cases;
-    if (statusFilter === "active") return cases.filter((c) => c.status !== "Closed");
-    if (statusFilter === "closed") return cases.filter((c) => c.status === "Closed");
+    if (statusFilter === "active") {
+      return cases.filter((c) => c.status !== "Closed");
+    }
+    if (statusFilter === "closed") {
+      return cases.filter((c) => c.status === "Closed");
+    }
     return cases.filter((c) => c.status === statusFilter);
   }, [cases, statusFilter]);
 
   if (userLoading || loading) {
-    return <div className="p-6 text-slate-400">Loading cases...</div>;
+    return (
+      <div className="p-6">
+        <div className="card-modern text-sm font-semibold text-[#274C5A]">
+          Loading cases...
+        </div>
+      </div>
+    );
   }
 
   return (
     <PermissionGuard module="client_cases" action="view_own" showMessage={true}>
-      <div className="min-h-screen bg-[#030712] p-6 text-white">
-        <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="page-shell p-6">
+        <div className="page-header">
           <div>
-            <h1 className="text-3xl font-bold">My Cases</h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+              Client Cases
+            </p>
+            <h1 className="page-title">My Cases</h1>
+            <p className="page-subtitle mt-1">
               Track your submitted cases and requests.
             </p>
           </div>
 
-          <Link
-            href="/client/cases/new"
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
+          <Link href="/client/cases/new" className="btn-primary">
             Create New Case
           </Link>
         </div>
 
-        <div className="mb-4 rounded-2xl border border-slate-800 bg-[#111827] p-4">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-[#0b1220] px-3 py-2 text-sm text-white"
-          >
-            <option value="all">All cases</option>
-            <option value="active">Active only</option>
-            <option value="closed">Completed only</option>
-            <option value="Received">Request received</option>
-            <option value="Assigned">Team assigned</option>
-            <option value="EnRoute">Team on the way</option>
-            <option value="OnScene">Team arrived</option>
-            <option value="Transporting">Transporting</option>
-            <option value="Hospital">Arrived at destination</option>
-          </select>
+        <div className="card-modern">
+          <div className="grid gap-3 md:grid-cols-[220px_1fr] md:items-end">
+            <div>
+              <label className="field-label">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="select"
+              >
+                <option value="all">All cases</option>
+                <option value="active">Active only</option>
+                <option value="closed">Completed only</option>
+                <option value="Received">Request received</option>
+                <option value="Assigned">Team assigned</option>
+                <option value="EnRoute">Team on the way</option>
+                <option value="OnScene">Team arrived</option>
+                <option value="Transporting">Transporting</option>
+                <option value="Hospital">Arrived at destination</option>
+              </select>
+            </div>
+            <p className="text-sm font-semibold text-[#607482]">
+              Showing {filteredCases.length} of {cases.length} case
+              {cases.length === 1 ? "" : "s"}.
+            </p>
+          </div>
         </div>
 
         {filteredCases.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
+          <div className="rounded-3xl border border-dashed border-[#c8dce2] bg-white p-8 text-center text-sm font-semibold text-[#607482] shadow-sm">
             No cases found.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {filteredCases.map((c) => (
-              <div
-                key={c.id}
-                className="rounded-2xl border border-slate-800 bg-[#111827] p-5"
-              >
+              <div key={c.id} className="card-modern">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold">
+                    <h2 className="text-lg font-black text-[#123746]">
                       {c.projectName || "Project"}
                     </h2>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs font-semibold text-[#607482]">
                       {formatDate(c.createdAt)}
                     </p>
                   </div>
 
-                  <span className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-300">
+                  <span className="rounded-full border border-[#274C5A]/20 bg-[#274C5A]/10 px-3 py-1 text-xs font-black text-[#274C5A]">
                     {clientStatus(c.status)}
                   </span>
                 </div>
 
-                <div className="space-y-2 text-sm text-slate-300">
+                <div className="space-y-2 text-sm font-semibold text-[#274C5A]">
                   <p>
-                    <span className="text-slate-500">Caller:</span>{" "}
-                    {c.callerName || "—"}
+                    <span className="text-[#8aa0aa]">Caller:</span>{" "}
+                    {c.callerName || "-"}
                   </p>
 
                   <p>
-                    <span className="text-slate-500">Patient:</span>{" "}
-                    {c.patientName || "—"}
+                    <span className="text-[#8aa0aa]">Patient:</span>{" "}
+                    {c.patientName || "-"}
                   </p>
 
                   <p>
-                    <span className="text-slate-500">Complaint:</span>{" "}
-                    {c.chiefComplaint || "—"}
+                    <span className="text-[#8aa0aa]">Complaint:</span>{" "}
+                    {c.chiefComplaint || "-"}
                   </p>
 
                   <p>
-                    <span className="text-slate-500">Location:</span>{" "}
-                    {c.locationDescription || "—"}
+                    <span className="text-[#8aa0aa]">Location:</span>{" "}
+                    {c.locationDescription || "-"}
                   </p>
 
                   {c.googleMapsLink && (
                     <a
                       href={c.googleMapsLink}
                       target="_blank"
-                      className="inline-block text-sm text-blue-400 hover:underline"
+                      className="inline-block text-sm font-bold text-[#274C5A] underline"
                     >
                       Open Location
                     </a>
