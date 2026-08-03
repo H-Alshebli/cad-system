@@ -47,7 +47,7 @@ export type DeploymentType =
   | "Walking Team"
   | "With Ambulance"
   | "Medical Team Standby";
-export type InputType = "check" | "quantity" | "fuel" | "psi" | "seal";
+export type InputType = "check" | "quantity" | "fuel" | "psi" | "seal" | "code";
 export type VehicleSeverity = "red" | "yellow" | "green";
 
 export type ReadinessChecklistItem = {
@@ -64,6 +64,7 @@ export type ReadinessChecklistItem = {
   actualQty?: number;
   unit?: string;
   inputType?: InputType;
+  identifierValue?: string;
   serviceLevels?: ServiceType[];
   deploymentTypes?: DeploymentType[];
   status: ChecklistItemStatus;
@@ -94,12 +95,23 @@ export type ReadinessChecklistPayload = {
   manualProjectName?: string;
   manualMissionLabel?: string;
   allowDuplicate?: boolean;
+  submissionAcknowledgement?: {
+    acknowledged: boolean;
+    acknowledgedAtMs?: number;
+    acknowledgedBy?: string;
+    acknowledgedByName?: string;
+    text?: string;
+    policiesUrl?: string;
+  };
   items: ReadinessChecklistItem[];
 };
 
 export const CHECKLIST_COLLECTION = "projectChecklists";
 export const FUTURE_EXPIRY_COLLECTION = "projectExpiryItems";
 export const READINESS_TEMPLATE_VERSION = 3;
+export const READINESS_POLICIES_URL = "/readiness-policies";
+export const READINESS_ACKNOWLEDGEMENT_TEXT =
+  "I acknowledge that all information entered in this checklist is accurate and complete, and that the recorded readiness status, quantities, seal/code numbers, and notes reflect the actual condition at the time of inspection.";
 
 export const WIZARD_STEPS = [
   "Info",
@@ -243,7 +255,6 @@ export const OFFICIAL_READINESS_ITEMS: ReadinessChecklistItem[] = [
   item("care_triage_tags", "vehicle", "Medical Supplies", "General & Patient Care", "Disaster triage tags", { minQty: 20 }),
   item("care_humidifier", "vehicle", "Medical Supplies", "General & Patient Care", "Humidifier bottle", { minQty: 1 }),
   item("care_o2_regulator", "vehicle", "Medical Supplies", "General & Patient Care", "Oxygen cylinder regulator", { critical: true, manualVerify: true, minQty: 1 }),
-  item("care_cord_clamp", "vehicle", "Medical Supplies", "General & Patient Care", "Cord clamp", { minQty: 2 }),
   item("care_ob_kit", "vehicle", "Medical Supplies", "General & Patient Care", "OB kit", { minQty: 1 }),
   item("care_biohazard_bag", "vehicle", "Medical Supplies", "General & Patient Care", "Biohazard small bag", { minQty: 1 }),
   item("care_blanket", "vehicle", "Medical Supplies", "General & Patient Care", "Blanket", { minQty: 1 }),
@@ -474,7 +485,6 @@ function isVedCriticalLabel(label: string) {
     value.includes("ob kit") ||
     value.includes("disaster triage") ||
     value.includes("biohazard") ||
-    value.includes("cord clamp") ||
     value.includes("oxygen regulator") ||
     value.includes("intraosseous") ||
     value.includes("io kit") ||
@@ -576,6 +586,7 @@ function standardItem(
     minQty,
     unit: options.unit,
     actualQty: options.actualQty,
+    identifierValue: options.identifierValue,
     vehicleSeverity: options.vehicleSeverity,
     manualVerify: options.manualVerify,
     serviceLevels: options.minService ? servicesFrom(options.minService) : options.serviceLevels,
@@ -583,20 +594,28 @@ function standardItem(
   });
 }
 
+type ChecklistLabelRow =
+  | string
+  | [string, (Partial<ReadinessChecklistItem> & { minService?: ServiceType })?];
+
 function itemsFromLabels(
   prefix: string,
   step: ChecklistStepKey,
   section: string,
   group: string,
-  labels: string[],
+  labels: ChecklistLabelRow[],
   options: Partial<ReadinessChecklistItem> & {
     minService?: ServiceType;
     deployments?: Array<Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">>;
   } = {}
 ) {
-  return labels.map((label, index) =>
-    standardItem(`${prefix}_${index + 1}`, step, section, group, label, options)
-  );
+  return labels.map((row, index) => {
+    const [label, rowOptions] = Array.isArray(row) ? row : [row, undefined];
+    return standardItem(`${prefix}_${index + 1}`, step, section, group, label, {
+      ...options,
+      ...(rowOptions || {}),
+    });
+  });
 }
 
 function qtyItems(
@@ -623,6 +642,31 @@ function qtyItems(
   );
 }
 
+function qtyItemsFromIndex(
+  prefix: string,
+  startIndex: number,
+  step: ChecklistStepKey,
+  section: string,
+  group: string,
+  rows: Array<[
+    string,
+    string | number,
+    (Partial<ReadinessChecklistItem> & { minService?: ServiceType })?
+  ]>,
+  options: Partial<ReadinessChecklistItem> & {
+    minService?: ServiceType;
+    deployments?: Array<Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">>;
+  } = {}
+) {
+  return rows.map(([label, qty, rowOptions], index) =>
+    standardItem(`${prefix}_${startIndex + index}`, step, section, group, label, {
+      ...options,
+      ...(rowOptions || {}),
+      qty,
+    })
+  );
+}
+
 const AMBULANCE_OPENING_ITEMS: ReadinessChecklistItem[] = itemsFromLabels(
   "amb_open",
   "opening",
@@ -630,11 +674,11 @@ const AMBULANCE_OPENING_ITEMS: ReadinessChecklistItem[] = itemsFromLabels(
   "Ambulance Opening",
   [
     "Attendance",
-    "Ambulance key / ambulance code number",
+    ["Ambulance key / ambulance code number", { inputType: "code" }],
     "Ambulance checklist",
-    "Medication bag and bag code number",
-    "Ambulance red bag and bag code number",
-    "Radio device and device code number",
+    ["Medication bag and bag code number", { inputType: "code" }],
+    ["Ambulance red bag and bag code number", { inputType: "code" }],
+    ["Radio device and device code number", { inputType: "code" }],
   ],
   { deployments: ["Ambulance", "Ambulance + Clinic"], source: "LZM-QC-CL-AMB-OPEN" }
 );
@@ -645,8 +689,8 @@ const CLINIC_OPENING_ITEMS: ReadinessChecklistItem[] = itemsFromLabels(
   "Opening Shift Checklist",
   "Clinic Opening",
   [
-    "Clinic key",
-    "Ambulance key",
+    ["Clinic key", { inputType: "code" }],
+    ["Ambulance key", { inputType: "code" }],
     "Radio device",
     "Radio charged",
     "Clinic sterilization",
@@ -714,8 +758,8 @@ const AMBULANCE_VEHICLE_ITEMS: ReadinessChecklistItem[] = [
   ...qtyItems(
     "amb_storage",
     "vehicle",
-    "Storage & Immobilization Equipment",
     "Under Bench",
+    "Equipment",
     [
       ["Folding stretcher", 1],
       ["K.E.D adult", 1],
@@ -730,8 +774,8 @@ const AMBULANCE_VEHICLE_ITEMS: ReadinessChecklistItem[] = [
   ...qtyItems(
     "amb_main",
     "vehicle",
-    "Main Area Supplies",
-    "Supplies",
+    "Main Area",
+    "Equipment & Supplies",
     [
       ["Main oxygen more than 700 PSI", 2, { inputType: "psi", unit: "PSI", critical: true, manualVerify: true }],
       ["Portable oxygen more than 1000 PSI", 1, { inputType: "psi", unit: "PSI", critical: true, manualVerify: true }],
@@ -755,11 +799,12 @@ const AMBULANCE_VEHICLE_ITEMS: ReadinessChecklistItem[] = [
 ];
 
 const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
-  ...qtyItems(
+  ...qtyItemsFromIndex(
     "amb_basic_supply",
+    1,
     "vehicle",
-    "Medical Supplies",
-    "BLS Supplies",
+    "PPE",
+    "Personal Protective Equipment",
     [
       ["Face shield", 2],
       ["Goggles", 2],
@@ -767,12 +812,32 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
       ["Yellow gown", 4],
       ["Property bag", 10],
       ["Razor", 2],
+    ],
+    { deployments: ["Ambulance", "Ambulance + Clinic"], source: "LZM-QC-CL-AMB-BLS" }
+  ),
+  ...qtyItemsFromIndex(
+    "amb_basic_supply",
+    7,
+    "vehicle",
+    "Airway",
+    "Basic Airway",
+    [
       ["Magill forceps adult-pediatric", 1],
       ["OPA 6.0-10.0 mm set", 1, { critical: true, manualVerify: true }],
       ["NPA 4.0-8.0 mm set", 1],
       ["Lubrication", 3],
       ["Tube Yankauer rigid", 3],
       ["Suction tip sizes 14/16/20", 3],
+    ],
+    { deployments: ["Ambulance", "Ambulance + Clinic"], source: "LZM-QC-CL-AMB-BLS" }
+  ),
+  ...qtyItemsFromIndex(
+    "amb_basic_supply",
+    13,
+    "vehicle",
+    "Breathing",
+    "Oxygen Delivery",
+    [
       ["BVM adult-pediatric-infant set", 1, { critical: true, manualVerify: true }],
       ["Nasal cannula adult", 5],
       ["Oxygen mask adult", 5],
@@ -782,6 +847,16 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
       ["Oxygen mask pediatric", 3],
       ["Nebulizer mask pediatric", 3],
       ["Non-rebreather NRB pediatric", 3],
+    ],
+    { deployments: ["Ambulance", "Ambulance + Clinic"], source: "LZM-QC-CL-AMB-BLS" }
+  ),
+  ...qtyItemsFromIndex(
+    "amb_basic_supply",
+    22,
+    "vehicle",
+    "Circulation",
+    "Wound Care & Patient Supplies",
+    [
       ["Surgical tape small-medium", 1],
       ["Gauze 7x7 and 10x10 non-sterile", 2],
       ["Roll gauze 5 cm", 2],
@@ -810,7 +885,6 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
       ["Disaster triage tags", 20],
       ["Humidifier bottle", 1],
       ["Oxygen cylinder regulator", 1, { critical: true, manualVerify: true }],
-      ["Cord clamp", 2],
       ["OB kit", 1],
       ["Biohazard small bag", 1],
       ["Blanket", 1],
@@ -822,7 +896,7 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
   ...qtyItems(
     "amb_iv",
     "vehicle",
-    "Medical Supplies",
+    "IV",
     "IV Fluids & Cannulation",
     [
       ["Ringer lactate", 2],
@@ -847,8 +921,8 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
   ...qtyItems(
     "amb_airway_advanced",
     "vehicle",
-    "Medical Supplies",
-    "Advanced Airway / Intubation",
+    "Airway",
+    "ALS Airway / Intubation",
     [
       ["ETT 2.5-8.5 set", 1, { critical: true, manualVerify: true }],
       ["LMA 2/3/4/5 set", 1],
@@ -885,7 +959,7 @@ const AMBULANCE_MEDICAL_SUPPLY_ITEMS: ReadinessChecklistItem[] = [
     [
       "Medication bag is available",
       "Medication bag is sealed",
-      "Medication bag seal number verified",
+      ["Medication bag seal number verified", { inputType: "seal" }],
       "Emergency medication kit complete and sealed per approved list",
     ],
     { deployments: ["Ambulance", "Ambulance + Clinic"], minService: "ALS", source: "LZM-QC-CL-AMB-ALS/ALS+" }
@@ -906,7 +980,7 @@ const RED_BAG_ITEMS: ReadinessChecklistItem[] = [
     "red_bag",
     "Red Bag",
     "Bag Control",
-    ["Bag is available", "Bag is sealed", "Seal number verified"],
+    ["Bag is available", "Bag is sealed", ["Seal number verified", { inputType: "seal" }]],
     { deployments: ["Ambulance", "Clinic", "Ambulance + Clinic", "Walking Team"], source: "LZM-QC-CL-AMB-RB-001 / LZM-QC-CL-CLN-BLS/BLS+/ALS/ALS+" }
   ),
   ...qtyItems(
@@ -1282,7 +1356,7 @@ const CLOSING_ITEMS: ReadinessChecklistItem[] = [
       "Vehicle external and internal damage checked",
       "Fuel, oxygen, and stretcher condition reported",
       "Patient cabinet cleaned and waste disposed",
-      "Red bag, medication bag, and narcotics seals verified",
+      ["Red bag, medication bag, and narcotics seals verified", { inputType: "seal" }],
     ],
     {
       deployments: ["Ambulance", "Ambulance + Clinic"],
@@ -1297,8 +1371,8 @@ const CLOSING_ITEMS: ReadinessChecklistItem[] = [
     [
       "Clinic room cleaned and secured",
       "Clinic supplies and consumables shortage recorded",
-      "Medication and red bag seals verified",
-      "Clinic key and fixed assets handed over",
+      ["Medication and red bag seals verified", { inputType: "seal" }],
+      ["Clinic key and fixed assets handed over", { inputType: "code" }],
     ],
     {
       deployments: ["Clinic", "Ambulance + Clinic"],
@@ -1312,8 +1386,8 @@ const CLOSING_ITEMS: ReadinessChecklistItem[] = [
     "Walking Team",
     [
       "Vest and walking team kit returned",
-      "Oxygen bag pressure and usage recorded",
-      "Red bag and medication bag seals verified",
+      ["Oxygen bag pressure and usage recorded", { inputType: "psi", unit: "PSI" }],
+      ["Red bag and medication bag seals verified", { inputType: "seal" }],
       "Used or missing walking team items reported",
     ],
     { deployments: ["Walking Team"], source: "Official walking team closing checklist" }
@@ -1665,7 +1739,8 @@ export async function updateReadinessChecklistDraft(
 
 export async function submitReadinessChecklist(
   checklistId: string,
-  payload: Pick<ReadinessChecklistPayload, "items" | "notes"> & Partial<Pick<ReadinessChecklistPayload, "durationSeconds" | "submittedAtMs">>
+  payload: Pick<ReadinessChecklistPayload, "items" | "notes"> &
+    Partial<Pick<ReadinessChecklistPayload, "durationSeconds" | "submittedAtMs" | "submissionAcknowledgement">>
 ) {
   const cleanPayload = removeUndefinedValues(payload);
   const readiness = removeUndefinedValues(calculateReadiness(cleanPayload.items));

@@ -7,6 +7,8 @@ import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import {
+  READINESS_ACKNOWLEDGEMENT_TEXT,
+  READINESS_POLICIES_URL,
   ReadinessChecklistItem,
   calculateReadiness,
   classifyReadinessItem,
@@ -67,6 +69,35 @@ function needsQuantity(item: ReadinessChecklistItem) {
   return Boolean(item.minQty || item.inputType === "fuel" || item.inputType === "psi");
 }
 
+function needsIdentifier(item: ReadinessChecklistItem) {
+  return item.inputType === "code" || item.inputType === "seal";
+}
+
+function identifierPlaceholder(item: ReadinessChecklistItem) {
+  if (item.inputType === "seal") return "Seal number";
+  return "Code / serial number";
+}
+
+function statusPatch(
+  item: ReadinessChecklistItem,
+  status: ReadinessChecklistItem["status"]
+): Partial<ReadinessChecklistItem> {
+  if (
+    status === "missing" ||
+    status === "not_available" ||
+    status === "not_applicable" ||
+    status === "unchecked"
+  ) {
+    return { status, actualQty: undefined, identifierValue: "" };
+  }
+
+  if (status === "checked" && needsQuantity(item) && Number(item.minQty || 0) > 0) {
+    return { status, actualQty: Number(item.minQty) };
+  }
+
+  return { status, actualQty: item.actualQty };
+}
+
 function hasEnteredQuantity(item: ReadinessChecklistItem) {
   return item.actualQty !== undefined && Number.isFinite(Number(item.actualQty)) && Number(item.actualQty) > 0;
 }
@@ -82,6 +113,14 @@ function quantityValidationMessage(item: ReadinessChecklistItem) {
   }
   if (item.status === "some" && minimum > 0 && actual >= minimum) {
     return `${item.label}: Some must be less than the minimum ${minimum}${item.unit ? ` ${item.unit}` : ""}. Use Yes when the minimum is met.`;
+  }
+  return "";
+}
+
+function identifierValidationMessage(item: ReadinessChecklistItem) {
+  if (!needsIdentifier(item) || (item.status !== "checked" && item.status !== "some")) return "";
+  if (!String(item.identifierValue || "").trim()) {
+    return `${item.label}: enter ${item.inputType === "seal" ? "seal number" : "code / serial number"}.`;
   }
   return "";
 }
@@ -110,6 +149,7 @@ export default function ChecklistDetailsPage({
   const [reviewNotes, setReviewNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [submitAcknowledged, setSubmitAcknowledged] = useState(false);
   const durationMarkRef = useRef(Date.now());
 
   useEffect(() => {
@@ -201,9 +241,15 @@ export default function ChecklistDetailsPage({
   }
 
   async function submit() {
-    const quantityError = items.map(quantityValidationMessage).find(Boolean);
-    if (quantityError) {
-      alert(quantityError);
+    if (!submitAcknowledged) {
+      alert("Please confirm the submission acknowledgement before submitting.");
+      return;
+    }
+    const validationError = items
+      .map((item) => quantityValidationMessage(item) || identifierValidationMessage(item))
+      .find(Boolean);
+    if (validationError) {
+      alert(validationError);
       return;
     }
     const unansweredBlockingVehicle = items.filter(
@@ -221,6 +267,14 @@ export default function ChecklistDetailsPage({
         items,
         notes,
         submittedAtMs: Date.now(),
+        submissionAcknowledgement: {
+          acknowledged: true,
+          acknowledgedAtMs: Date.now(),
+          acknowledgedBy: user?.uid || user?.id || "",
+          acknowledgedByName: user?.displayName || user?.name || user?.fullName || user?.email || "",
+          text: READINESS_ACKNOWLEDGEMENT_TEXT,
+          policiesUrl: READINESS_POLICIES_URL,
+        },
         durationSeconds: Number(checklist?.durationSeconds || 0) + elapsedSeconds,
       });
       alert("Checklist submitted.");
@@ -379,6 +433,7 @@ export default function ChecklistDetailsPage({
                 <div className="mt-1 text-sm font-semibold text-[#607482]">
                   {statusLabel(item.status)}
                   {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
+                  {item.identifierValue ? ` / ${item.identifierValue}` : ""}
                   {item.note ? ` / ${item.note}` : ""}
                 </div>
               </div>
@@ -444,7 +499,7 @@ export default function ChecklistDetailsPage({
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-1 gap-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3 xl:grid-cols-[minmax(320px,1fr)_190px_130px_minmax(260px,1fr)]"
+                  className="grid grid-cols-1 gap-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-3 xl:grid-cols-[minmax(320px,1fr)_280px_130px_220px_minmax(260px,1fr)]"
                 >
                 <div>
                   <div className="font-black text-[#123746]">{displayItem.label}</div>
@@ -454,36 +509,39 @@ export default function ChecklistDetailsPage({
                     {displayItem.manualVerify && <span className="badge border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]">Manual</span>}
                     {displayItem.group && <span className="badge">{displayItem.group}</span>}
                     {displayItem.minQty && <span className="badge">Min {displayItem.minQty}{displayItem.unit ? ` ${displayItem.unit}` : ""}</span>}
-                    {displayItem.serviceLevels?.length ? (
-                      <span className="badge border-amber-500/25 bg-amber-500/10 text-amber-800">
-                        {displayItem.serviceLevels.join(", ")}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
                 {editable ? (
-                  <select
-                    className="select"
-                    value={item.status === "not_available" ? "missing" : item.status}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        status: e.target.value as ReadinessChecklistItem["status"],
-                        actualQty:
-                          e.target.value === "missing" ||
-                          e.target.value === "not_available" ||
-                          e.target.value === "not_applicable" ||
-                          e.target.value === "unchecked"
-                            ? undefined
-                            : item.actualQty,
-                      })
-                    }
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[#c8dce2] bg-white p-1">
+                    {STATUS_OPTIONS.filter((option) => option.value !== "unchecked").map((option) => {
+                      const selected =
+                        item.status === option.value ||
+                        (item.status === "not_available" && option.value === "missing");
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            updateItem(
+                              item.id,
+                              statusPatch(
+                                item,
+                                option.value as ReadinessChecklistItem["status"]
+                              )
+                            )
+                          }
+                          className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                            selected
+                              ? "bg-[#274C5A] text-white shadow-sm"
+                              : "bg-[#f7fbfc] text-[#274C5A] hover:bg-[#eaf3f6]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <span className="badge self-start">{statusLabel(item.status)}</span>
                 )}
@@ -504,6 +562,23 @@ export default function ChecklistDetailsPage({
                 ) : (
                   <div className="text-sm font-semibold text-[#607482]">
                       {displayItem.actualQty ?? "-"}{displayItem.unit ? ` ${displayItem.unit}` : ""}
+                    </div>
+                  )
+                ) : (
+                  <div className="hidden xl:block" />
+                )}
+
+                {needsIdentifier(displayItem) ? (
+                  editable ? (
+                    <input
+                      className="input"
+                      value={item.identifierValue || ""}
+                      onChange={(e) => updateItem(item.id, { identifierValue: e.target.value })}
+                      placeholder={identifierPlaceholder(displayItem)}
+                    />
+                  ) : (
+                    <div className="text-sm font-semibold text-[#607482]">
+                      {displayItem.identifierValue || "-"}
                     </div>
                   )
                 ) : (
@@ -563,6 +638,7 @@ export default function ChecklistDetailsPage({
                 <div className="mt-1 text-sm font-semibold text-[#607482]">
                   {statusLabel(item.status)}
                   {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
+                  {item.identifierValue ? ` / ${item.identifierValue}` : ""}
                   {item.note ? ` / ${item.note}` : ""}
                 </div>
               </div>
@@ -571,15 +647,38 @@ export default function ChecklistDetailsPage({
       )}
 
       {editable && (
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" disabled={saving} onClick={saveDraft}>
-            {saving ? "Saving..." : "Save Draft"}
-          </button>
+        <div className="card-modern space-y-3">
           {submittable && (
-            <button className="btn-primary" disabled={saving} onClick={submit}>
-              {saving ? "Submitting..." : "Submit"}
-            </button>
+            <label className="flex items-start gap-3 rounded-2xl border border-[#274C5A]/30 bg-[#274C5A]/5 p-4">
+              <input
+                type="checkbox"
+                className="mt-1 h-5 w-5 accent-[#274C5A]"
+                checked={submitAcknowledged}
+                onChange={(e) => setSubmitAcknowledged(e.target.checked)}
+              />
+              <span className="text-sm font-semibold leading-6 text-[#274C5A]">
+                {READINESS_ACKNOWLEDGEMENT_TEXT}
+                <span className="mt-2 block text-xs font-bold text-[#7F7F7F]">
+                  Please review all checklist requirements carefully before submission. By submitting, you confirm that you have read and agree to the applicable{" "}
+                  <Link href={READINESS_POLICIES_URL} className="text-[#274C5A] underline underline-offset-4">
+                    terms, policies, and operational requirements
+                  </Link>
+                  .
+                </span>
+              </span>
+            </label>
           )}
+
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" disabled={saving} onClick={saveDraft}>
+              {saving ? "Saving..." : "Save Draft"}
+            </button>
+            {submittable && (
+              <button className="btn-primary" disabled={saving || !submitAcknowledged} onClick={submit}>
+                {saving ? "Submitting..." : "Submit"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -11,6 +11,8 @@ import {
   DEPLOYMENT_TYPES,
   DeploymentType,
   ChecklistPhase,
+  READINESS_ACKNOWLEDGEMENT_TEXT,
+  READINESS_POLICIES_URL,
   SERVICE_TYPES,
   SHIFT_OPTIONS,
   ServiceType,
@@ -67,6 +69,35 @@ function needsQuantity(item: ReadinessChecklistItem) {
   return Boolean(item.minQty || item.inputType === "fuel" || item.inputType === "psi");
 }
 
+function needsIdentifier(item: ReadinessChecklistItem) {
+  return item.inputType === "code" || item.inputType === "seal";
+}
+
+function identifierPlaceholder(item: ReadinessChecklistItem) {
+  if (item.inputType === "seal") return "Seal number";
+  return "Code / serial number";
+}
+
+function statusPatch(
+  item: ReadinessChecklistItem,
+  status: ReadinessChecklistItem["status"]
+): Partial<ReadinessChecklistItem> {
+  if (
+    status === "missing" ||
+    status === "not_available" ||
+    status === "not_applicable" ||
+    status === "unchecked"
+  ) {
+    return { status, actualQty: undefined, identifierValue: "" };
+  }
+
+  if (status === "checked" && needsQuantity(item) && Number(item.minQty || 0) > 0) {
+    return { status, actualQty: Number(item.minQty) };
+  }
+
+  return { status, actualQty: item.actualQty };
+}
+
 function hasEnteredQuantity(item: ReadinessChecklistItem) {
   return item.actualQty !== undefined && Number.isFinite(Number(item.actualQty)) && Number(item.actualQty) > 0;
 }
@@ -82,6 +113,14 @@ function quantityValidationMessage(item: ReadinessChecklistItem) {
   }
   if (item.status === "some" && minimum > 0 && actual >= minimum) {
     return `${item.label}: Some must be less than the minimum ${minimum}${item.unit ? ` ${item.unit}` : ""}. Use Yes when the minimum is met.`;
+  }
+  return "";
+}
+
+function identifierValidationMessage(item: ReadinessChecklistItem) {
+  if (!needsIdentifier(item) || (item.status !== "checked" && item.status !== "some")) return "";
+  if (!String(item.identifierValue || "").trim()) {
+    return `${item.label}: enter ${item.inputType === "seal" ? "seal number" : "code / serial number"}.`;
   }
   return "";
 }
@@ -124,6 +163,15 @@ function getValidationIssues(items: ReadinessChecklistItem[]) {
         itemId: item.id,
         label: item.label,
         message: quantityMessage,
+      });
+    }
+
+    const identifierMessage = identifierValidationMessage(item);
+    if (identifierMessage) {
+      issues.push({
+        itemId: item.id,
+        label: item.label,
+        message: identifierMessage,
       });
     }
   });
@@ -170,42 +218,50 @@ function ItemRow({
         hasIssue ? "border-red-400 bg-red-50 ring-2 ring-red-400/30" : statusTone(item.status)
       }`}
     >
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_190px_130px_1fr]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_280px_130px_220px_1fr]">
         <div>
           <div className="font-bold text-[#274C5A]">{item.label}</div>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
             {vehicleSeverityBadge(item)}
             {item.critical && <span className="badge border-rose-500/20 bg-rose-500/10 text-rose-700">V Item</span>}
             {item.manualVerify && <span className="badge border-[#274C5A]/20 bg-[#274C5A]/10 text-[#274C5A]">Manual</span>}
-            {item.serviceLevels?.length ? (
-              <span className="badge border-amber-500/20 bg-amber-500/10 text-amber-700">
-                {item.serviceLevels.join(", ")}
-              </span>
-            ) : null}
             {item.minQty && <span className="badge">Min {item.minQty}{item.unit ? ` ${item.unit}` : ""}</span>}
           </div>
         </div>
 
-        <select
-          className={`select ${hasIssue && item.status === "unchecked" ? "border-red-400 bg-red-50" : ""}`}
-          value={item.status}
-          onChange={(e) => {
-            const status = e.target.value as ReadinessChecklistItem["status"];
-            onChange({
-              status,
-              actualQty:
-                status === "missing" || status === "not_available" || status === "not_applicable" || status === "unchecked"
-                  ? undefined
-                  : item.actualQty,
-            });
-          }}
+        <div
+          className={`grid grid-cols-2 gap-2 rounded-2xl border bg-white p-1 ${
+            hasIssue && item.status === "unchecked" ? "border-red-400 bg-red-50" : "border-[#c8dce2]"
+          }`}
         >
-          {STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          {STATUS_OPTIONS.filter((option) => option.value !== "unchecked").map((option) => {
+            const selected =
+              item.status === option.value ||
+              (item.status === "not_available" && option.value === "missing");
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  onChange(
+                    statusPatch(
+                      item,
+                      option.value as ReadinessChecklistItem["status"]
+                    )
+                  )
+                }
+                className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                  selected
+                    ? "bg-[#274C5A] text-white shadow-sm"
+                    : "bg-[#f7fbfc] text-[#274C5A] hover:bg-[#eaf3f6]"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
 
         {needsQty ? (
           <input
@@ -227,6 +283,17 @@ function ItemRow({
               }
             }}
             placeholder={item.inputType === "psi" ? "PSI" : item.inputType === "fuel" ? "%" : "Qty"}
+          />
+        ) : (
+          <div className="hidden xl:block" />
+        )}
+
+        {needsIdentifier(item) ? (
+          <input
+            className={`input ${hasIssue && (item.status === "checked" || item.status === "some") ? "border-red-400 bg-red-50" : ""}`}
+            value={item.identifierValue || ""}
+            onChange={(e) => onChange({ identifierValue: e.target.value })}
+            placeholder={identifierPlaceholder(item)}
           />
         ) : (
           <div className="hidden xl:block" />
@@ -275,6 +342,7 @@ export default function NewProjectChecklistPage({
   const [deploymentType, setDeploymentType] = useState<DeploymentType>("Ambulance");
   const [dateKey, setDateKey] = useState(getRiyadhDateKey());
   const [notes, setNotes] = useState("");
+  const [submitAcknowledged, setSubmitAcknowledged] = useState(false);
   const [items, setItems] = useState<ReadinessChecklistItem[]>(
     cloneDefaultChecklistItems("BLS", "Ambulance", checklistPhase)
   );
@@ -385,6 +453,7 @@ export default function NewProjectChecklistPage({
         ...(previousById.get(item.id)?.actualQty !== undefined
           ? { actualQty: previousById.get(item.id)?.actualQty }
           : {}),
+        identifierValue: previousById.get(item.id)?.identifierValue || "",
         note: previousById.get(item.id)?.note || "",
       }));
     });
@@ -592,6 +661,10 @@ export default function NewProjectChecklistPage({
       alert("You do not have permission to submit readiness checklists.");
       return;
     }
+    if (status === "submitted" && !submitAcknowledged) {
+      alert("Please confirm the submission acknowledgement before submitting.");
+      return;
+    }
     const selectedProject = projects.find((entry) => entry.id === selectedProjectId);
     const resolvedProjectId = isManualMode
       ? selectedProjectId || "_manual"
@@ -650,6 +723,17 @@ export default function NewProjectChecklistPage({
           startedAtMs,
           submittedAtMs: status === "submitted" ? nowMs : undefined,
           durationSeconds,
+          submissionAcknowledgement:
+            status === "submitted"
+              ? {
+                  acknowledged: true,
+                  acknowledgedAtMs: nowMs,
+                  acknowledgedBy: user.uid,
+                  acknowledgedByName: inspectorName(user),
+                  text: READINESS_ACKNOWLEDGEMENT_TEXT,
+                  policiesUrl: READINESS_POLICIES_URL,
+                }
+              : undefined,
           manualProjectName: isManualMode ? manualProjectName.trim() : undefined,
           manualMissionLabel: isManualMode ? manualMissionLabel.trim() : undefined,
           allowDuplicate: isManualMode,
@@ -1077,6 +1161,7 @@ export default function NewProjectChecklistPage({
                     <div className="mt-1 text-sm text-[#7F7F7F]">
                       {statusLabel(item.status)}
                       {item.minQty ? ` / ${item.actualQty || 0} of ${item.minQty}${item.unit ? ` ${item.unit}` : ""}` : ""}
+                      {item.identifierValue ? ` / ${item.identifierValue}` : ""}
                     </div>
                   </div>
                 ))}
@@ -1119,6 +1204,25 @@ export default function NewProjectChecklistPage({
             <span className={labelClass}>Checklist Notes</span>
             <textarea className="input min-h-[120px]" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
+
+          <label className={`${cardClass} flex items-start gap-3 border-[#274C5A]/30 bg-[#274C5A]/5`}>
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 accent-[#274C5A]"
+              checked={submitAcknowledged}
+              onChange={(e) => setSubmitAcknowledged(e.target.checked)}
+            />
+            <span className="text-sm font-semibold leading-6 text-[#274C5A]">
+              {READINESS_ACKNOWLEDGEMENT_TEXT}
+              <span className="mt-2 block text-xs font-bold text-[#7F7F7F]">
+                Please review all checklist requirements carefully before submission. By submitting, you confirm that you have read and agree to the applicable{" "}
+                <Link href={READINESS_POLICIES_URL} className="text-[#274C5A] underline underline-offset-4">
+                  terms, policies, and operational requirements
+                </Link>
+                .
+              </span>
+            </span>
+          </label>
         </section>
       )}
 
@@ -1149,7 +1253,7 @@ export default function NewProjectChecklistPage({
               Continue
             </button>
           ) : (
-            <button className={primaryButtonClass} disabled={saving || !selectedMission} onClick={() => save("submitted")}>
+            <button className={primaryButtonClass} disabled={saving || !selectedMission || !submitAcknowledged} onClick={() => save("submitted")}>
               {saving ? "Submitting..." : "Submit"}
             </button>
           )}
