@@ -757,15 +757,19 @@ export function getCrewProfileCompletion(
     : 100;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const isExpiryField = (field: CrewProfileField) =>
+    field.type === "date" &&
+    (field.key.toLowerCase().includes("expiry") ||
+      field.key === "contractEndDate");
   const expired = requiredFields.filter((field) => {
-    if (field.type !== "date") return false;
+    if (!isExpiryField(field)) return false;
     const rawValue = String(values[field.key] || "").trim();
     if (!rawValue) return false;
     const date = new Date(`${rawValue}T00:00:00`);
     return !Number.isNaN(date.getTime()) && date < today;
   });
   const expiringSoon = requiredFields.filter((field) => {
-    if (field.type !== "date") return false;
+    if (!isExpiryField(field)) return false;
     const rawValue = String(values[field.key] || "").trim();
     if (!rawValue) return false;
     const date = new Date(`${rawValue}T00:00:00`);
