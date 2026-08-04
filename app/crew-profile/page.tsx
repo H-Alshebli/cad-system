@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   AlertCircle,
   BadgeCheck,
+  Bell,
   Building2,
   CheckCircle2,
   CreditCard,
@@ -22,12 +31,17 @@ import { storage } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import {
   CREW_PROFILE_SECTIONS,
+  CrewProfileAttachments,
   CrewProfileField,
   CrewProfileValues,
   formatIban,
+  getCrewAttachmentStatus,
   getCrewProfileCompletion,
   getCrewProfileValues,
+  isCrewProfileFieldVisible,
+  isValidSaudiIban,
   normalizeIban,
+  sanitizeSaudiIban,
 } from "@/lib/crewProfile";
 import { getProjectDisplayName } from "@/lib/displayLabels";
 
@@ -39,13 +53,30 @@ const sectionIcons: Record<string, React.ReactNode> = {
   bank: <CreditCard size={18} />,
 };
 
+type CrewExpiryNotification = {
+  id: string;
+  title?: string;
+  message?: string;
+  expiryDate?: string;
+  daysRemaining?: number;
+  threshold?: number;
+  createdAt?: any;
+};
+
 function fieldSpan(field: CrewProfileField) {
   return field.type === "textarea" ? "md:col-span-2" : "";
 }
 
 function cleanValue(field: CrewProfileField, value: string) {
-  if (field.key === "iban") {
-    return formatIban(value);
+  if (field.key === "iban" || field.key === "alternativeIban") {
+    return sanitizeSaudiIban(value);
+  }
+
+  if (
+    field.key === "accountNumber" ||
+    field.key === "alternativeAccountNumber"
+  ) {
+    return value.replace(/\D/g, "").slice(0, 18);
   }
 
   if (field.type === "tel") {
@@ -65,7 +96,9 @@ function toStoredProfile(values: CrewProfileValues) {
       .filter(([key]) => !key.endsWith("Attachment"))
       .map(([key, value]) => [
         key,
-        key === "iban" ? normalizeIban(value) : String(value || "").trim(),
+        key === "iban" || key === "alternativeIban"
+          ? normalizeIban(value)
+          : String(value || "").trim(),
       ])
   );
 }
@@ -96,9 +129,12 @@ export default function CrewProfilePage() {
   const [uploadingField, setUploadingField] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
-  const [attachments, setAttachments] = useState<Record<string, any>>({});
+  const [attachments, setAttachments] = useState<CrewProfileAttachments>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [expiryNotifications, setExpiryNotifications] = useState<
+    CrewExpiryNotification[]
+  >([]);
 
   useEffect(() => {
     if (!user) return;
@@ -106,7 +142,14 @@ export default function CrewProfilePage() {
     setAttachments(user.crewProfileAttachments || {});
   }, [user]);
 
-  const completion = useMemo(() => getCrewProfileCompletion(values), [values]);
+  const completion = useMemo(
+    () => getCrewProfileCompletion(values, attachments),
+    [values, attachments]
+  );
+  const requiredFieldKeys = useMemo(
+    () => new Set(completion.requiredKeys),
+    [completion.requiredKeys.join("|")]
+  );
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "roles"), (snap) => {
@@ -115,6 +158,39 @@ export default function CrewProfilePage() {
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setExpiryNotifications([]);
+      return;
+    }
+
+    const notificationsQuery = query(
+      collection(db, "notifications"),
+      where("recipientUserIds", "array-contains", user.uid)
+    );
+
+    return onSnapshot(
+      notificationsQuery,
+      (snap) => {
+        setExpiryNotifications(
+          snap.docs
+            .map((item) => ({ id: item.id, ...(item.data() as any) }))
+            .filter((item: any) => item.type === "crew_expiry")
+            .sort((a: any, b: any) => {
+              const aTime = a.createdAt?.toMillis?.() || 0;
+              const bTime = b.createdAt?.toMillis?.() || 0;
+              return bTime - aTime;
+            })
+            .slice(0, 10)
+        );
+      },
+      (notificationError) => {
+        console.warn("Failed to load crew expiry notifications", notificationError);
+        setExpiryNotifications([]);
+      }
+    );
+  }, [user?.uid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "projects"), (snap) => {
@@ -134,10 +210,18 @@ export default function CrewProfilePage() {
   function updateField(field: CrewProfileField, value: string) {
     setMessage("");
     setError("");
-    setValues((current) => ({
-      ...current,
-      [field.key]: cleanValue(field, value),
-    }));
+    setValues((current) => {
+      const next = {
+        ...current,
+        [field.key]: cleanValue(field, value),
+      };
+
+      if (field.key === "nationality" && value) {
+        next.identityType = value === "Saudi Arabia" ? "National ID" : "Iqama";
+      }
+
+      return next;
+    });
   }
 
   async function uploadAttachment(field: CrewProfileField, file?: File | null) {
@@ -164,21 +248,58 @@ export default function CrewProfilePage() {
         contentType: file.type || "application/octet-stream",
         size: file.size,
         uploadedAt: new Date().toISOString(),
+        uploadedById: user.uid,
+        uploadedByName: user.name || user.displayName || user.email || "Crew Member",
+        status: "uploaded" as const,
+        verificationHistory: [
+          ...(attachments[field.key]?.verificationHistory || []),
+          {
+            action: "uploaded" as const,
+            at: new Date().toISOString(),
+            actorId: user.uid,
+            actorName: user.name || user.displayName || user.email || "Crew Member",
+            actorEmail: user.email || "",
+          },
+        ],
       };
 
       const nextAttachments = {
         ...attachments,
         [field.key]: fileData,
       };
+      const nextValues = {
+        ...values,
+        [field.key]: url,
+      };
+      const nextCompletion = getCrewProfileCompletion(
+        nextValues,
+        nextAttachments
+      );
 
       setAttachments(nextAttachments);
-      setValues((current) => ({
-        ...current,
-        [field.key]: url,
-      }));
+      setValues(nextValues);
 
       await updateDoc(doc(db, "users", user.uid), {
         crewProfileAttachments: nextAttachments,
+        crewProfileCompletion: nextCompletion.percent,
+        crewProfileMissingFields: nextCompletion.missing.map(
+          (item) => item.key
+        ),
+        crewProfilePendingVerificationFields:
+          nextCompletion.pendingVerification.map((item) => item.key),
+        crewProfileRejectedFields: nextCompletion.rejected.map(
+          (item) => item.key
+        ),
+        crewProfileExpiredFields: nextCompletion.expired.map(
+          (item) => item.key
+        ),
+        crewProfileExpiringSoonFields: nextCompletion.expiringSoon.map(
+          (item) => item.key
+        ),
+        crewProfileStatus: nextCompletion.status,
+        crewProfileComplianceStatus: nextCompletion.complianceStatus,
+        crewProfileIsComplete: nextCompletion.isComplete,
+        crewProfileIsCompliant: nextCompletion.isCompliant,
         profileUpdatedAt: serverTimestamp(),
       });
 
@@ -213,6 +334,31 @@ export default function CrewProfilePage() {
   async function saveProfile() {
     if (!user?.uid) return;
 
+    if (!isValidSaudiIban(values.iban || "")) {
+      setError("IBAN must start with SA followed by exactly 22 digits (24 characters total).");
+      return;
+    }
+    if (!/^\d{18}$/.test(values.accountNumber || "")) {
+      setError("Account Number must contain exactly 18 digits.");
+      return;
+    }
+    if (
+      values.alternativeIban &&
+      !isValidSaudiIban(values.alternativeIban)
+    ) {
+      setError(
+        "Alternative IBAN must start with SA followed by exactly 22 digits (24 characters total)."
+      );
+      return;
+    }
+    if (
+      values.alternativeAccountNumber &&
+      !/^\d{18}$/.test(values.alternativeAccountNumber)
+    ) {
+      setError("Alternative Account Number must contain exactly 18 digits.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
     setError("");
@@ -230,6 +376,18 @@ export default function CrewProfilePage() {
         crewProfileAttachments: attachments,
         crewProfileCompletion: completion.percent,
         crewProfileMissingFields: completion.missing.map((field) => field.key),
+        crewProfilePendingVerificationFields: completion.pendingVerification.map(
+          (field) => field.key
+        ),
+        crewProfileRejectedFields: completion.rejected.map((field) => field.key),
+        crewProfileExpiredFields: completion.expired.map((field) => field.key),
+        crewProfileExpiringSoonFields: completion.expiringSoon.map(
+          (field) => field.key
+        ),
+        crewProfileStatus: completion.status,
+        crewProfileComplianceStatus: completion.complianceStatus,
+        crewProfileIsComplete: completion.isComplete,
+        crewProfileIsCompliant: completion.isCompliant,
         profileUpdatedAt: serverTimestamp(),
         name:
           fullNameEn ||
@@ -248,8 +406,13 @@ export default function CrewProfilePage() {
       setValues((current) => ({
         ...current,
         iban: formatIban(current.iban || ""),
+        alternativeIban: formatIban(current.alternativeIban || ""),
       }));
-      setMessage("Crew profile saved successfully.");
+      setMessage(
+        completion.isCompliant
+          ? "Crew profile saved and marked compliant."
+          : "Crew profile saved as a draft. Complete the required fields to become compliant."
+      );
     } catch (err) {
       console.error("Failed to save crew profile", err);
       setError("Could not save the profile. Please try again.");
@@ -327,8 +490,74 @@ export default function CrewProfilePage() {
               <div className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 {completion.complete} of {completion.total} required fields completed
               </div>
+              <div className="mt-3">
+                <span className="badge">
+                  {completion.isCompliant
+                    ? "Compliant"
+                    : completion.isComplete
+                    ? "Complete - expired items"
+                    : "Draft"}
+                </span>
+              </div>
             </div>
           </div>
+
+          {completion.expired.length > 0 && (
+            <div className="notice-danger">
+              <div className="font-black">Expired required items</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {completion.expired.map((field) => (
+                  <span key={field.key} className="badge">
+                    {field.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {completion.expiringSoon.length > 0 && completion.expired.length === 0 && (
+            <div className="notice-warning">
+              <div className="font-black">Required items expiring within 90 days</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {completion.expiringSoon.map((field) => (
+                  <span key={field.key} className="badge">
+                    {field.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {completion.pendingVerification.length > 0 && (
+            <div className="notice-warning">
+              <div className="font-black">Pending document verification</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {completion.pendingVerification.map((field) => (
+                  <span key={field.key} className="badge">
+                    {field.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {completion.rejected.length > 0 && (
+            <div className="notice-danger">
+              <div className="font-black">Rejected documents</div>
+              <div className="mt-3 space-y-2">
+                {completion.rejected.map((field) => (
+                  <div key={field.key} className="rounded-xl border border-red-500/20 p-3">
+                    <div className="font-bold">{field.label}</div>
+                    {attachments[field.key]?.rejectionReason && (
+                      <div className="mt-1 text-xs">
+                        Reason: {attachments[field.key]?.rejectionReason}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="card-modern">
             <div className="flex items-center gap-2 text-sm font-black text-slate-950 dark:text-white">
@@ -348,6 +577,11 @@ export default function CrewProfilePage() {
                   </span>
                 ))}
               </div>
+            ) : !completion.isMappedJobTitle ? (
+              <div className="notice-warning mt-4">
+                The selected job title must be mapped before this profile can be
+                marked complete.
+              </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-700 dark:text-emerald-200">
                 All tracked fields are complete.
@@ -365,6 +599,34 @@ export default function CrewProfilePage() {
               for storage and shown in readable groups on screen.
             </p>
           </div>
+
+          <div className="card-modern">
+            <div className="flex items-center gap-2 text-sm font-black text-slate-950 dark:text-white">
+              <Bell size={17} />
+              Expiry Notifications
+            </div>
+            {expiryNotifications.length ? (
+              <div className="mt-4 space-y-3">
+                {expiryNotifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3"
+                  >
+                    <div className="text-sm font-black text-amber-800 dark:text-amber-200">
+                      {notification.title || "Document expiry reminder"}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                      {notification.message || "Review the document expiry date."}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                No expiry notifications.
+              </div>
+            )}
+          </div>
         </aside>
 
         <main className="space-y-4">
@@ -376,7 +638,12 @@ export default function CrewProfilePage() {
 
           {error && <div className="notice-danger">{error}</div>}
 
-          {CREW_PROFILE_SECTIONS.map((section) => (
+          {CREW_PROFILE_SECTIONS.map((section) => {
+            const visibleFields = section.fields.filter((field) =>
+              isCrewProfileFieldVisible(field.key, values)
+            );
+
+            return (
             <section key={section.key} className="card-modern">
               <div className="mb-5 flex items-start gap-3">
                 <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-200">
@@ -388,12 +655,31 @@ export default function CrewProfilePage() {
                 </div>
               </div>
 
+              {section.key === "credentials" && !values.jobTitle && (
+                <div className="notice-warning mb-4">
+                  Select a Job Title in Employment Details to load the applicable
+                  credentials and documents.
+                </div>
+              )}
+
+              {section.key === "credentials" &&
+                values.jobTitle &&
+                completion.titleGroup === "other" && (
+                  <div className="notice-warning mb-4">
+                    This custom job title is not mapped yet. All credential fields
+                    remain visible for safe manual entry and are optional until the
+                    title is mapped.
+                  </div>
+                )}
+
               <div className="grid gap-4 md:grid-cols-2">
-                {section.fields.map((field) => (
+                {visibleFields.map((field) => (
                   <label key={field.key} className={fieldSpan(field)}>
                     <span className="field-label">
                       {field.label}
-                      {field.required && <span className="text-red-500"> *</span>}
+                      {requiredFieldKeys.has(field.key) && (
+                        <span className="text-red-500"> *</span>
+                      )}
                     </span>
 
                     {field.type === "select" ? (
@@ -424,14 +710,19 @@ export default function CrewProfilePage() {
                           </div>
                         )}
                         {attachments[field.key]?.url && (
-                          <a
-                            href={attachments[field.key].url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex text-xs font-black text-blue-600 hover:underline dark:text-blue-300"
-                          >
-                            {attachments[field.key].name || "View uploaded file"}
-                          </a>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <a
+                              href={attachments[field.key].url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex text-xs font-black text-blue-600 hover:underline dark:text-blue-300"
+                            >
+                              {attachments[field.key].name || "View uploaded file"}
+                            </a>
+                            <span className="badge capitalize">
+                              {getCrewAttachmentStatus(attachments[field.key])}
+                            </span>
+                          </div>
                         )}
                       </div>
                     ) : field.type === "textarea" ? (
@@ -447,9 +738,23 @@ export default function CrewProfilePage() {
                         type={field.type}
                         value={values[field.key] || ""}
                         placeholder={field.placeholder || ""}
+                        maxLength={
+                          field.key === "iban" || field.key === "alternativeIban"
+                            ? 24
+                            : field.key === "accountNumber" ||
+                              field.key === "alternativeAccountNumber"
+                            ? 18
+                            : undefined
+                        }
+                        inputMode={
+                          field.key === "accountNumber" ||
+                          field.key === "alternativeAccountNumber"
+                            ? "numeric"
+                            : undefined
+                        }
                         onChange={(event) => updateField(field, event.target.value)}
                         onBlur={() =>
-                          field.key === "iban"
+                          field.key === "iban" || field.key === "alternativeIban"
                             ? updateField(field, values[field.key] || "")
                             : undefined
                         }
@@ -459,7 +764,8 @@ export default function CrewProfilePage() {
                 ))}
               </div>
             </section>
-          ))}
+            );
+          })}
 
           <div className="sticky bottom-4 flex justify-end">
             <button onClick={saveProfile} disabled={saving} className="btn-primary gap-2">

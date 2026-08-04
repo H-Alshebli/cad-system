@@ -61,6 +61,13 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         ],
       },
       {
+        key: "identityType",
+        label: "Identity Type",
+        type: "select",
+        options: ["National ID", "Iqama"],
+      },
+      { key: "iqamaExpiry", label: "Iqama Expiry Date", type: "date" },
+      {
         key: "gender",
         label: "Gender",
         type: "select",
@@ -154,7 +161,20 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         options: ["Full Time", "Part Time", "Contract", "Volunteer", "Collaborator"],
       },
       { key: "joiningDate", label: "Joining Date", type: "date" },
+      { key: "contractEndDate", label: "End of Contract Date", type: "date" },
       { key: "supervisorName", label: "Supervisor Name", type: "text" },
+      {
+        key: "coverageScope",
+        label: "Clinical Coverage Scope",
+        type: "select",
+        options: ["Adult", "Pediatric", "Adult & Pediatric", "Event Populations"],
+      },
+      {
+        key: "drivesAmbulance",
+        label: "Will This Employee Drive an Ambulance?",
+        type: "select",
+        options: ["Yes", "No"],
+      },
       {
         key: "workLocation",
         label: "Work Location",
@@ -177,26 +197,83 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
       { key: "scfhsNumber", label: "SCFHS Number", type: "text" },
       { key: "scfhsExpiry", label: "SCFHS Expiry Date", type: "date" },
       { key: "scfhsAttachment", label: "SCFHS Attachment", type: "file" },
+      { key: "blsNumber", label: "BLS Certificate Number", type: "text" },
       { key: "blsExpiry", label: "BLS Expiry Date", type: "date" },
       { key: "blsAttachment", label: "BLS Attachment", type: "file" },
+      { key: "aclsNumber", label: "ACLS Certificate Number", type: "text" },
       { key: "aclsExpiry", label: "ACLS Expiry Date", type: "date" },
       { key: "aclsAttachment", label: "ACLS Attachment", type: "file" },
+      {
+        key: "phtlsItlsType",
+        label: "Trauma Certification Type",
+        type: "select",
+        options: ["PHTLS", "ITLS"],
+      },
+      { key: "phtlsItlsNumber", label: "PHTLS / ITLS Certificate Number", type: "text" },
+      { key: "phtlsItlsExpiry", label: "PHTLS / ITLS Expiry Date", type: "date" },
+      { key: "phtlsItlsAttachment", label: "PHTLS / ITLS Attachment", type: "file" },
+      { key: "palsNumber", label: "PALS Certificate Number", type: "text" },
+      { key: "palsExpiry", label: "PALS Expiry Date", type: "date" },
+      { key: "palsAttachment", label: "PALS Attachment", type: "file" },
+      { key: "atlsNumber", label: "ATLS Certificate Number", type: "text" },
+      { key: "atlsExpiry", label: "ATLS Expiry Date", type: "date" },
+      { key: "atlsAttachment", label: "ATLS Attachment", type: "file" },
       { key: "driverLicenseNumber", label: "Driver License Number", type: "text" },
+      { key: "driverLicenseClass", label: "Driver License Class", type: "text" },
       { key: "driverLicenseExpiry", label: "Driver License Expiry", type: "date" },
       { key: "driverLicenseAttachment", label: "Driver License Attachment", type: "file" },
+      {
+        key: "evocEvosType",
+        label: "Emergency Vehicle Course Type",
+        type: "select",
+        options: ["EVOC", "EVOS"],
+      },
+      { key: "evocEvosNumber", label: "EVOC / EVOS Certificate Number", type: "text" },
+      { key: "evocEvosExpiry", label: "EVOC / EVOS Expiry Date", type: "date" },
+      { key: "evocEvosAttachment", label: "EVOC / EVOS Attachment", type: "file" },
       { key: "passportNumber", label: "Passport Number", type: "text" },
       { key: "passportExpiry", label: "Passport Expiry Date", type: "date" },
       { key: "passportAttachment", label: "Passport Attachment", type: "file" },
+      { key: "medicalDegreeAttachment", label: "Medical Degree Attachment", type: "file" },
+      {
+        key: "malpracticeInsuranceAttachment",
+        label: "Malpractice Insurance Attachment",
+        type: "file",
+      },
     ],
   },
   {
     key: "bank",
     title: "Bank Details",
-    description: "Payroll payment information. IBAN spacing is cleaned automatically.",
+    description: "Payroll payment information. Saudi IBANs are stored without spaces.",
     fields: [
       { key: "bankName", label: "Bank Name", type: "text" },
-      { key: "iban", label: "IBAN", type: "text", placeholder: "SA00 0000 0000 0000 0000 0000" },
+      {
+        key: "accountNumber",
+        label: "Account Number",
+        type: "text",
+        placeholder: "18-digit account number",
+      },
+      { key: "iban", label: "IBAN", type: "text", placeholder: "SA0000000000000000000000" },
       { key: "ibanAttachment", label: "IBAN Certificate Attachment", type: "file" },
+      { key: "alternativeBankName", label: "Alternative Bank Name", type: "text" },
+      {
+        key: "alternativeAccountNumber",
+        label: "Alternative Account Number",
+        type: "text",
+        placeholder: "18-digit account number",
+      },
+      {
+        key: "alternativeIban",
+        label: "Alternative IBAN",
+        type: "text",
+        placeholder: "SA0000000000000000000000",
+      },
+      {
+        key: "alternativeIbanAttachment",
+        label: "Alternative IBAN Certificate Attachment",
+        type: "file",
+      },
     ],
   },
   {
@@ -243,13 +320,360 @@ export const CREW_PROFILE_FIELDS = CREW_PROFILE_SECTIONS.flatMap(
 
 export type CrewProfileValues = Record<string, string>;
 
+export type CrewAttachmentStatus = "uploaded" | "verified" | "rejected";
+export type CrewComplianceStatus =
+  | "compliant"
+  | "incomplete"
+  | "pending_verification"
+  | "expiring_soon"
+  | "expired"
+  | "rejected";
+
+export type CrewProfileAttachment = {
+  name?: string;
+  url?: string;
+  path?: string;
+  contentType?: string;
+  size?: number;
+  uploadedAt?: string;
+  uploadedById?: string;
+  uploadedByName?: string;
+  status?: CrewAttachmentStatus;
+  reviewedAt?: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  reviewerEmail?: string;
+  rejectionReason?: string;
+  verificationHistory?: Array<{
+    action: CrewAttachmentStatus;
+    at: string;
+    actorId?: string;
+    actorName?: string;
+    actorEmail?: string;
+    reason?: string;
+  }>;
+};
+
+export type CrewProfileAttachments = Record<string, CrewProfileAttachment>;
+
+export function getCrewAttachmentStatus(
+  attachment?: CrewProfileAttachment | null
+): CrewAttachmentStatus {
+  if (attachment?.status === "verified" || attachment?.status === "rejected") {
+    return attachment.status;
+  }
+
+  return "uploaded";
+}
+
+export type CrewJobTitleGroup =
+  | "physician"
+  | "registered_nurse"
+  | "paramedic"
+  | "emt"
+  | "ambulance_driver"
+  | "ccc_admin"
+  | "other";
+
+export type CrewCredentialRequirement = {
+  key: string;
+  label: string;
+  planned?: boolean;
+};
+
+export const CREW_PROFILE_BASE_REQUIRED_KEYS = [
+  "firstNameEn",
+  "secondNameEn",
+  "thirdNameEn",
+  "familyNameEn",
+  "firstNameAr",
+  "secondNameAr",
+  "thirdNameAr",
+  "familyNameAr",
+  "nationalId",
+  "identityType",
+  "dateOfBirth",
+  "nationality",
+  "gender",
+  "bloodType",
+  "nationalAddressRNumber",
+  "nationalIdAttachment",
+  "mobileCountryCode",
+  "mobile",
+  "email",
+  "city",
+  "employeeId",
+  "jobTitle",
+  "employmentType",
+  "joiningDate",
+  "workLocation",
+  "primaryProjectId",
+  "bankName",
+  "accountNumber",
+  "iban",
+  "ibanAttachment",
+] as const;
+
+const credential = (
+  key: string,
+  label: string,
+  planned = false
+): CrewCredentialRequirement => ({ key, label, planned });
+
+const scfhs = [
+  credential("scfhsNumber", "SCFHS Number"),
+  credential("scfhsExpiry", "SCFHS Expiry Date"),
+  credential("scfhsAttachment", "SCFHS Attachment"),
+];
+const bls = [
+  credential("blsNumber", "BLS Certificate Number", true),
+  credential("blsExpiry", "BLS Expiry Date"),
+  credential("blsAttachment", "BLS Attachment"),
+];
+const acls = [
+  credential("aclsNumber", "ACLS Certificate Number", true),
+  credential("aclsExpiry", "ACLS Expiry Date"),
+  credential("aclsAttachment", "ACLS Attachment"),
+];
+const trauma = [
+  credential("phtlsItlsType", "Trauma Certification Type"),
+  credential("phtlsItlsNumber", "PHTLS / ITLS Certificate Number", true),
+  credential("phtlsItlsExpiry", "PHTLS / ITLS Expiry Date", true),
+  credential("phtlsItlsAttachment", "PHTLS / ITLS Attachment", true),
+];
+const driverLicense = [
+  credential("driverLicenseNumber", "Driver License Number"),
+  credential("driverLicenseClass", "Driver License Class"),
+  credential("driverLicenseExpiry", "Driver License Expiry"),
+  credential("driverLicenseAttachment", "Driver License Attachment"),
+];
+const evoc = [
+  credential("evocEvosType", "Emergency Vehicle Course Type"),
+  credential("evocEvosNumber", "EVOC / EVOS Certificate Number", true),
+  credential("evocEvosExpiry", "EVOC / EVOS Expiry Date", true),
+  credential("evocEvosAttachment", "EVOC / EVOS Attachment", true),
+];
+
+export const CREW_CREDENTIAL_REQUIREMENTS: Record<
+  CrewJobTitleGroup,
+  CrewCredentialRequirement[]
+> = {
+  physician: [
+    ...scfhs,
+    ...bls,
+    ...acls,
+  ],
+  registered_nurse: [...scfhs, ...bls, ...acls],
+  paramedic: [...scfhs, ...bls, ...acls, ...trauma],
+  emt: [...scfhs, ...bls, ...trauma],
+  ambulance_driver: [...driverLicense, ...evoc, ...bls],
+  ccc_admin: [],
+  other: [],
+};
+
+const passportRequirements = [
+  credential("passportNumber", "Passport Number"),
+  credential("passportExpiry", "Passport Expiry Date"),
+  credential("passportAttachment", "Passport Attachment"),
+];
+
+const plannedBaseRequirements = [
+  credential("contractEndDate", "End of Contract Date", true),
+];
+
+const plannedNonSaudiRequirements = [
+  credential("iqamaExpiry", "Iqama Expiry Date", true),
+];
+
+const atlsRequirements = [
+  credential("atlsNumber", "ATLS Certificate Number"),
+  credential("atlsExpiry", "ATLS Expiry Date"),
+  credential("atlsAttachment", "ATLS Attachment"),
+];
+
+const palsRequirements = [
+  credential("palsNumber", "PALS Certificate Number"),
+  credential("palsExpiry", "PALS Expiry Date"),
+  credential("palsAttachment", "PALS Attachment"),
+];
+
+export function normalizeCrewJobTitle(value: string): CrewJobTitleGroup {
+  const title = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+
+  if (/physician|doctor|medical officer/.test(title)) return "physician";
+  if (/registered nurse|\brn\b|nurse/.test(title)) return "registered_nurse";
+  if (/paramedic/.test(title)) return "paramedic";
+  if (/\bemt\b|emergency medical technician/.test(title)) return "emt";
+  if (/ambulance driver|\bdriver\b/.test(title)) return "ambulance_driver";
+  if (
+    /ccc|control center|control centre|operator|dispatcher|dispatch|admin|manager|supervisor|coordinator/.test(
+      title
+    )
+  ) {
+    return "ccc_admin";
+  }
+  return "other";
+}
+
+export function isSaudiNationality(value: string) {
+  const nationality = String(value || "").trim().toLowerCase();
+  return nationality === "saudi" || nationality === "saudi arabia";
+}
+
+export function getCrewProfileRequirements(values: CrewProfileValues) {
+  const titleGroup = normalizeCrewJobTitle(values.jobTitle);
+  const availableFieldKeys = new Set(CREW_PROFILE_FIELDS.map((field) => field.key));
+  const baseRequirements = CREW_PROFILE_BASE_REQUIRED_KEYS.map((key) => {
+    const field = CREW_PROFILE_FIELDS.find((item) => item.key === key);
+    return credential(key, field?.label || key);
+  });
+  const titleRequirements = CREW_CREDENTIAL_REQUIREMENTS[titleGroup];
+  const nationalityRequirements =
+    values.nationality && !isSaudiNationality(values.nationality)
+      ? [...passportRequirements, ...plannedNonSaudiRequirements]
+      : [];
+  const drivingRequirements =
+    titleGroup === "paramedic" && values.drivesAmbulance === "Yes"
+      ? [...driverLicense, ...evoc]
+      : [];
+  const coverageScope = String(values.coverageScope || "").toLowerCase();
+  const pediatricCoverage =
+    coverageScope.includes("pediatric") || coverageScope.includes("event");
+  const coverageRequirements = pediatricCoverage
+    ? titleGroup === "ccc_admin" || titleGroup === "ambulance_driver"
+      ? []
+      : palsRequirements
+    : titleGroup === "physician" && coverageScope
+    ? atlsRequirements
+    : [];
+  const workflowRequirements = [
+    ...(["physician", "registered_nurse", "paramedic", "emt"].includes(
+      titleGroup
+    )
+      ? [credential("coverageScope", "Clinical Coverage Scope")]
+      : []),
+    ...(titleGroup === "paramedic"
+      ? [
+          credential(
+            "drivesAmbulance",
+            "Will This Employee Drive an Ambulance?"
+          ),
+        ]
+      : []),
+  ];
+
+  const allRequirements = [
+    ...baseRequirements,
+    ...plannedBaseRequirements,
+    ...titleRequirements,
+    ...nationalityRequirements,
+    ...drivingRequirements,
+    ...coverageRequirements,
+    ...workflowRequirements,
+  ];
+  const uniqueRequirements = Array.from(
+    new Map(allRequirements.map((item) => [item.key, item])).values()
+  );
+
+  return {
+    titleGroup,
+    requirements: uniqueRequirements.filter((item) => availableFieldKeys.has(item.key)),
+    plannedRequirements: uniqueRequirements.filter(
+      (item) => item.planned && !availableFieldKeys.has(item.key)
+    ),
+  };
+}
+
+const requirementKeys = (items: CrewCredentialRequirement[]) =>
+  new Set(items.map((item) => item.key));
+
+const scfhsKeys = requirementKeys(scfhs);
+const blsKeys = requirementKeys(bls);
+const aclsKeys = requirementKeys(acls);
+const traumaKeys = requirementKeys(trauma);
+const driverLicenseKeys = requirementKeys(driverLicense);
+const evocKeys = requirementKeys(evoc);
+const passportKeys = requirementKeys(passportRequirements);
+const atlsKeys = requirementKeys(atlsRequirements);
+const palsKeys = requirementKeys(palsRequirements);
+const physicianOptionalDocumentKeys = new Set([
+  "medicalDegreeAttachment",
+  "malpracticeInsuranceAttachment",
+]);
+const credentialFieldKeys = new Set(
+  CREW_PROFILE_SECTIONS.find((section) => section.key === "credentials")?.fields.map(
+    (field) => field.key
+  ) || []
+);
+
+export function isCrewProfileFieldVisible(
+  fieldKey: string,
+  values: CrewProfileValues
+) {
+  const titleGroup = normalizeCrewJobTitle(values.jobTitle);
+  const hasJobTitle = Boolean(String(values.jobTitle || "").trim());
+  const isNonSaudi = Boolean(values.nationality) && !isSaudiNationality(values.nationality);
+  const clinicalTitle = [
+    "physician",
+    "registered_nurse",
+    "paramedic",
+    "emt",
+  ].includes(titleGroup);
+
+  if (fieldKey === "iqamaExpiry") return isNonSaudi;
+  if (fieldKey === "coverageScope") return hasJobTitle && clinicalTitle;
+  if (fieldKey === "drivesAmbulance") return titleGroup === "paramedic";
+  if (!credentialFieldKeys.has(fieldKey)) return true;
+  if (!hasJobTitle) return false;
+
+  if (passportKeys.has(fieldKey)) return isNonSaudi;
+  // Unknown/custom titles remain visible for safe manual capture until mapped.
+  if (titleGroup === "other") return true;
+  if (physicianOptionalDocumentKeys.has(fieldKey)) return titleGroup === "physician";
+  if (scfhsKeys.has(fieldKey)) return clinicalTitle;
+  if (blsKeys.has(fieldKey)) return titleGroup !== "ccc_admin";
+  if (aclsKeys.has(fieldKey)) return clinicalTitle;
+  if (traumaKeys.has(fieldKey)) {
+    return ["registered_nurse", "paramedic", "emt"].includes(titleGroup);
+  }
+  if (driverLicenseKeys.has(fieldKey) || evocKeys.has(fieldKey)) {
+    return (
+      titleGroup === "ambulance_driver" ||
+      (titleGroup === "paramedic" && values.drivesAmbulance === "Yes")
+    );
+  }
+  if (palsKeys.has(fieldKey)) {
+    const scope = String(values.coverageScope || "").toLowerCase();
+    return clinicalTitle && (scope.includes("pediatric") || scope.includes("event"));
+  }
+  if (atlsKeys.has(fieldKey)) {
+    const scope = String(values.coverageScope || "").toLowerCase();
+    return titleGroup === "physician" && scope === "adult";
+  }
+
+  return false;
+}
+
 export function normalizeIban(value: string) {
   return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
 export function formatIban(value: string) {
+  return normalizeIban(value);
+}
+
+export function sanitizeSaudiIban(value: string) {
   const compact = normalizeIban(value);
-  return compact.replace(/(.{4})/g, "$1 ").trim();
+  if (!compact) return "";
+  const digits = compact.replace(/^SA/, "").replace(/\D/g, "").slice(0, 22);
+  return `SA${digits}`;
+}
+
+export function isValidSaudiIban(value: string) {
+  return /^SA\d{22}$/.test(normalizeIban(value));
 }
 
 export function getCrewProfileValues(user: any): CrewProfileValues {
@@ -280,24 +704,155 @@ export function getCrewProfileValues(user: any): CrewProfileValues {
     values.iban = formatIban(values.iban);
   }
 
+  if (values.alternativeIban) {
+    values.alternativeIban = formatIban(values.alternativeIban);
+  }
+
+  if (!values.identityType && values.nationality) {
+    values.identityType = isSaudiNationality(values.nationality)
+      ? "National ID"
+      : "Iqama";
+  }
+
   return values;
 }
 
-export function getCrewProfileCompletion(values: CrewProfileValues) {
-  const explicitlyRequired = CREW_PROFILE_FIELDS.filter((field) => field.required);
-  const requiredFields = explicitlyRequired.length
-    ? explicitlyRequired
-    : CREW_PROFILE_FIELDS.filter((field) => field.type !== "file");
-  const missing = requiredFields.filter((field) => !String(values[field.key] || "").trim());
-  const complete = requiredFields.length - missing.length;
+export function getCrewProfileCompletion(
+  values: CrewProfileValues,
+  attachments: CrewProfileAttachments = {}
+) {
+  const { titleGroup, requirements, plannedRequirements } =
+    getCrewProfileRequirements(values);
+  const requiredFields = requirements.map((requirement) => {
+    const field = CREW_PROFILE_FIELDS.find((item) => item.key === requirement.key);
+    return field || ({ key: requirement.key, label: requirement.label, type: "text" } as CrewProfileField);
+  });
+  const hasFieldValue = (field: CrewProfileField) =>
+    field.type === "file"
+      ? Boolean(attachments[field.key]?.url || String(values[field.key] || "").trim())
+      : Boolean(String(values[field.key] || "").trim());
+  const missing = requiredFields.filter((field) => !hasFieldValue(field));
+  const pendingVerification = requiredFields.filter(
+    (field) =>
+      field.type === "file" &&
+      hasFieldValue(field) &&
+      getCrewAttachmentStatus(attachments[field.key]) === "uploaded"
+  );
+  const rejected = requiredFields.filter(
+    (field) =>
+      field.type === "file" &&
+      hasFieldValue(field) &&
+      getCrewAttachmentStatus(attachments[field.key]) === "rejected"
+  );
+  const incompleteKeys = new Set([
+    ...missing.map((field) => field.key),
+    ...pendingVerification.map((field) => field.key),
+    ...rejected.map((field) => field.key),
+  ]);
+  const complete = requiredFields.filter(
+    (field) => !incompleteKeys.has(field.key)
+  ).length;
   const percent = requiredFields.length
     ? Math.round((complete / requiredFields.length) * 100)
     : 100;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expired = requiredFields.filter((field) => {
+    if (field.type !== "date") return false;
+    const rawValue = String(values[field.key] || "").trim();
+    if (!rawValue) return false;
+    const date = new Date(`${rawValue}T00:00:00`);
+    return !Number.isNaN(date.getTime()) && date < today;
+  });
+  const expiringSoon = requiredFields.filter((field) => {
+    if (field.type !== "date") return false;
+    const rawValue = String(values[field.key] || "").trim();
+    if (!rawValue) return false;
+    const date = new Date(`${rawValue}T00:00:00`);
+    if (Number.isNaN(date.getTime()) || date < today) return false;
+    const daysRemaining = Math.ceil(
+      (date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)
+    );
+    return daysRemaining <= 90;
+  });
+  const isMappedJobTitle =
+    Boolean(String(values.jobTitle || "").trim()) && titleGroup !== "other";
+  const isComplete =
+    missing.length === 0 &&
+    pendingVerification.length === 0 &&
+    rejected.length === 0 &&
+    isMappedJobTitle;
+  const isCompliant = isComplete && expired.length === 0;
+  const complianceStatus: CrewComplianceStatus = rejected.length
+    ? "rejected"
+    : expired.length
+    ? "expired"
+    : pendingVerification.length
+    ? "pending_verification"
+    : missing.length || !isMappedJobTitle
+    ? "incomplete"
+    : expiringSoon.length
+    ? "expiring_soon"
+    : "compliant";
 
   return {
     complete,
     total: requiredFields.length,
     missing,
+    pendingVerification,
+    rejected,
     percent,
+    expired,
+    expiringSoon,
+    isComplete,
+    isCompliant,
+    status: isCompliant ? "compliant" : isComplete ? "complete" : "draft",
+    complianceStatus,
+    requiredKeys: requiredFields.map((field) => field.key),
+    titleGroup,
+    isMappedJobTitle,
+    plannedRequirements,
+  };
+}
+
+export function isCrewComplianceSubject(user: Record<string, any>) {
+  const values = getCrewProfileValues(user);
+  if (String(values.jobTitle || "").trim()) return true;
+  if (Object.keys(user?.crewProfileAttachments || {}).length > 0) return true;
+  if (
+    Object.values(user?.crewProfile || {}).some((value) =>
+      String(value || "").trim()
+    )
+  ) {
+    return true;
+  }
+
+  const role = String(user?.role || "").trim().toLowerCase();
+  return /crew|paramedic|emt|nurse|physician|doctor|ambulance|driver|dispatcher|ccc|medical[_ ]team/.test(
+    role
+  );
+}
+
+export function getCrewDeploymentReadiness(user: Record<string, any>) {
+  const values = getCrewProfileValues(user);
+  const attachments = (user?.crewProfileAttachments || {}) as CrewProfileAttachments;
+  const completion = getCrewProfileCompletion(values, attachments);
+  const blockers = [
+    ...completion.missing.map((field) => `Missing: ${field.label}`),
+    ...completion.pendingVerification.map(
+      (field) => `Pending verification: ${field.label}`
+    ),
+    ...completion.rejected.map((field) => `Rejected: ${field.label}`),
+    ...completion.expired.map((field) => `Expired: ${field.label}`),
+    ...(!completion.isMappedJobTitle ? ["Job title is not mapped"] : []),
+    ...(user?.active === false ? ["User account is inactive"] : []),
+  ];
+
+  return {
+    ready: blockers.length === 0 && completion.isCompliant,
+    blockers: Array.from(new Set(blockers)),
+    complianceStatus: completion.complianceStatus,
+    completionPercent: completion.percent,
+    expiringSoon: completion.expiringSoon,
   };
 }

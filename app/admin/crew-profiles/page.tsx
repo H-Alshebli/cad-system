@@ -2,7 +2,7 @@
 
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   AlertCircle,
   CheckCircle2,
@@ -17,10 +17,15 @@ import {
 
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import { getProjectDisplayName } from "@/lib/displayLabels";
 import {
   CREW_PROFILE_FIELDS,
   CREW_PROFILE_SECTIONS,
+  CrewProfileAttachments,
   CrewProfileValues,
+  getCrewAttachmentStatus,
   getCrewProfileCompletion,
   getCrewProfileValues,
 } from "@/lib/crewProfile";
@@ -33,8 +38,26 @@ type CrewUser = {
   role?: string;
   active?: boolean;
   crewProfile?: Record<string, string>;
-  crewProfileAttachments?: Record<string, any>;
+  crewProfileAttachments?: CrewProfileAttachments;
   profileUpdatedAt?: any;
+};
+
+type CrewProject = {
+  id: string;
+  projectName?: string;
+  name?: string;
+  isArchived?: boolean;
+  assignedUsers?: Record<string, boolean>;
+  assignedUserIds?: string[];
+  teamUserIds?: string[];
+  assignedAmbulances?: Array<{
+    crewUserIds?: string[];
+    crewMembers?: Array<{ userId?: string }>;
+  }>;
+  projectDetails?: {
+    siteDetails?: string;
+    eventLocation?: string;
+  };
 };
 
 const fileFieldKeys = new Set(
@@ -86,16 +109,55 @@ function formatDate(value: any) {
   });
 }
 
-function statusClass(percent: number) {
-  if (percent >= 90) {
+function complianceStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    compliant: "Compliant",
+    incomplete: "Incomplete",
+    pending_verification: "Pending Verification",
+    expiring_soon: "Expiring Soon",
+    expired: "Expired",
+    rejected: "Rejected",
+  };
+  return labels[status] || status;
+}
+
+function statusClass(status: string) {
+  if (status === "compliant") {
     return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
   }
-
-  if (percent >= 60) {
+  if (status === "expiring_soon" || status === "pending_verification") {
     return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200";
   }
-
   return "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200";
+}
+
+function isCrewProfileUser(user: CrewUser, values: CrewProfileValues) {
+  if (String(values.jobTitle || "").trim()) return true;
+  if (Object.values(user.crewProfile || {}).some((value) => String(value || "").trim())) {
+    return true;
+  }
+  if (Object.keys(user.crewProfileAttachments || {}).length > 0) return true;
+
+  const role = String(user.role || "").toLowerCase();
+  return /crew|paramedic|emt|nurse|physician|doctor|ambulance|driver|dispatcher|ccc|medical[_ ]team/.test(
+    role
+  );
+}
+
+function getProjectAssignedUserIds(project: CrewProject) {
+  const ids = new Set<string>();
+  Object.entries(project.assignedUsers || {}).forEach(([id, assigned]) => {
+    if (assigned) ids.add(id);
+  });
+  (project.assignedUserIds || []).forEach((id) => ids.add(id));
+  (project.teamUserIds || []).forEach((id) => ids.add(id));
+  (project.assignedAmbulances || []).forEach((ambulance) => {
+    (ambulance.crewUserIds || []).forEach((id) => ids.add(id));
+    (ambulance.crewMembers || []).forEach((member) => {
+      if (member.userId) ids.add(member.userId);
+    });
+  });
+  return ids;
 }
 
 function fieldDisplayValue(fieldKey: string, values: CrewProfileValues, attachments: Record<string, any>) {
@@ -116,11 +178,21 @@ function todayFileStamp() {
 }
 
 export default function CrewProfilesDashboardPage() {
+  const { user: reviewer } = useCurrentUser();
+  const { can, isAdmin } = usePermissions(reviewer?.role);
   const [users, setUsers] = useState<CrewUser[]>([]);
+  const [projects, setProjects] = useState<CrewProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [jobTitleFilter, setJobTitleFilter] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [supervisorFilter, setSupervisorFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
+  const [reviewingAttachment, setReviewingAttachment] = useState("");
+  const canReviewAttachments =
+    isAdmin || can("crew_profile", "edit_all");
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -142,12 +214,37 @@ export default function CrewProfilesDashboardPage() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, "projects"),
+      (snap) => {
+        setProjects(
+          snap.docs
+            .map((item) => ({ id: item.id, ...(item.data() as any) }))
+            .filter((project) => !project.isArchived)
+            .sort((a, b) =>
+              getProjectDisplayName(a).localeCompare(getProjectDisplayName(b))
+            )
+        );
+      },
+      (error) => console.error("Failed to load projects for crew compliance", error)
+    );
+  }, []);
+
   const rows = useMemo(() => {
     return users.map((user) => {
       const values = getCrewProfileValues(user);
-      const completion = getCrewProfileCompletion(values);
       const attachments = user.crewProfileAttachments || {};
+      const completion = getCrewProfileCompletion(values, attachments);
       const attachmentCount = Object.values(attachments).filter(Boolean).length;
+
+      const projectIds = projects
+        .filter(
+          (project) =>
+            values.primaryProjectId === project.id ||
+            getProjectAssignedUserIds(project).has(user.id)
+        )
+        .map((project) => project.id);
 
       return {
         user,
@@ -155,24 +252,45 @@ export default function CrewProfilesDashboardPage() {
         completion,
         attachmentCount,
         displayName: profileName(user, values),
+        projectIds,
+        projectNames: projects
+          .filter((project) => projectIds.includes(project.id))
+          .map((project) => getProjectDisplayName(project)),
       };
-    });
-  }, [users]);
+    }).filter((row) => isCrewProfileUser(row.user, row.values));
+  }, [users, projects]);
 
   const stats = useMemo(() => {
-    const complete = rows.filter((row) => row.completion.percent >= 90).length;
-    const partial = rows.filter(
-      (row) => row.completion.percent > 0 && row.completion.percent < 90
+    const compliant = rows.filter(
+      (row) => row.completion.complianceStatus === "compliant"
     ).length;
-    const notStarted = rows.filter((row) => row.completion.percent === 0).length;
+    const attention = rows.length - compliant;
+    const expired = rows.filter(
+      (row) => row.completion.complianceStatus === "expired"
+    ).length;
 
     return {
       total: rows.length,
-      complete,
-      partial,
-      notStarted,
+      compliant,
+      attention,
+      expired,
     };
   }, [rows]);
+
+  const filterOptions = useMemo(
+    () => ({
+      jobTitles: Array.from(
+        new Set(rows.map((row) => row.values.jobTitle).filter(Boolean))
+      ).sort(),
+      locations: Array.from(
+        new Set(rows.map((row) => row.values.workLocation).filter(Boolean))
+      ).sort(),
+      supervisors: Array.from(
+        new Set(rows.map((row) => row.values.supervisorName).filter(Boolean))
+      ).sort(),
+    }),
+    [rows]
+  );
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -186,6 +304,9 @@ export default function CrewProfilesDashboardPage() {
         row.values.mobile,
         row.values.city,
         row.values.jobTitle,
+        row.values.workLocation,
+        row.values.supervisorName,
+        ...row.projectNames,
       ]
         .filter(Boolean)
         .join(" ")
@@ -194,17 +315,172 @@ export default function CrewProfilesDashboardPage() {
       const matchesSearch = !q || haystack.includes(q);
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "complete" && row.completion.percent >= 90) ||
-        (statusFilter === "partial" &&
-          row.completion.percent > 0 &&
-          row.completion.percent < 90) ||
-        (statusFilter === "missing" && row.completion.percent === 0);
+        row.completion.complianceStatus === statusFilter;
+      const matchesJobTitle =
+        jobTitleFilter === "all" || row.values.jobTitle === jobTitleFilter;
+      const matchesProject =
+        projectFilter === "all" ||
+        (projectFilter === "unassigned"
+          ? row.projectIds.length === 0
+          : row.projectIds.includes(projectFilter));
+      const matchesLocation =
+        locationFilter === "all" || row.values.workLocation === locationFilter;
+      const matchesSupervisor =
+        supervisorFilter === "all" ||
+        row.values.supervisorName === supervisorFilter;
 
-      return matchesSearch && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesJobTitle &&
+        matchesProject &&
+        matchesLocation &&
+        matchesSupervisor
+      );
     });
-  }, [rows, search, statusFilter]);
+  }, [
+    rows,
+    search,
+    statusFilter,
+    jobTitleFilter,
+    projectFilter,
+    locationFilter,
+    supervisorFilter,
+  ]);
+
+  const projectCompliance = useMemo(() => {
+    const summaries = projects.map((project) => {
+      const projectRows = rows.filter((row) => row.projectIds.includes(project.id));
+      const compliant = projectRows.filter(
+        (row) => row.completion.complianceStatus === "compliant"
+      ).length;
+      return {
+        id: project.id,
+        name: getProjectDisplayName(project),
+        site:
+          project.projectDetails?.siteDetails ||
+          project.projectDetails?.eventLocation ||
+          "-",
+        total: projectRows.length,
+        compliant,
+        attention: projectRows.length - compliant,
+        percent: projectRows.length
+          ? Math.round((compliant / projectRows.length) * 100)
+          : 0,
+      };
+    });
+    const unassignedRows = rows.filter((row) => row.projectIds.length === 0);
+    const unassignedCompliant = unassignedRows.filter(
+      (row) => row.completion.complianceStatus === "compliant"
+    ).length;
+
+    return [
+      ...summaries,
+      {
+        id: "unassigned",
+        name: "Unassigned Crew",
+        site: "-",
+        total: unassignedRows.length,
+        compliant: unassignedCompliant,
+        attention: unassignedRows.length - unassignedCompliant,
+        percent: unassignedRows.length
+          ? Math.round((unassignedCompliant / unassignedRows.length) * 100)
+          : 0,
+      },
+    ];
+  }, [projects, rows]);
 
   const selectedRow = rows.find((row) => row.user.id === selectedId);
+
+  async function reviewAttachment(
+    targetUser: CrewUser,
+    fieldKey: string,
+    decision: "verified" | "rejected"
+  ) {
+    if (!reviewer?.uid || !canReviewAttachments) return;
+
+    const existing = targetUser.crewProfileAttachments?.[fieldKey];
+    if (!existing?.url) return;
+
+    const reason =
+      decision === "rejected"
+        ? window.prompt("Enter the rejection reason. The crew member will see it:")
+        : "";
+    if (decision === "rejected" && !String(reason || "").trim()) return;
+
+    const reviewKey = `${targetUser.id}:${fieldKey}`;
+    setReviewingAttachment(reviewKey);
+
+    try {
+      const reviewedAt = new Date().toISOString();
+      const actorName =
+        reviewer.name || reviewer.displayName || reviewer.email || "Reviewer";
+      const nextAttachment = {
+        name: existing.name || "",
+        url: existing.url,
+        path: existing.path || "",
+        contentType: existing.contentType || "application/octet-stream",
+        size: existing.size || 0,
+        uploadedAt: existing.uploadedAt || "",
+        uploadedById: existing.uploadedById || "",
+        uploadedByName: existing.uploadedByName || "",
+        status: decision,
+        reviewedAt,
+        reviewerId: reviewer.uid,
+        reviewerName: actorName,
+        reviewerEmail: reviewer.email || "",
+        ...(decision === "rejected"
+          ? { rejectionReason: String(reason).trim() }
+          : {}),
+        verificationHistory: [
+          ...(existing.verificationHistory || []),
+          {
+            action: decision,
+            at: reviewedAt,
+            actorId: reviewer.uid,
+            actorName,
+            actorEmail: reviewer.email || "",
+            ...(decision === "rejected"
+              ? { reason: String(reason).trim() }
+              : {}),
+          },
+        ],
+      };
+      const nextAttachments = {
+        ...(targetUser.crewProfileAttachments || {}),
+        [fieldKey]: nextAttachment,
+      };
+      const values = getCrewProfileValues({
+        ...targetUser,
+        crewProfileAttachments: nextAttachments,
+      });
+      const completion = getCrewProfileCompletion(values, nextAttachments);
+
+      await updateDoc(doc(db, "users", targetUser.id), {
+        crewProfileAttachments: nextAttachments,
+        crewProfileCompletion: completion.percent,
+        crewProfileMissingFields: completion.missing.map((field) => field.key),
+        crewProfilePendingVerificationFields: completion.pendingVerification.map(
+          (field) => field.key
+        ),
+        crewProfileRejectedFields: completion.rejected.map((field) => field.key),
+        crewProfileExpiredFields: completion.expired.map((field) => field.key),
+        crewProfileExpiringSoonFields: completion.expiringSoon.map(
+          (field) => field.key
+        ),
+        crewProfileStatus: completion.status,
+        crewProfileComplianceStatus: completion.complianceStatus,
+        crewProfileIsComplete: completion.isComplete,
+        crewProfileIsCompliant: completion.isCompliant,
+        profileUpdatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to review crew attachment", error);
+      window.alert("Could not update the document status. Please try again.");
+    } finally {
+      setReviewingAttachment("");
+    }
+  }
 
   function exportToExcel() {
     const exportRows = filteredRows.map((row) => {
@@ -218,9 +494,26 @@ export default function CrewProfilesDashboardPage() {
         "Mobile Country Code": row.values.mobileCountryCode || "",
         "Mobile Number": row.values.mobile || "",
         City: row.values.city || "",
+        "Work Location": row.values.workLocation || "",
+        Supervisor: row.values.supervisorName || "",
+        Projects: row.projectNames.join(", ") || "Unassigned",
         "Completion %": row.completion.percent,
         "Missing Count": row.completion.missing.length,
         "Missing Fields": row.completion.missing.map((field) => field.label).join(", "),
+        "Pending Verification": row.completion.pendingVerification
+          .map((field) => field.label)
+          .join(", "),
+        "Rejected Documents": row.completion.rejected
+          .map((field) => field.label)
+          .join(", "),
+        "Expired Fields": row.completion.expired.map((field) => field.label).join(", "),
+        "Expiring Within 90 Days": row.completion.expiringSoon
+          .map((field) => field.label)
+          .join(", "),
+        "Profile Status": row.completion.status,
+        "Compliance Status": complianceStatusLabel(
+          row.completion.complianceStatus
+        ),
         "Attachments Count": row.attachmentCount,
         "Last Updated": formatDate(row.user.profileUpdatedAt),
       };
@@ -229,6 +522,13 @@ export default function CrewProfilesDashboardPage() {
         if (field.type === "file") {
           base[`${field.label} - File Name`] = attachments[field.key]?.name || "";
           base[`${field.label} - Link`] = attachments[field.key]?.url || "";
+          base[`${field.label} - Status`] = getCrewAttachmentStatus(
+            attachments[field.key]
+          );
+          base[`${field.label} - Reviewer`] =
+            attachments[field.key]?.reviewerName || "";
+          base[`${field.label} - Rejection Reason`] =
+            attachments[field.key]?.rejectionReason || "";
         } else {
           base[field.label] = row.values[field.key] || "";
         }
@@ -238,6 +538,16 @@ export default function CrewProfilesDashboardPage() {
     });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const projectWorksheet = XLSX.utils.json_to_sheet(
+      projectCompliance.map((project) => ({
+        Project: project.name,
+        Site: project.site,
+        "Total Crew": project.total,
+        Compliant: project.compliant,
+        "Needs Attention": project.attention,
+        "Compliance %": project.percent,
+      }))
+    );
     const workbook = XLSX.utils.book_new();
 
     worksheet["!cols"] = Object.keys(exportRows[0] || { "Crew Member": "" }).map((key) => ({
@@ -245,6 +555,7 @@ export default function CrewProfilesDashboardPage() {
     }));
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Crew Profiles");
+    XLSX.utils.book_append_sheet(workbook, projectWorksheet, "Project Compliance");
     XLSX.writeFile(workbook, `Crew_Profiles_${todayFileStamp()}.xlsx`);
   }
 
@@ -281,29 +592,29 @@ export default function CrewProfilesDashboardPage() {
             </div>
           </div>
           <div className="card-modern">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Near Complete</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Compliant</div>
             <div className="mt-2 flex items-center gap-2 text-3xl font-black text-emerald-600 dark:text-emerald-300">
               <CheckCircle2 size={24} />
-              {stats.complete}
+              {stats.compliant}
             </div>
           </div>
           <div className="card-modern">
-            <div className="text-sm text-slate-500 dark:text-slate-400">In Progress</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Needs Attention</div>
             <div className="mt-2 text-3xl font-black text-amber-600 dark:text-amber-300">
-              {stats.partial}
+              {stats.attention}
             </div>
           </div>
           <div className="card-modern">
-            <div className="text-sm text-slate-500 dark:text-slate-400">Not Started</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Expired</div>
             <div className="mt-2 flex items-center gap-2 text-3xl font-black text-red-600 dark:text-red-300">
               <AlertCircle size={24} />
-              {stats.notStarted}
+              {stats.expired}
             </div>
           </div>
         </div>
 
         <div className="card-modern">
-          <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <label className="relative">
               <Search
                 size={16}
@@ -323,11 +634,91 @@ export default function CrewProfilesDashboardPage() {
               className="select"
             >
               <option value="all">All statuses</option>
-              <option value="complete">Near complete</option>
-              <option value="partial">In progress</option>
-              <option value="missing">Not started</option>
+              <option value="compliant">Compliant</option>
+              <option value="incomplete">Incomplete</option>
+              <option value="pending_verification">Pending verification</option>
+              <option value="expiring_soon">Expiring soon</option>
+              <option value="expired">Expired</option>
+              <option value="rejected">Rejected documents</option>
+            </select>
+
+            <select
+              value={jobTitleFilter}
+              onChange={(event) => setJobTitleFilter(event.target.value)}
+              className="select"
+            >
+              <option value="all">All job titles</option>
+              {filterOptions.jobTitles.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+
+            <select
+              value={projectFilter}
+              onChange={(event) => setProjectFilter(event.target.value)}
+              className="select"
+            >
+              <option value="all">All projects</option>
+              <option value="unassigned">Unassigned crew</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {getProjectDisplayName(project)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={locationFilter}
+              onChange={(event) => setLocationFilter(event.target.value)}
+              className="select"
+            >
+              <option value="all">All work locations</option>
+              {filterOptions.locations.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+
+            <select
+              value={supervisorFilter}
+              onChange={(event) => setSupervisorFilter(event.target.value)}
+              className="select"
+            >
+              <option value="all">All supervisors</option>
+              {filterOptions.supervisors.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
             </select>
           </div>
+        </div>
+
+        <div className="table-modern overflow-x-auto">
+          <div className="border-b border-slate-200 p-4 dark:border-slate-800">
+            <h2 className="section-title">Project / Site Compliance</h2>
+          </div>
+          <table className="w-full min-w-[760px] text-left">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900/70">
+              <tr>
+                <th className="p-4">Project</th>
+                <th className="p-4">Site</th>
+                <th className="p-4">Total Crew</th>
+                <th className="p-4">Compliant</th>
+                <th className="p-4">Needs Attention</th>
+                <th className="p-4">Compliance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projectCompliance.map((project) => (
+                <tr key={project.id} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="p-4 font-black">{project.name}</td>
+                  <td className="p-4">{project.site}</td>
+                  <td className="p-4">{project.total}</td>
+                  <td className="p-4 text-emerald-600">{project.compliant}</td>
+                  <td className="p-4 text-amber-600">{project.attention}</td>
+                  <td className="p-4"><span className="badge">{project.percent}%</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <div className="table-modern overflow-x-auto">
@@ -339,6 +730,7 @@ export default function CrewProfilesDashboardPage() {
                 <th className="p-4">Employee ID</th>
                 <th className="p-4">Mobile</th>
                 <th className="p-4">City</th>
+                <th className="p-4">Project</th>
                 <th className="p-4">Completion</th>
                 <th className="p-4">Missing</th>
                 <th className="p-4">Files</th>
@@ -350,13 +742,13 @@ export default function CrewProfilesDashboardPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={10}>
+                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={11}>
                     Loading crew profiles...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={10}>
+                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={11}>
                     No crew profiles match the current filters.
                   </td>
                 </tr>
@@ -382,9 +774,12 @@ export default function CrewProfilesDashboardPage() {
                       {[row.values.mobileCountryCode, row.values.mobile].filter(Boolean).join(" ") || "-"}
                     </td>
                     <td className="p-4">{row.values.city || "-"}</td>
+                    <td className="p-4 text-xs">{row.projectNames.join(", ") || "Unassigned"}</td>
                     <td className="p-4">
-                      <span className={`badge ${statusClass(row.completion.percent)}`}>
-                        {row.completion.percent}%
+                      <span
+                        className={`badge ${statusClass(row.completion.complianceStatus)}`}
+                      >
+                        {row.completion.percent}% - {complianceStatusLabel(row.completion.complianceStatus)}
                       </span>
                     </td>
                     <td className="p-4">{row.completion.missing.length}</td>
@@ -472,6 +867,32 @@ export default function CrewProfilesDashboardPage() {
                 </div>
               )}
 
+              {selectedRow.completion.expired.length > 0 && (
+                <div className="notice-danger mb-5">
+                  <div className="mb-3 font-black">Expired required items</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRow.completion.expired.map((field) => (
+                      <span key={field.key} className="badge">
+                        {field.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedRow.completion.expiringSoon.length > 0 && (
+                <div className="notice-warning mb-5">
+                  <div className="mb-3 font-black">Expiring within 90 days</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRow.completion.expiringSoon.map((field) => (
+                      <span key={field.key} className="badge">
+                        {field.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-5">
                 {CREW_PROFILE_SECTIONS.map((section) => (
                   <section key={section.key} className="card-modern">
@@ -492,16 +913,77 @@ export default function CrewProfilesDashboardPage() {
                             </div>
                             {field.type === "file" ? (
                               attachment?.url ? (
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-2 inline-flex items-center gap-2 text-sm font-black text-blue-600 hover:underline dark:text-blue-300"
-                                >
-                                  <FileText size={15} />
-                                  {attachment.name || "Open attachment"}
-                                  <ExternalLink size={13} />
-                                </a>
+                                <div className="mt-2 space-y-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <a
+                                      href={attachment.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-2 text-sm font-black text-blue-600 hover:underline dark:text-blue-300"
+                                    >
+                                      <FileText size={15} />
+                                      {attachment.name || "Open attachment"}
+                                      <ExternalLink size={13} />
+                                    </a>
+                                    <span className="badge capitalize">
+                                      {getCrewAttachmentStatus(attachment)}
+                                    </span>
+                                  </div>
+
+                                  {attachment.reviewerName && (
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                                      Reviewed by {attachment.reviewerName}
+                                      {attachment.reviewedAt
+                                        ? ` on ${formatDate(attachment.reviewedAt)}`
+                                        : ""}
+                                    </div>
+                                  )}
+
+                                  {attachment.rejectionReason && (
+                                    <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-2 text-xs font-bold text-red-700 dark:text-red-200">
+                                      Rejection reason: {attachment.rejectionReason}
+                                    </div>
+                                  )}
+
+                                  {canReviewAttachments && (
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          reviewingAttachment ===
+                                          `${selectedRow.user.id}:${field.key}`
+                                        }
+                                        onClick={() =>
+                                          reviewAttachment(
+                                            selectedRow.user,
+                                            field.key,
+                                            "verified"
+                                          )
+                                        }
+                                        className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                                      >
+                                        Verify
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          reviewingAttachment ===
+                                          `${selectedRow.user.id}:${field.key}`
+                                        }
+                                        onClick={() =>
+                                          reviewAttachment(
+                                            selectedRow.user,
+                                            field.key,
+                                            "rejected"
+                                          )
+                                        }
+                                        className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                                      >
+                                        Reject
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="mt-2 text-sm font-semibold text-slate-400">-</div>
                               )

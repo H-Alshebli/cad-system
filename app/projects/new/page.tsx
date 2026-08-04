@@ -13,6 +13,12 @@ import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import {
+  getCrewDeploymentReadiness,
+  isCrewComplianceSubject,
+} from "@/lib/crewProfile";
 
 const REQUEST_TYPES = [
   "Clinic",
@@ -65,6 +71,8 @@ type User = {
   email?: string;
   role?: string;
   active?: boolean;
+  crewProfile?: Record<string, string>;
+  crewProfileAttachments?: Record<string, any>;
 };
 
 type Hospital = {
@@ -78,6 +86,17 @@ type Hospital = {
 };
 
 type AmbulanceCrewAssignments = Record<string, string[]>;
+type CrewComplianceOverrides = Record<
+  string,
+  {
+    reason: string;
+    approvedById: string;
+    approvedByName: string;
+    approvedAt: string;
+    complianceStatus: string;
+    blockers: string[];
+  }
+>;
 
 function ambulanceIsFree(amb: Ambulance) {
   const status = String(amb.status || "").toLowerCase();
@@ -114,6 +133,8 @@ function unique(values: string[]) {
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
+  const { isAdmin } = usePermissions(currentUser?.role);
 
   const [projectName, setProjectName] = useState("");
   const [client, setClient] = useState("");
@@ -135,6 +156,8 @@ export default function NewProjectPage() {
   const [assignedUsers, setAssignedUsers] = useState<Record<string, boolean>>(
     {}
   );
+  const [crewComplianceOverrides, setCrewComplianceOverrides] =
+    useState<CrewComplianceOverrides>({});
 
   const [selectedAmbulanceIds, setSelectedAmbulanceIds] = useState<string[]>(
     []
@@ -314,11 +337,62 @@ export default function NewProjectPage() {
     });
   }, [hospitals, hospitalSearch]);
 
+  const requestComplianceOverride = (user: User) => {
+    const readiness = getCrewDeploymentReadiness(user);
+    if (readiness.ready || crewComplianceOverrides[user.id]) return true;
+
+    if (!isAdmin || !currentUser?.uid) {
+      alert(
+        `${getUserName(user)} cannot be assigned.\n\n${readiness.blockers.join("\n")}`
+      );
+      return false;
+    }
+
+    const reason = window.prompt(
+      `${getUserName(user)} is not compliant:\n\n${readiness.blockers.join(
+        "\n"
+      )}\n\nEnter the administrative override reason:`
+    );
+    if (!String(reason || "").trim()) return false;
+
+    setCrewComplianceOverrides((current) => ({
+      ...current,
+      [user.id]: {
+        reason: String(reason).trim(),
+        approvedById: currentUser.uid,
+        approvedByName:
+          currentUser.name || currentUser.displayName || currentUser.email || "Admin",
+        approvedAt: new Date().toISOString(),
+        complianceStatus: readiness.complianceStatus,
+        blockers: readiness.blockers,
+      },
+    }));
+    return true;
+  };
+
   const toggleUser = (uid: string) => {
+    const user = users.find((item) => item.id === uid);
+    const selecting = !assignedUsers[uid];
+    if (
+      selecting &&
+      user &&
+      isCrewComplianceSubject(user) &&
+      !requestComplianceOverride(user)
+    ) {
+      return;
+    }
+
     setAssignedUsers((prev) => ({
       ...prev,
       [uid]: !prev[uid],
     }));
+    if (!selecting) {
+      setCrewComplianceOverrides((current) => {
+        const next = { ...current };
+        delete next[uid];
+        return next;
+      });
+    }
   };
 
   const removeSelectedUser = (uid: string) => {
@@ -326,10 +400,16 @@ export default function NewProjectPage() {
       ...prev,
       [uid]: false,
     }));
+    setCrewComplianceOverrides((current) => {
+      const next = { ...current };
+      delete next[uid];
+      return next;
+    });
   };
 
   const clearSelectedUsers = () => {
     setAssignedUsers({});
+    setCrewComplianceOverrides({});
     setAmbulanceCrewAssignments((prev) => {
       const next: AmbulanceCrewAssignments = {};
 
@@ -400,6 +480,9 @@ export default function NewProjectPage() {
     index: number,
     userId: string
   ) => {
+    const selectedUser = users.find((user) => user.id === userId);
+    if (selectedUser && !requestComplianceOverride(selectedUser)) return;
+
     setAmbulanceCrewAssignments((prev) => {
       const current = prev[ambulanceId]?.length ? [...prev[ambulanceId]] : [""];
       current[index] = userId;
@@ -467,6 +550,35 @@ export default function NewProjectPage() {
       return;
     }
 
+    const blockedCrew = selectedUsers.filter(
+      (user) =>
+        isCrewComplianceSubject(user) &&
+        !getCrewDeploymentReadiness(user).ready &&
+        !crewComplianceOverrides[user.id]
+    );
+    const ambulanceCrewIds = unique(
+      selectedAmbulances.flatMap((ambulance) =>
+        getCrewUserIdsForAmbulance(ambulance.id)
+      )
+    );
+    const blockedAmbulanceCrew = users.filter(
+      (user) =>
+        ambulanceCrewIds.includes(user.id) &&
+        !getCrewDeploymentReadiness(user).ready &&
+        !crewComplianceOverrides[user.id]
+    );
+    const blocked = unique(
+      [...blockedCrew, ...blockedAmbulanceCrew].map((user) => user.id)
+    ).map((id) => users.find((user) => user.id === id) as User);
+    if (blocked.length) {
+      alert(
+        `Project cannot be created. Resolve crew compliance for:\n${blocked
+          .map((user) => `- ${getUserName(user)}`)
+          .join("\n")}`
+      );
+      return;
+    }
+
     const cleanAssignedUsers = Object.fromEntries(
       Object.entries(assignedUsers).filter(([, v]) => v)
     );
@@ -491,6 +603,11 @@ export default function NewProjectPage() {
       isArchived: false,
 
       assignedUsers: cleanAssignedUsers,
+      crewComplianceOverrides: Object.fromEntries(
+        Object.entries(crewComplianceOverrides).filter(([userId]) =>
+          selectedUserIds.includes(userId)
+        )
+      ),
 
       assignedAmbulanceIds: selectedAmbulanceIds,
       assignedAmbulances: assignedAmbulancesPayload,
@@ -538,6 +655,11 @@ export default function NewProjectPage() {
         crewMembers,
         crewUserIds: crewMembers.map((member) => member.userId),
         crew: crewMembers.map((member) => member.name),
+        crewComplianceOverrides: Object.fromEntries(
+          Object.entries(crewComplianceOverrides).filter(([userId]) =>
+            crewMembers.some((member) => member.userId === userId)
+          )
+        ),
 
         updatedAt: serverTimestamp(),
       });
@@ -759,6 +881,11 @@ export default function NewProjectPage() {
 
                             {list.map((u) => {
                               const checked = !!assignedUsers[u.id];
+                              const crewSubject = isCrewComplianceSubject(u);
+                              const readiness = getCrewDeploymentReadiness(u);
+                              const overridden = Boolean(
+                                crewComplianceOverrides[u.id]
+                              );
 
                               return (
                                 <label
@@ -783,6 +910,23 @@ export default function NewProjectPage() {
                                     <span className="block truncate text-xs font-semibold text-[#607482]">
                                       {getUserRole(u)}
                                     </span>
+                                    {crewSubject && (
+                                      <span
+                                        className={`mt-1 block text-[10px] font-black ${
+                                          readiness.ready
+                                            ? "text-emerald-700"
+                                            : overridden
+                                            ? "text-amber-700"
+                                            : "text-red-700"
+                                        }`}
+                                      >
+                                        {readiness.ready
+                                          ? "Compliant"
+                                          : overridden
+                                          ? "Administrative override"
+                                          : `${readiness.complianceStatus} - assignment blocked`}
+                                      </span>
+                                    )}
                                   </span>
                                 </label>
                               );
@@ -1048,6 +1192,11 @@ export default function NewProjectPage() {
                                     <option key={user.id} value={user.id}>
                                       {getUserName(user)}
                                       {user.email ? ` - ${user.email}` : ""}
+                                      {getCrewDeploymentReadiness(user).ready
+                                        ? " - Compliant"
+                                        : crewComplianceOverrides[user.id]
+                                        ? " - Override approved"
+                                        : " - Blocked"}
                                     </option>
                                   )
                                 )}

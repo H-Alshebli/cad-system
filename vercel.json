@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/crew-profile/expiry-alerts",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

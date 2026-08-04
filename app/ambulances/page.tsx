@@ -12,6 +12,23 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+import {
+  getCrewDeploymentReadiness,
+} from "@/lib/crewProfile";
+
+type CrewComplianceOverrides = Record<
+  string,
+  {
+    reason: string;
+    approvedById: string;
+    approvedByName: string;
+    approvedAt: string;
+    complianceStatus: string;
+    blockers: string[];
+  }
+>;
 
 function getProjectDisplayName(project: any) {
   return (
@@ -44,6 +61,9 @@ type AppUser = {
   ambulanceIds?: string[];
   archived?: boolean;
   disabled?: boolean;
+  active?: boolean;
+  crewProfile?: Record<string, string>;
+  crewProfileAttachments?: Record<string, any>;
 };
 
 type Ambulance = {
@@ -70,6 +90,7 @@ type Ambulance = {
   lat?: number | null;
   lng?: number | null;
   archived?: boolean;
+  crewComplianceOverrides?: CrewComplianceOverrides;
 };
 
 function getUserDisplayName(user: AppUser) {
@@ -101,6 +122,8 @@ function getAmbulanceCrewDisplay(amb: Ambulance) {
 }
 
 export default function AmbulancesPage() {
+  const { user: currentUser } = useCurrentUser();
+  const { isAdmin } = usePermissions(currentUser?.role);
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -191,6 +214,14 @@ export default function AmbulancesPage() {
     );
   }, [users]);
 
+  const getComplianceLabel = (user: AppUser, ambulance?: Ambulance) => {
+    if (getCrewDeploymentReadiness(user).ready) return " - Compliant";
+    if (ambulance?.crewComplianceOverrides?.[user.id]) {
+      return " - Override approved";
+    }
+    return isAdmin ? " - Override required" : " - Assignment blocked";
+  };
+
   const getSelectedCrewMembers = (firstUserId: string, secondUserId: string) => {
     const selectedIds = [firstUserId, secondUserId].filter(Boolean);
     const uniqueIds = Array.from(new Set(selectedIds));
@@ -208,6 +239,49 @@ export default function AmbulancesPage() {
         };
       })
       .filter(Boolean) as CrewMember[];
+  };
+
+  const authorizeCrewAssignment = (
+    crewUserIds: string[],
+    existingOverrides: CrewComplianceOverrides = {}
+  ): CrewComplianceOverrides | null => {
+    const overrides: CrewComplianceOverrides = {};
+
+    for (const userId of Array.from(new Set(crewUserIds.filter(Boolean)))) {
+      const user = users.find((item) => item.id === userId);
+      if (!user) continue;
+
+      const readiness = getCrewDeploymentReadiness(user);
+      if (readiness.ready) continue;
+      if (existingOverrides[userId]) {
+        overrides[userId] = existingOverrides[userId];
+        continue;
+      }
+
+      if (!isAdmin) {
+        alert(
+          `${getUserDisplayName(user)} cannot be assigned because their crew profile is not compliant.\n\n${readiness.blockers.join("\n")}`
+        );
+        return null;
+      }
+
+      const reason = window.prompt(
+        `${getUserDisplayName(user)} is not compliant:\n\n${readiness.blockers.join("\n")}\n\nEnter the administrative override reason:`
+      );
+      if (!reason?.trim()) return null;
+
+      overrides[userId] = {
+        reason: reason.trim(),
+        approvedById: currentUser?.uid || "unknown",
+        approvedByName:
+          currentUser?.name || currentUser?.email || currentUser?.uid || "Admin",
+        approvedAt: new Date().toISOString(),
+        complianceStatus: readiness.complianceStatus,
+        blockers: readiness.blockers,
+      };
+    }
+
+    return overrides;
   };
 
   const getAmbulanceProjectName = (amb: Ambulance) => {
@@ -247,6 +321,8 @@ export default function AmbulancesPage() {
 
     const crewMembers = getSelectedCrewMembers(crewUserId1, crewUserId2);
     const crewUserIds = crewMembers.map((m) => m.userId);
+    const crewComplianceOverrides = authorizeCrewAssignment(crewUserIds);
+    if (!crewComplianceOverrides) return;
     const assignedTeamGroup = `${code} Team`;
 
     const ambulanceRef = await addDoc(collection(db, "ambulances"), {
@@ -259,6 +335,7 @@ export default function AmbulancesPage() {
 
       assignedUserIds: crewUserIds,
       assignedTeamGroup,
+      crewComplianceOverrides,
 
       status,
       currentCase: null,
@@ -361,6 +438,11 @@ export default function AmbulancesPage() {
     );
 
     const crewUserIds = crewMembers.map((m) => m.userId);
+    const crewComplianceOverrides = authorizeCrewAssignment(
+      crewUserIds,
+      editingAmbulance.crewComplianceOverrides || {}
+    );
+    if (!crewComplianceOverrides) return;
     const assignedTeamGroup = `${editCode} Team`;
 
     await updateDoc(doc(db, "ambulances", editingAmbulance.id), {
@@ -373,6 +455,7 @@ export default function AmbulancesPage() {
 
       assignedUserIds: crewUserIds,
       assignedTeamGroup,
+      crewComplianceOverrides,
 
       status: editStatus,
       lat: editLat ? Number(editLat) : null,
@@ -442,6 +525,7 @@ export default function AmbulancesPage() {
                 <option key={user.id} value={user.id}>
                   {getUserDisplayName(user)}
                   {user.email ? ` - ${user.email}` : ""}
+                  {getComplianceLabel(user)}
                 </option>
               ))}
             </select>
@@ -458,6 +542,7 @@ export default function AmbulancesPage() {
                   <option key={user.id} value={user.id}>
                     {getUserDisplayName(user)}
                     {user.email ? ` - ${user.email}` : ""}
+                    {getComplianceLabel(user)}
                   </option>
                 ))}
             </select>
@@ -645,6 +730,7 @@ export default function AmbulancesPage() {
                     <option key={user.id} value={user.id}>
                       {getUserDisplayName(user)}
                       {user.email ? ` - ${user.email}` : ""}
+                      {getComplianceLabel(user, editingAmbulance || undefined)}
                     </option>
                   ))}
                 </select>
@@ -661,6 +747,7 @@ export default function AmbulancesPage() {
                       <option key={user.id} value={user.id}>
                         {getUserDisplayName(user)}
                         {user.email ? ` - ${user.email}` : ""}
+                        {getComplianceLabel(user, editingAmbulance || undefined)}
                       </option>
                     ))}
                 </select>
