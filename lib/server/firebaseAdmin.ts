@@ -2,7 +2,30 @@ import { cert, getApps, initializeApp, applicationDefault } from "firebase-admin
 import { getFirestore } from "firebase-admin/firestore";
 
 function getPrivateKey() {
-  return process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const rawValue = String(process.env.FIREBASE_ADMIN_PRIVATE_KEY || "").trim();
+  if (!rawValue) return undefined;
+
+  let privateKey = rawValue;
+
+  // Accept a full Firebase service-account JSON object when it was pasted into
+  // the Vercel variable instead of only the private_key property.
+  if (privateKey.startsWith("{")) {
+    try {
+      const serviceAccount = JSON.parse(privateKey);
+      privateKey = String(serviceAccount.private_key || "").trim();
+    } catch {
+      // Keep the original value so Firebase reports an invalid credential.
+    }
+  } else if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    // Accept a JSON-quoted private_key value copied directly from the file.
+    try {
+      privateKey = JSON.parse(privateKey);
+    } catch {
+      privateKey = privateKey.slice(1, -1);
+    }
+  }
+
+  return privateKey.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").trim();
 }
 
 function initializeAdminApp() {
