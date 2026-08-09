@@ -17,6 +17,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import {
   getCrewDeploymentReadiness,
 } from "@/lib/crewProfile";
+import { syncAmbulanceCrewAssignments } from "@/lib/ambulanceCrewSync";
 
 type CrewComplianceOverrides = Record<
   string,
@@ -438,6 +439,14 @@ export default function AmbulancesPage() {
     );
 
     const crewUserIds = crewMembers.map((m) => m.userId);
+    const previousUserIds = Array.from(
+      new Set(
+        [
+          ...(editingAmbulance.assignedUserIds || []),
+          ...(editingAmbulance.crewUserIds || []),
+        ].filter(Boolean)
+      )
+    );
     const crewComplianceOverrides = authorizeCrewAssignment(
       crewUserIds,
       editingAmbulance.crewComplianceOverrides || {}
@@ -478,6 +487,43 @@ export default function AmbulancesPage() {
         })
       )
     );
+
+    const crewChanged =
+      previousUserIds.slice().sort().join("|") !==
+      crewUserIds.slice().sort().join("|");
+
+    try {
+      if (!crewChanged) {
+        setEditingAmbulance(null);
+        return;
+      }
+
+      const syncResult = await syncAmbulanceCrewAssignments({
+        ambulanceId: editingAmbulance.id,
+        ambulanceCode: editCode,
+        assignedTeamGroup,
+        previousUserIds,
+        assignedUserIds: crewUserIds,
+        changedById: currentUser?.uid || "unknown",
+        changedByName:
+          currentUser?.name || currentUser?.email || currentUser?.uid || "Admin",
+      });
+
+      if (syncResult.skippedCaseIds.length) {
+        alert(
+          `Crew updated and synchronized to ${syncResult.updatedRequests} B2C request(s) and ${syncResult.updatedCases} CAD case(s).\n\n${syncResult.skippedCaseIds.length} active/closed CAD case(s) were not changed to preserve operational history:\n${syncResult.skippedCaseIds.join("\n")}`
+        );
+      } else {
+        alert(
+          `Crew updated successfully. Synchronized ${syncResult.updatedRequests} linked B2C request(s) and ${syncResult.updatedCases} CAD case(s).`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to synchronize ambulance crew assignments", error);
+      alert(
+        "The ambulance crew was updated, but synchronization with linked B2C/CAD records failed. Please review the linked assignments."
+      );
+    }
 
     setEditingAmbulance(null);
   };
