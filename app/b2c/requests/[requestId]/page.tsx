@@ -13,6 +13,7 @@ import {
   FileText,
   MapPin,
   PackageCheck,
+  RefreshCw,
   Save,
   ShieldCheck,
   UserRound,
@@ -31,6 +32,7 @@ import {
   isWithinOneHour,
   updateB2CRequest,
 } from "@/lib/b2cRequests";
+import { syncB2CRequestCrewFromAmbulance } from "@/lib/ambulanceCrewSync";
 
 const requestTypes = ["Scheduled", "Immediate"];
 const genderOptions = ["Male", "Female"];
@@ -155,6 +157,7 @@ export default function B2CRequestDetailsPage({
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [acknowledgingRequest, setAcknowledgingRequest] = useState(false);
+  const [syncingCrew, setSyncingCrew] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancellingRequest, setCancellingRequest] = useState(false);
   const [cancellationReason, setCancellationReason] = useState("");
@@ -367,6 +370,16 @@ export default function B2CRequestDetailsPage({
     () => ambulances.find((a) => a.id === assignment.unitId),
     [ambulances, assignment.unitId]
   );
+  const currentAmbulanceCrewIds = selectedAmbulance
+    ? getAmbulanceTeamIds(selectedAmbulance)
+    : [];
+  const requestCrewIds = Array.isArray(request?.plannedAssignment?.assignedUserIds)
+    ? request.plannedAssignment.assignedUserIds.filter(Boolean)
+    : [];
+  const crewAssignmentDiffers =
+    Boolean(selectedAmbulance) &&
+    currentAmbulanceCrewIds.slice().sort().join("|") !==
+      requestCrewIds.slice().sort().join("|");
 
   const cadReady = request ? canCreateCadCase(request) : false;
   const withinOneHour = request ? isWithinOneHour(request) : false;
@@ -654,6 +667,29 @@ export default function B2CRequestDetailsPage({
     }
   }
 
+  async function handleSyncCrewFromAmbulance() {
+    if (!request?.id || !request?.plannedAssignment?.unitId) return;
+    setSyncingCrew(true);
+    try {
+      const result = await syncB2CRequestCrewFromAmbulance({
+        requestId: request.id,
+        ambulanceId: request.plannedAssignment.unitId,
+        changedById: user?.uid || "unknown",
+        changedByName: user?.name || user?.email || user?.uid || "Dispatch",
+      });
+      alert(
+        `Crew synchronized successfully to the B2C request${
+          result.cadUpdated ? " and linked CAD case" : ""
+        }.`
+      );
+    } catch (error: any) {
+      console.error("Failed to synchronize B2C crew", error);
+      alert(error?.message || "Failed to synchronize the current ambulance crew.");
+    } finally {
+      setSyncingCrew(false);
+    }
+  }
+
   function openCancelModal() {
     if (!request) return;
 
@@ -831,6 +867,17 @@ export default function B2CRequestDetailsPage({
             <button className="btn-secondary" onClick={() => setEditMode(true)}>
               <Edit3 size={16} />
               Edit Request
+            </button>
+          )}
+
+          {isDispatch && crewAssignmentDiffers && !editMode && (
+            <button
+              className="btn-secondary"
+              disabled={syncingCrew}
+              onClick={handleSyncCrewFromAmbulance}
+            >
+              <RefreshCw size={16} />
+              {syncingCrew ? "Synchronizing Crew..." : "Sync Crew from Ambulance"}
             </button>
           )}
 

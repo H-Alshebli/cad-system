@@ -2,6 +2,7 @@ import {
   arrayUnion,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -133,4 +134,95 @@ export async function syncAmbulanceCrewAssignments(params: {
     updatedCases: safeCases.length,
     skippedCaseIds,
   };
+}
+
+export async function syncB2CRequestCrewFromAmbulance(params: {
+  requestId: string;
+  ambulanceId: string;
+  changedById: string;
+  changedByName: string;
+}) {
+  const [requestSnapshot, ambulanceSnapshot] = await Promise.all([
+    getDoc(doc(db, "b2cRequests", params.requestId)),
+    getDoc(doc(db, "ambulances", params.ambulanceId)),
+  ]);
+  if (!requestSnapshot.exists() || !ambulanceSnapshot.exists()) {
+    throw new Error("The linked B2C request or ambulance was not found.");
+  }
+
+  const request = requestSnapshot.data();
+  const ambulance = ambulanceSnapshot.data();
+  if (request.plannedAssignment?.unitId !== params.ambulanceId) {
+    throw new Error("This B2C request is no longer linked to the selected ambulance.");
+  }
+
+  const assignedUserIds = Array.from(
+    new Set(
+      (ambulance.assignedUserIds || ambulance.crewUserIds || []).filter(Boolean)
+    )
+  ) as string[];
+  if (!assignedUserIds.length) {
+    throw new Error("The linked ambulance has no assigned crew.");
+  }
+
+  const previousUserIds = Array.isArray(request.plannedAssignment?.assignedUserIds)
+    ? request.plannedAssignment.assignedUserIds.filter(Boolean)
+    : [];
+  const assignedTeamGroup =
+    ambulance.assignedTeamGroup ||
+    `${ambulance.code || params.ambulanceId} Team`;
+  const ambulanceCode = ambulance.code || params.ambulanceId;
+  const changedAt = new Date().toISOString();
+  const auditEntry = {
+    source: "b2c_manual_crew_sync",
+    ambulanceId: params.ambulanceId,
+    ambulanceCode,
+    previousUserIds,
+    assignedUserIds,
+    changedById: params.changedById,
+    changedByName: params.changedByName,
+    changedAt,
+  };
+
+  let cadCase: Record<string, any> | null = null;
+  if (request.cadCaseId) {
+    const cadSnapshot = await getDoc(doc(db, "cases", request.cadCaseId));
+    cadCase = cadSnapshot.exists()
+      ? { id: cadSnapshot.id, ...cadSnapshot.data() }
+      : null;
+    if (!cadCase) throw new Error("The linked CAD case was not found.");
+    if (
+      hasCadMovementStarted(cadCase.status) ||
+      hasCadMovementStarted(cadCase.dispatchStatus)
+    ) {
+      throw new Error(
+        "Crew cannot be synchronized because the linked CAD case has already started or closed."
+      );
+    }
+  }
+
+  await Promise.all([
+    updateDoc(doc(db, "b2cRequests", params.requestId), {
+      "plannedAssignment.unitCode": ambulanceCode,
+      "plannedAssignment.assignedTeamGroup": assignedTeamGroup,
+      "plannedAssignment.assignedUserIds": assignedUserIds,
+      crewAssignmentHistory: arrayUnion(auditEntry),
+      crewAssignmentUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+    ...(cadCase
+      ? [
+          updateDoc(doc(db, "cases", String(cadCase.id)), {
+            assignedAmbulanceCode: ambulanceCode,
+            assignedTeamGroup,
+            assignedUserIds,
+            crewAssignmentHistory: arrayUnion(auditEntry),
+            crewAssignmentUpdatedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }),
+        ]
+      : []),
+  ]);
+
+  return { assignedUserIds, cadUpdated: Boolean(cadCase) };
 }
