@@ -670,13 +670,18 @@ export default function B2CRequestDetailsPage({
   async function handleSyncCrewFromAmbulance() {
     if (!request?.id || !request?.plannedAssignment?.unitId) return;
     setSyncingCrew(true);
-    try {
-      const result = await syncB2CRequestCrewFromAmbulance({
+    const syncCrew = (overrideReason?: string) =>
+      syncB2CRequestCrewFromAmbulance({
         requestId: request.id,
         ambulanceId: request.plannedAssignment.unitId,
         changedById: user?.uid || "unknown",
         changedByName: user?.name || user?.email || user?.uid || "Dispatch",
+        allowOperationalOverride: Boolean(overrideReason),
+        overrideReason,
       });
+
+    try {
+      const result = await syncCrew();
       alert(
         `Crew synchronized successfully to the B2C request${
           result.cadUpdated ? " and linked CAD case" : ""
@@ -684,6 +689,35 @@ export default function B2CRequestDetailsPage({
       );
     } catch (error: any) {
       console.error("Failed to synchronize B2C crew", error);
+      if (
+        isAdmin &&
+        String(error?.message || "").includes("already started or closed")
+      ) {
+        const reason = window.prompt(
+          "The linked CAD has started or closed. Enter the administrative crew reassignment reason:"
+        );
+        if (!reason?.trim()) {
+          setSyncingCrew(false);
+          return;
+        }
+
+        try {
+          const overrideResult = await syncCrew(reason.trim());
+          alert(
+            `Administrative crew reassignment completed and audited${
+              overrideResult.cadUpdated ? " for the linked CAD case" : ""
+            }.`
+          );
+          return;
+        } catch (overrideError: any) {
+          console.error("Administrative crew reassignment failed", overrideError);
+          alert(
+            overrideError?.message ||
+              "Failed to complete the administrative crew reassignment."
+          );
+          return;
+        }
+      }
       alert(error?.message || "Failed to synchronize the current ambulance crew.");
     } finally {
       setSyncingCrew(false);

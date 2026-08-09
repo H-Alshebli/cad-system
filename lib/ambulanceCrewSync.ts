@@ -141,6 +141,8 @@ export async function syncB2CRequestCrewFromAmbulance(params: {
   ambulanceId: string;
   changedById: string;
   changedByName: string;
+  allowOperationalOverride?: boolean;
+  overrideReason?: string;
 }) {
   const [requestSnapshot, ambulanceSnapshot] = await Promise.all([
     getDoc(doc(db, "b2cRequests", params.requestId)),
@@ -185,28 +187,52 @@ export async function syncB2CRequestCrewFromAmbulance(params: {
   };
 
   let cadCase: Record<string, any> | null = null;
+  let operationalOverride = false;
+  let cadStatusAtChange = "";
   if (request.cadCaseId) {
     const cadSnapshot = await getDoc(doc(db, "cases", request.cadCaseId));
     cadCase = cadSnapshot.exists()
       ? { id: cadSnapshot.id, ...cadSnapshot.data() }
       : null;
     if (!cadCase) throw new Error("The linked CAD case was not found.");
-    if (
+    cadStatusAtChange = String(cadCase.status || cadCase.dispatchStatus || "");
+    const movementStarted =
       hasCadMovementStarted(cadCase.status) ||
-      hasCadMovementStarted(cadCase.dispatchStatus)
-    ) {
+      hasCadMovementStarted(cadCase.dispatchStatus);
+    if (movementStarted && !params.allowOperationalOverride) {
       throw new Error(
         "Crew cannot be synchronized because the linked CAD case has already started or closed."
       );
     }
+    if (movementStarted) {
+      if (!String(params.overrideReason || "").trim()) {
+        throw new Error("An administrative reassignment reason is required.");
+      }
+      operationalOverride = true;
+    }
   }
+
+  const finalAuditEntry = {
+    ...auditEntry,
+    source: operationalOverride
+      ? "administrative_operational_crew_reassignment"
+      : auditEntry.source,
+    operationalOverride,
+    overrideReason: operationalOverride
+      ? String(params.overrideReason || "").trim()
+      : "",
+    cadStatusAtChange,
+  };
 
   await Promise.all([
     updateDoc(doc(db, "b2cRequests", params.requestId), {
       "plannedAssignment.unitCode": ambulanceCode,
       "plannedAssignment.assignedTeamGroup": assignedTeamGroup,
       "plannedAssignment.assignedUserIds": assignedUserIds,
-      crewAssignmentHistory: arrayUnion(auditEntry),
+      crewAssignmentHistory: arrayUnion(finalAuditEntry),
+      ...(operationalOverride
+        ? { crewAssignmentOverrideAt: serverTimestamp() }
+        : {}),
       crewAssignmentUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }),
@@ -216,7 +242,10 @@ export async function syncB2CRequestCrewFromAmbulance(params: {
             assignedAmbulanceCode: ambulanceCode,
             assignedTeamGroup,
             assignedUserIds,
-            crewAssignmentHistory: arrayUnion(auditEntry),
+            crewAssignmentHistory: arrayUnion(finalAuditEntry),
+            ...(operationalOverride
+              ? { crewAssignmentOverrideAt: serverTimestamp() }
+              : {}),
             crewAssignmentUpdatedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }),
@@ -224,5 +253,9 @@ export async function syncB2CRequestCrewFromAmbulance(params: {
       : []),
   ]);
 
-  return { assignedUserIds, cadUpdated: Boolean(cadCase) };
+  return {
+    assignedUserIds,
+    cadUpdated: Boolean(cadCase),
+    operationalOverride,
+  };
 }
