@@ -432,15 +432,22 @@ const DESTINATIONS = [
   "Treated on Scene",
   "Scene to Hospital",
   "Death",
-  "Won't Transfer or Treat",
+  "No Transport and/or Treatment",
 ] as const;
+
+const NO_TRANSPORT_DESTINATION = "No Transport and/or Treatment";
+const LEGACY_NO_TRANSPORT_DESTINATION = "Won't Transfer or Treat";
+const isNoTransportDestination = (destination: string) =>
+  destination === NO_TRANSPORT_DESTINATION ||
+  destination === LEGACY_NO_TRANSPORT_DESTINATION;
 
 const NO_TRANSFER_REASONS = [
   "Violent Patient",
   "Transport No Longer Required",
   "Unsafe Scene",
-  "Critical Condition",
   "Patient Refused Transport",
+  "Patient Transported by Another Provider",
+  "Patient’s Condition Did Not Permit Transport (Hospital/B2C Cases Only)",
   "Other",
 ] as const;
 
@@ -485,6 +492,25 @@ const pickTimelineTime = (timeline: any, newKey: string, oldKey: string) => {
 const requiresHospitalFields = (destination: string) => {
   return String(destination || "").toLowerCase().includes("hospital");
 };
+
+const imageUrlToPngDataUrl = (src: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth || 320;
+      canvas.height = image.naturalHeight || 348;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Unable to prepare logo for PDF"));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = () => reject(new Error("Unable to load logo for PDF"));
+    image.src = src;
+  });
 const getCaseDestinationHospitalName = (caseData: any): string => {
   return (
     caseData?.destinationHospitalName ||
@@ -868,7 +894,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
     if (!outcome.destination.trim()) m.push("Outcome: Destination");
 
-    if (outcome.destination === "Won't Transfer or Treat") {
+    if (isNoTransportDestination(outcome.destination)) {
       if (!outcome.noTransferReason?.trim()) {
         m.push("Outcome: Reason for No Transfer or Treatment");
       }
@@ -924,21 +950,16 @@ patientInfo.chiefComplaints.forEach((complaint) => {
   const canFinalize = missing.length === 0;
 
   const exportPdf = async () => {
-    if (!bodyPainRef.current) {
-      alert("Body diagram not ready yet");
-      return;
-    }
-
-    const diagramImage = await bodyPainRef.current.exportImage();
+    const brandLogoDataUrl = await imageUrlToPngDataUrl(
+      "/brand/lazem-secondary-logo-solid.svg"
+    ).catch(() => undefined);
 
     generateEpcrPdf({
+      brandLogoDataUrl,
       projectInfo,
       patientInfo,
       medicalHistory,
-      headToToe: {
-        ...headToToe,
-        diagramImage,
-      },
+      headToToe,
       narrativeVitals,
       outcome,
       transferTeam,
@@ -1460,6 +1481,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
         <BodyPainSelector
           ref={bodyPainRef}
+          disabled={locked}
           values={headToToe.painLocations}
           onChange={(vals) =>
             setData((prev) => ({
@@ -1927,7 +1949,11 @@ patientInfo.chiefComplaints.forEach((complaint) => {
         <Select
           disabled={locked}
           label="Destination *"
-          value={outcome.destination}
+          value={
+            outcome.destination === LEGACY_NO_TRANSPORT_DESTINATION
+              ? NO_TRANSPORT_DESTINATION
+              : outcome.destination
+          }
           onChange={(e) => {
             const destination = e.target.value;
             setData((prev) => ({
@@ -1935,7 +1961,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
               outcome: {
                 ...(prev?.outcome ?? emptyOutcome()),
                 destination,
-                ...(destination === "Won't Transfer or Treat"
+                ...(isNoTransportDestination(destination)
                   ? {}
                   : {
                       noTransferReason: "",
@@ -1952,7 +1978,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           ))}
         </Select>
 
-        {outcome.destination === "Won't Transfer or Treat" && (
+        {isNoTransportDestination(outcome.destination) && (
           <>
             <Select
               disabled={locked}

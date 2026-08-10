@@ -4,7 +4,8 @@ import autoTable from "jspdf-autotable";
 /**
  * Lazem – Modern Electronic Patient Care Report (ePCR)
  */
-export function generateEpcrPdf(data: {
+export type EpcrPdfData = {
+  brandLogoDataUrl?: string;
   projectInfo?: {
     projectId?: string;
     projectName?: string;
@@ -17,7 +18,9 @@ export function generateEpcrPdf(data: {
   outcome: any;
   transferTeam: any;
   time: any;
-}) {
+};
+
+export function buildEpcrPdf(data: EpcrPdfData) {
   const doc = new jsPDF("p", "mm", "a4");
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -27,12 +30,12 @@ export function generateEpcrPdf(data: {
   let y = 14;
 
   const colors = {
-    navy: [15, 23, 42] as [number, number, number],
-    blue: [37, 99, 235] as [number, number, number],
-    cyan: [14, 165, 233] as [number, number, number],
-    slate: [71, 85, 105] as [number, number, number],
-    lightSlate: [241, 245, 249] as [number, number, number],
-    border: [226, 232, 240] as [number, number, number],
+    navy: [31, 70, 84] as [number, number, number],
+    blue: [39, 76, 90] as [number, number, number],
+    cyan: [116, 205, 218] as [number, number, number],
+    slate: [118, 139, 148] as [number, number, number],
+    lightSlate: [238, 244, 246] as [number, number, number],
+    border: [211, 226, 231] as [number, number, number],
     white: [255, 255, 255] as [number, number, number],
     green: [22, 163, 74] as [number, number, number],
     amber: [217, 119, 6] as [number, number, number],
@@ -48,7 +51,8 @@ export function generateEpcrPdf(data: {
     if (y + space > pageHeight - 18) {
       drawFooter();
       doc.addPage();
-      y = 18;
+      drawContinuationHeader();
+      y = 30;
     }
   };
 
@@ -61,59 +65,140 @@ export function generateEpcrPdf(data: {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...colors.slate);
-    doc.text("Lazem Medical Services – ePCR Report", marginX, pageHeight - 7);
+    doc.text("Lazem Medical Services - ePCR Report", marginX, pageHeight - 7);
     doc.text(`Page ${page}`, pageWidth - marginX, pageHeight - 7, {
       align: "right",
     });
   };
 
   const drawHeader = () => {
-    doc.setFillColor(...colors.navy);
-    doc.roundedRect(marginX, 10, pageWidth - marginX * 2, 28, 4, 4, "F");
-
-    try {
-      doc.addImage("/lazem-logo.png", "PNG", marginX + 5, 14, 18, 18);
-    } catch {
-      doc.setFillColor(...colors.blue);
-      doc.circle(marginX + 14, 23, 8, "F");
+    if (data.brandLogoDataUrl) {
+      doc.addImage(data.brandLogoDataUrl, "PNG", marginX, 8, 18, 19.5);
+    } else {
+      doc.setFillColor(...colors.navy);
+      doc.circle(marginX + 7, 20, 7, "F");
       doc.setTextColor(...colors.white);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text("L", marginX + 14, 25, { align: "center" });
+      doc.setFontSize(10);
+      doc.text("L", marginX + 7, 23.5, { align: "center" });
+      doc.setTextColor(...colors.navy);
+      doc.setFontSize(18);
+      doc.text("Lazem", marginX + 18, 19);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...colors.slate);
+      doc.text("EMERGENCY MEDICAL SERVICES", marginX + 18, 25);
     }
 
-    doc.setTextColor(...colors.white);
+    doc.setTextColor(...colors.navy);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(15);
-    doc.text("Electronic Patient Care Report", marginX + 28, 22);
-
+    doc.text("PATIENT CARE REPORT", pageWidth - marginX, 18, { align: "right" });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(203, 213, 225);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, marginX + 28, 29);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...colors.slate);
+    doc.text(`Generated ${new Date().toLocaleString()}`, pageWidth - marginX, 25, { align: "right" });
 
-    doc.setFillColor(...colors.green);
-    doc.roundedRect(pageWidth - marginX - 34, 18, 26, 8, 2, 2, "F");
-    doc.setTextColor(...colors.white);
+    doc.setDrawColor(...colors.navy);
+    doc.setLineWidth(0.8);
+    doc.line(marginX, 32, pageWidth - marginX, 32);
+
+    y = 39;
+  };
+
+  const drawBodyFigure = (
+    centerX: number,
+    topY: number,
+    side: "front" | "back",
+    selected: string[]
+  ) => {
+    const drawZone = (
+      id: string,
+      label: string,
+      shape: () => void,
+      labelX: number,
+      labelY: number,
+      fontSize = 4.8
+    ) => {
+      const active = selected.includes(id);
+      doc.setFillColor(...(active ? colors.navy : [222, 243, 247] as [number, number, number]));
+      doc.setDrawColor(...(active ? colors.navy : [147, 190, 200] as [number, number, number]));
+      doc.setLineWidth(active ? 0.8 : 0.45);
+      shape();
+      doc.setFont("helvetica", active ? "bold" : "normal");
+      doc.setFontSize(fontSize);
+      doc.setTextColor(...(active ? colors.white : colors.blue));
+      doc.text(label, labelX, labelY, { align: "center" });
+    };
+
+    const isFront = side === "front";
+    const ids = isFront
+      ? {
+          head: "Head", neck: "Neck", upper: "Chest", lower: "Abdomen",
+          pelvis: "Pelvis", leftArm: "Left Arm", rightArm: "Right Arm",
+          leftLeg: "Left Leg", rightLeg: "Right Leg",
+        }
+      : {
+          head: "Back Head", neck: "__back_neck__", upper: "Back - Upper",
+          lower: "Back - Lower", pelvis: "__back_pelvis__",
+          leftArm: "Back - Left Arm", rightArm: "Back - Right Arm",
+          leftLeg: "Back - Left Leg", rightLeg: "Back - Right Leg",
+        };
+
+    drawZone(ids.head, isFront ? "Head" : "Head", () => {
+      doc.ellipse(centerX, topY + 6, 6.2, 6.8, "FD");
+    }, centerX, topY + 7.5, 4.6);
+    drawZone(ids.neck, "Neck", () => {
+      doc.roundedRect(centerX - 3.2, topY + 13, 6.4, 4.5, 1.5, 1.5, "FD");
+    }, centerX, topY + 16, 4);
+    drawZone(ids.upper, isFront ? "Chest" : "Upper Back", () => {
+      doc.roundedRect(centerX - 10.5, topY + 18, 21, 13.5, 4, 4, "FD");
+    }, centerX, topY + 25.5, 4.5);
+    drawZone(ids.lower, isFront ? "Abdomen" : "Lower Back", () => {
+      doc.roundedRect(centerX - 9.2, topY + 32.5, 18.4, 11, 3, 3, "FD");
+    }, centerX, topY + 38.8, 4.3);
+    drawZone(ids.pelvis, "Pelvis", () => {
+      doc.roundedRect(centerX - 8, topY + 44.5, 16, 7.5, 3, 3, "FD");
+    }, centerX, topY + 49.2, 4.2);
+    drawZone(ids.leftArm, "L Arm", () => {
+      doc.roundedRect(centerX - 17.5, topY + 19.5, 5.8, 27, 2.5, 2.5, "FD");
+    }, centerX - 14.6, topY + 34, 4);
+    drawZone(ids.rightArm, "R Arm", () => {
+      doc.roundedRect(centerX + 11.7, topY + 19.5, 5.8, 27, 2.5, 2.5, "FD");
+    }, centerX + 14.6, topY + 34, 4);
+    drawZone(ids.leftLeg, "L Leg", () => {
+      doc.roundedRect(centerX - 8, topY + 53, 7, 24, 3, 3, "FD");
+    }, centerX - 4.5, topY + 66, 4);
+    drawZone(ids.rightLeg, "R Leg", () => {
+      doc.roundedRect(centerX + 1, topY + 53, 7, 24, 3, 3, "FD");
+    }, centerX + 4.5, topY + 66, 4);
+  };
+
+  const drawContinuationHeader = () => {
+    doc.setTextColor(...colors.navy);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.text("ePCR", pageWidth - marginX - 21, 23.5, { align: "center" });
-
-    y = 46;
+    doc.setFontSize(10);
+    doc.text("Lazem EMS", marginX, 18);
+    doc.text("PATIENT CARE REPORT - CONTINUED", pageWidth - marginX, 18, {
+      align: "right",
+    });
+    doc.setDrawColor(...colors.navy);
+    doc.setLineWidth(0.6);
+    doc.line(marginX, 23, pageWidth - marginX, 23);
   };
 
   const sectionTitle = (title: string) => {
     ensurePage(16);
 
     doc.setFillColor(...colors.lightSlate);
-    doc.roundedRect(marginX, y, pageWidth - marginX * 2, 10, 2, 2, "F");
+    doc.roundedRect(marginX, y, pageWidth - marginX * 2, 8, 1.5, 1.5, "F");
 
     doc.setTextColor(...colors.navy);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(title, marginX + 4, y + 6.5);
+    doc.setFontSize(8.5);
+    doc.text(title.toUpperCase(), marginX + 4, y + 5.5);
 
-    y += 14;
+    y += 11;
   };
 
   const infoCard = (
@@ -158,11 +243,10 @@ export function generateEpcrPdf(data: {
   };
 
   const multilineCard = (label: string, value: any) => {
-    ensurePage(22);
-
     const text = safeText(value);
     const lines = doc.splitTextToSize(text, pageWidth - marginX * 2 - 10);
     const h = Math.max(18, lines.length * 5 + 12);
+    ensurePage(h + 6);
 
     doc.setDrawColor(...colors.border);
     doc.setFillColor(...colors.white);
@@ -218,6 +302,47 @@ export function generateEpcrPdf(data: {
   };
 
   drawHeader();
+
+  const summaryItems = [
+    { label: "Age", value: data.patientInfo?.age ? `${data.patientInfo.age} yrs` : "-" },
+    { label: "Sex", value: data.patientInfo?.gender },
+    { label: "Triage", value: data.patientInfo?.triageColor },
+    { label: "Class", value: data.patientInfo?.healthClassification },
+    { label: "Project", value: data.projectInfo?.projectName },
+  ];
+  const summaryGap = 3;
+  const summaryW = (pageWidth - marginX * 2 - summaryGap * 4) / 5;
+
+  summaryItems.forEach((item, index) => {
+    const x = marginX + index * (summaryW + summaryGap);
+    doc.setFillColor(...colors.lightSlate);
+    doc.setDrawColor(...colors.border);
+    doc.roundedRect(x, y, summaryW, 18, 2, 2, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...colors.slate);
+    doc.text(item.label.toUpperCase(), x + 3, y + 5);
+    doc.setTextColor(...colors.navy);
+    doc.setFontSize(8.5);
+    const lines = doc.splitTextToSize(safeText(item.value), summaryW - 6);
+    doc.text(lines.slice(0, 2), x + 3, y + 11);
+  });
+  y += 23;
+
+  doc.setFillColor(...colors.navy);
+  doc.roundedRect(marginX, y, pageWidth - marginX * 2, 23, 3, 3, "F");
+  doc.setTextColor(183, 219, 226);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.text("CHIEF COMPLAINT", marginX + 5, y + 7);
+  doc.setTextColor(...colors.white);
+  doc.setFontSize(14);
+  const complaint = doc.splitTextToSize(
+    safeText(data.patientInfo?.chiefComplaints),
+    pageWidth - marginX * 2 - 10
+  );
+  doc.text(complaint.slice(0, 1), marginX + 5, y + 16);
+  y += 29;
 
   /* ================= PROJECT INFO ================= */
 
@@ -279,44 +404,54 @@ export function generateEpcrPdf(data: {
     2
   );
 
-  multilineCard("Chief Complaints", data.patientInfo?.chiefComplaints);
+  const complaintDetails = Object.entries(
+    data.patientInfo?.chiefComplaintDetails || {}
+  )
+    .map(([key, value]) => `${key}: ${safeText(value)}`)
+    .join("; ");
+  multilineCard("Complaint Details", complaintDetails);
   multilineCard("Signs & Symptoms", data.patientInfo?.signsAndSymptoms);
 
   /* ================= MEDICAL HISTORY ================= */
 
   sectionTitle("Relevant Medical History");
 
-  multilineCard("Conditions", data.medicalHistory?.conditions);
-  multilineCard("Eyes", data.medicalHistory?.eyes);
-  multilineCard("Other", data.medicalHistory?.other);
+  infoCard(
+    [
+      { label: "Conditions", value: data.medicalHistory?.conditions },
+      { label: "Eyes", value: data.medicalHistory?.eyes },
+      { label: "Other", value: data.medicalHistory?.other },
+    ],
+    2
+  );
 
   /* ================= HEAD TO TOE ================= */
 
   sectionTitle("Head-to-Toe Physical Examination");
 
-  if (data.headToToe?.diagramImage) {
-    ensurePage(105);
-
-    doc.setDrawColor(...colors.border);
-    doc.setFillColor(...colors.white);
-    doc.roundedRect(marginX, y, pageWidth - marginX * 2, 100, 3, 3, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...colors.slate);
-    doc.text("BODY PAIN DIAGRAM", marginX + 4, y + 6);
-
-    doc.addImage(
-      data.headToToe.diagramImage,
-      "PNG",
-      marginX + 5,
-      y + 10,
-      pageWidth - marginX * 2 - 10,
-      84
-    );
-
-    y += 106;
-  }
+  ensurePage(111);
+  const selectedPainLocations: string[] = data.headToToe?.painLocations || [];
+  doc.setDrawColor(...colors.border);
+  doc.setFillColor(...colors.white);
+  doc.roundedRect(marginX, y, pageWidth - marginX * 2, 105, 3, 3, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.slate);
+  doc.text("BODY PAIN ASSESSMENT", marginX + 4, y + 7);
+  doc.setFontSize(7);
+  doc.text("FRONT", marginX + 55, y + 14, { align: "center" });
+  doc.text("BACK", pageWidth - marginX - 55, y + 14, { align: "center" });
+  drawBodyFigure(marginX + 55, y + 16, "front", selectedPainLocations);
+  drawBodyFigure(pageWidth - marginX - 55, y + 16, "back", selectedPainLocations);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...colors.slate);
+  doc.text(
+    `Selected areas: ${safeText(selectedPainLocations)}`,
+    marginX + 4,
+    y + 101
+  );
+  y += 111;
 
   infoCard(
     [
@@ -397,19 +532,39 @@ export function generateEpcrPdf(data: {
 
   /* ================= OUTCOME ================= */
 
+  drawFooter();
+  doc.addPage();
+  drawContinuationHeader();
+  y = 30;
   sectionTitle("Outcome");
 
   infoCard(
     [
-      { label: "Destination", value: data.outcome?.destination },
       {
-        label: "No Transfer / Treatment Reason",
-        value: data.outcome?.noTransferReason,
+        label: "Destination",
+        value:
+          data.outcome?.destination === "Won't Transfer or Treat"
+            ? "No Transport and/or Treatment"
+            : data.outcome?.destination,
       },
-      {
-        label: "Other Reason Details",
-        value: data.outcome?.noTransferReasonOther,
-      },
+      ...(["No Transport and/or Treatment", "Won't Transfer or Treat"].includes(
+        data.outcome?.destination
+      )
+        ? [
+            {
+              label: "No Transfer / Treatment Reason",
+              value: data.outcome?.noTransferReason,
+            },
+            ...(data.outcome?.noTransferReason === "Other"
+              ? [
+                  {
+                    label: "Other Reason Details",
+                    value: data.outcome?.noTransferReasonOther,
+                  },
+                ]
+              : []),
+          ]
+        : []),
       { label: "Hospital", value: data.outcome?.hospitalName },
       { label: "Hospital Member", value: data.outcome?.hospitalMember },
     ],
@@ -454,6 +609,7 @@ export function generateEpcrPdf(data: {
 
   /* ================= TRANSFER TEAM ================= */
 
+  ensurePage(65);
   sectionTitle("Transfer Team");
 
   (data.transferTeam?.members || []).forEach((member: any, idx: number) => {
@@ -494,6 +650,7 @@ export function generateEpcrPdf(data: {
 
   /* ================= TIME ================= */
 
+  ensurePage(58);
   sectionTitle("Time");
 
   const t = data.time || {};
@@ -514,5 +671,10 @@ export function generateEpcrPdf(data: {
 
   drawFooter();
 
+  return doc;
+}
+
+export function generateEpcrPdf(data: EpcrPdfData) {
+  const doc = buildEpcrPdf(data);
   doc.save(`ePCR-${data.patientInfo?.patientId || "case"}.pdf`);
 }
