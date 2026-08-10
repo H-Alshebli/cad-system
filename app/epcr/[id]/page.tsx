@@ -117,6 +117,8 @@ type NarrativeVitals = {
 
 type Outcome = {
   destination: string;
+  noTransferReason: string;
+  noTransferReasonOther: string;
   hospitalName: string;
   hospitalMember: string;
   hospitalSignatureDataUrl: string;
@@ -243,6 +245,8 @@ const emptyNarrativeVitals = (): NarrativeVitals => ({
 
 const emptyOutcome = (): Outcome => ({
   destination: "",
+  noTransferReason: "",
+  noTransferReasonOther: "",
   hospitalName: "",
   hospitalMember: "",
   hospitalSignatureDataUrl: "",
@@ -428,6 +432,16 @@ const DESTINATIONS = [
   "Treated on Scene",
   "Scene to Hospital",
   "Death",
+  "Won't Transfer or Treat",
+] as const;
+
+const NO_TRANSFER_REASONS = [
+  "Violent Patient",
+  "Transport No Longer Required",
+  "Unsafe Scene",
+  "Critical Condition",
+  "Patient Refused Transport",
+  "Other",
 ] as const;
 
 const MEDICATIONS_LIST = [
@@ -853,6 +867,19 @@ patientInfo.chiefComplaints.forEach((complaint) => {
     }
 
     if (!outcome.destination.trim()) m.push("Outcome: Destination");
+
+    if (outcome.destination === "Won't Transfer or Treat") {
+      if (!outcome.noTransferReason?.trim()) {
+        m.push("Outcome: Reason for No Transfer or Treatment");
+      }
+
+      if (
+        outcome.noTransferReason === "Other" &&
+        !outcome.noTransferReasonOther?.trim()
+      ) {
+        m.push("Outcome: Other Reason Details");
+      }
+    }
 
     if (requiresHospitalFields(outcome.destination)) {
       if (!outcome.hospitalName.trim()) m.push("Outcome: Hospital Name");
@@ -1901,15 +1928,22 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           disabled={locked}
           label="Destination *"
           value={outcome.destination}
-          onChange={(e) =>
+          onChange={(e) => {
+            const destination = e.target.value;
             setData((prev) => ({
               ...(prev ?? {}),
               outcome: {
                 ...(prev?.outcome ?? emptyOutcome()),
-                destination: e.target.value,
+                destination,
+                ...(destination === "Won't Transfer or Treat"
+                  ? {}
+                  : {
+                      noTransferReason: "",
+                      noTransferReasonOther: "",
+                    }),
               },
-            }))
-          }
+            }));
+          }}
         >
           {DESTINATIONS.map((d) => (
             <option key={d} value={d}>
@@ -1917,6 +1951,52 @@ patientInfo.chiefComplaints.forEach((complaint) => {
             </option>
           ))}
         </Select>
+
+        {outcome.destination === "Won't Transfer or Treat" && (
+          <>
+            <Select
+              disabled={locked}
+              label="Reason for No Transfer or Treatment *"
+              value={outcome.noTransferReason || ""}
+              onChange={(e) => {
+                const noTransferReason = e.target.value;
+                setData((prev) => ({
+                  ...(prev ?? {}),
+                  outcome: {
+                    ...(prev?.outcome ?? emptyOutcome()),
+                    noTransferReason,
+                    ...(noTransferReason === "Other"
+                      ? {}
+                      : { noTransferReasonOther: "" }),
+                  },
+                }));
+              }}
+            >
+              {NO_TRANSFER_REASONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  {reason}
+                </option>
+              ))}
+            </Select>
+
+            {outcome.noTransferReason === "Other" && (
+              <Textarea
+                disabled={locked}
+                label="Other Reason Details *"
+                value={outcome.noTransferReasonOther || ""}
+                onChange={(e) =>
+                  setData((prev) => ({
+                    ...(prev ?? {}),
+                    outcome: {
+                      ...(prev?.outcome ?? emptyOutcome()),
+                      noTransferReasonOther: e.target.value,
+                    },
+                  }))
+                }
+              />
+            )}
+          </>
+        )}
 
         {requiresHospitalFields(outcome.destination) && (
           <>

@@ -402,6 +402,14 @@ export function generateEpcrPdf(data: {
   infoCard(
     [
       { label: "Destination", value: data.outcome?.destination },
+      {
+        label: "No Transfer / Treatment Reason",
+        value: data.outcome?.noTransferReason,
+      },
+      {
+        label: "Other Reason Details",
+        value: data.outcome?.noTransferReasonOther,
+      },
       { label: "Hospital", value: data.outcome?.hospitalName },
       { label: "Hospital Member", value: data.outcome?.hospitalMember },
     ],
