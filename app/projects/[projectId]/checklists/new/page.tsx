@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
@@ -14,22 +14,26 @@ import {
   READINESS_ACKNOWLEDGEMENT_TEXT,
   READINESS_POLICIES_URL,
   SERVICE_TYPES,
-  SHIFT_OPTIONS,
+  ResolvedProjectShift,
   ServiceType,
   ReadinessChecklistItem,
   calculateReadiness,
   checkAllEligibleItems,
   cloneDefaultChecklistItems,
   createReadinessChecklist,
+  doesChecklistShiftMatch,
+  findDuplicateChecklist,
   getServiceDescription,
   getChecklistWizardSteps,
   getStepKeyForWizardLabel,
-  getMissionLabel,
   getRiyadhDateKey,
+  getProjectReadinessSettings,
   getUnitCodeFromMission,
   getUnitIdFromMission,
   isMissionActive,
   isProjectMission,
+  normalizeDeploymentType,
+  resolveCurrentProjectShift,
 } from "@/lib/readinessChecklist";
 import { getProjectDisplayName, getUnitDisplayName } from "@/lib/displayLabels";
 
@@ -144,6 +148,11 @@ function getExtraStockItems(items: ReadinessChecklistItem[]) {
   });
 }
 
+function isChecklistComplete(checklist: any) {
+  const status = String(checklist?.status || "").toLowerCase();
+  return status === "submitted" || status === "approved";
+}
+
 function getValidationIssues(items: ReadinessChecklistItem[]) {
   const issues: ValidationIssue[] = [];
 
@@ -197,6 +206,110 @@ function groupItems(items: ReadinessChecklistItem[]) {
       return acc;
     },
     {}
+  );
+}
+
+function getUnitIdFromRecord(unit: any) {
+  return String(
+    unit?.id ||
+      unit?.unitId ||
+      unit?.ambulanceId ||
+      unit?.code ||
+      unit?.unitCode ||
+      unit?.ambulanceCode ||
+      ""
+  ).trim();
+}
+
+function getUnitCodeFromRecord(unit: any) {
+  return String(
+    unit?.unitCode ||
+      unit?.code ||
+      unit?.ambulanceCode ||
+      unit?.vehicleCode ||
+      unit?.callSign ||
+      unit?.name ||
+      getUnitIdFromRecord(unit)
+  ).trim();
+}
+
+function getUnitOptionLabel(unit: any) {
+  const unitCode = getUnitCodeFromRecord(unit);
+  return getUnitDisplayName({ unitCode, unitId: getUnitIdFromRecord(unit) }) || unitCode || "Unknown unit";
+}
+
+function getProjectAssignedUnitIds(project: any) {
+  const ids = new Set<string>();
+
+  [
+    ...(Array.isArray(project?.assignedAmbulanceIds) ? project.assignedAmbulanceIds : []),
+    ...(Array.isArray(project?.ambulanceIds) ? project.ambulanceIds : []),
+    ...(Array.isArray(project?.unitIds) ? project.unitIds : []),
+  ].forEach((id) => {
+    if (id) ids.add(String(id).trim());
+  });
+
+  if (Array.isArray(project?.assignedAmbulances)) {
+    project.assignedAmbulances.forEach((unit: any) => {
+      const id = typeof unit === "string" ? unit : getUnitIdFromRecord(unit);
+      if (id) ids.add(String(id).trim());
+    });
+  }
+
+  return ids;
+}
+
+function getUnitAssignedUserIds(unit: any) {
+  const ids = new Set<string>();
+
+  [
+    ...(Array.isArray(unit?.assignedUserIds) ? unit.assignedUserIds : []),
+    ...(Array.isArray(unit?.crewUserIds) ? unit.crewUserIds : []),
+  ].forEach((id) => {
+    if (id) ids.add(String(id).trim());
+  });
+
+  if (Array.isArray(unit?.crewMembers)) {
+    unit.crewMembers.forEach((member: any) => {
+      if (member?.userId) ids.add(String(member.userId).trim());
+    });
+  }
+
+  return ids;
+}
+
+function getUserUnitIds(user: any) {
+  return new Set(
+    [
+      ...(Array.isArray(user?.ambulanceIds) ? user.ambulanceIds : []),
+      ...(Array.isArray(user?.assignedAmbulanceIds) ? user.assignedAmbulanceIds : []),
+      ...(Array.isArray(user?.unitIds) ? user.unitIds : []),
+    ]
+      .filter(Boolean)
+      .map((id) => String(id).trim())
+  );
+}
+
+function mergeUnitOptions(...groups: any[][]) {
+  const seen = new Set<string>();
+  const options: any[] = [];
+
+  groups.flat().forEach((unit) => {
+    const id = getUnitIdFromRecord(unit);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    options.push(unit);
+  });
+
+  return options.sort((a, b) => getUnitOptionLabel(a).localeCompare(getUnitOptionLabel(b)));
+}
+
+function getChecklistCreatedMs(checklist: any) {
+  return (
+    checklist?.submittedAtMs ||
+    checklist?.startedAtMs ||
+    checklist?.createdAt?.toDate?.()?.getTime?.() ||
+    0
   );
 }
 
@@ -317,9 +430,10 @@ export default function NewProjectChecklistPage({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const missionIdFromUrl = searchParams.get("missionId") || "";
   const checklistPhase = (searchParams.get("phase") === "closing" ? "closing" : "opening") as ChecklistPhase;
   const sourceChecklistId = searchParams.get("sourceChecklistId") || "";
+  const unitIdFromUrl = searchParams.get("unitId") || "";
+  const shiftFromUrl = searchParams.get("shift") || "Day";
   const isManualMode = params.projectId === "_manual" || searchParams.get("manual") === "1";
   const isB2CMode = params.projectId === "_b2c" || params.projectId === "b2c";
   const { user, loading: userLoading } = useCurrentUser();
@@ -331,13 +445,17 @@ export default function NewProjectChecklistPage({
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [manualProjectName, setManualProjectName] = useState("");
-  const [manualMissionLabel, setManualMissionLabel] = useState("");
   const [manualUnitId, setManualUnitId] = useState("");
   const [manualUnitCode, setManualUnitCode] = useState("");
   const [projectLoading, setProjectLoading] = useState(true);
-  const [missions, setMissions] = useState<any[]>([]);
-  const [missionId, setMissionId] = useState(missionIdFromUrl);
-  const [shiftKey, setShiftKey] = useState("Day");
+  const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [projectMissionUnits, setProjectMissionUnits] = useState<any[]>([]);
+  const [projectChecklists, setProjectChecklists] = useState<any[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState(unitIdFromUrl);
+  const [shiftKey, setShiftKey] = useState(shiftFromUrl);
+  const [resolvedShift, setResolvedShift] = useState<ResolvedProjectShift>(() =>
+    resolveCurrentProjectShift(undefined)
+  );
   const [serviceType, setServiceType] = useState<ServiceType>("BLS");
   const [deploymentType, setDeploymentType] = useState<DeploymentType>("Ambulance");
   const [dateKey, setDateKey] = useState(getRiyadhDateKey());
@@ -351,6 +469,8 @@ export default function NewProjectChecklistPage({
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [activeIssueItemId, setActiveIssueItemId] = useState("");
   const [extraStockPrompt, setExtraStockPrompt] = useState<ExtraStockPrompt>(null);
+  const [unitSelectionTouched, setUnitSelectionTouched] = useState(false);
+  const [selectedUnitClosedChecklist, setSelectedUnitClosedChecklist] = useState<any>(null);
   const pageTopRef = useRef<HTMLDivElement | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
 
@@ -379,11 +499,21 @@ export default function NewProjectChecklistPage({
       const source: any = snap.data();
       if (source.serviceType) setServiceType(source.serviceType);
       if (source.deploymentType) setDeploymentType(source.deploymentType);
-      if (source.missionId) setMissionId(source.missionId);
       if (source.shiftKey) setShiftKey(source.shiftKey);
       if (source.dateKey) setDateKey(source.dateKey);
+      if (source.shiftId || source.shiftKey) {
+        setResolvedShift({
+          shiftId: source.shiftId || source.shiftKey || "shift",
+          shiftKey: source.shiftKey || source.shiftName || "Shift",
+          shiftName: source.shiftName || source.shiftKey || "Shift",
+          shiftDate: source.shiftDate || source.dateKey || getRiyadhDateKey(),
+          shiftStartTime: source.shiftStartTime || "--:--",
+          shiftEndTime: source.shiftEndTime || "--:--",
+          crossesMidnight: Boolean(source.crossesMidnight),
+        });
+      }
       if (source.projectName && isManualMode) setManualProjectName(source.projectName);
-      if (source.missionLabel && isManualMode) setManualMissionLabel(source.missionLabel);
+      if (source.unitId) setSelectedUnitId(source.unitId);
       if (source.unitId && isManualMode) setManualUnitId(source.unitId);
       if (source.unitCode && isManualMode) setManualUnitCode(source.unitCode);
     });
@@ -397,52 +527,249 @@ export default function NewProjectChecklistPage({
   }, [isManualMode]);
 
   useEffect(() => {
-    if (isManualMode || isB2CMode) {
-      const unsub = onSnapshot(collection(db, "cases"), (snap) => {
+    const unsub = onSnapshot(
+      collection(db, "ambulances"),
+      (snap) => {
         const rows = snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as any))
-          .filter((mission) => {
-            if (!isMissionActive(mission)) return false;
-            const source = String(mission.sourceType || mission.caseType || "").toLowerCase();
-            if (isB2CMode) return source.includes("b2c") && isProjectMission(mission);
-            return isProjectMission(mission);
-          });
-        setMissions(rows);
-      });
-      return () => unsub();
+          .filter((unit) => !unit.archived && !unit.disabled);
+        setAmbulances(rows);
+      },
+      (loadError) => {
+        console.error("Failed to load ambulances for readiness checklist", loadError);
+        setAmbulances([]);
+      }
+    );
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "projectChecklists"),
+      (snap) => {
+        setProjectChecklists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      () => setProjectChecklists([])
+    );
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const targetProjectId = isManualMode ? selectedProjectId : params.projectId;
+    if (!targetProjectId || targetProjectId.startsWith("_") || isB2CMode) {
+      setProjectMissionUnits([]);
+      return;
     }
 
-    const q = query(collection(db, "cases"), where("projectId", "==", params.projectId));
-    const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .filter((mission) => {
-          if (!isProjectMission(mission) || !isMissionActive(mission)) return false;
-          if (mission.projectId !== params.projectId) return false;
+    const unsub = onSnapshot(
+      collection(db, "cases"),
+      (snap) => {
+        const missionUnits = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as any))
+          .filter((mission) => {
+            const missionProjectId = mission.projectId || mission.assignedProjectId || "";
+            return (
+              missionProjectId === targetProjectId &&
+              isProjectMission(mission) &&
+              isMissionActive(mission)
+            );
+          })
+          .map((mission) => {
+            const unitId = getUnitIdFromMission(mission);
+            const unitCode = getUnitCodeFromMission(mission) || unitId;
+            return unitId
+              ? {
+                  id: unitId,
+                  unitId,
+                  unitCode,
+                  code: unitCode,
+                  source: "mission",
+                }
+              : null;
+          })
+          .filter(Boolean) as any[];
 
-          const projectUnitIds = new Set([
-            ...(Array.isArray(project?.assignedAmbulanceIds) ? project.assignedAmbulanceIds : []),
-            ...(Array.isArray(project?.assignedAmbulances)
-              ? project.assignedAmbulances.map((unit: any) => unit?.id).filter(Boolean)
-              : []),
-          ]);
-          if (projectUnitIds.size === 0) return true;
-          return projectUnitIds.has(getUnitIdFromMission(mission));
-        });
-      setMissions(rows);
-    });
+        setProjectMissionUnits(missionUnits);
+      },
+      () => setProjectMissionUnits([])
+    );
+
     return () => unsub();
-  }, [params.projectId, isManualMode, isB2CMode, project]);
+  }, [isB2CMode, isManualMode, params.projectId, selectedProjectId]);
 
-  const selectedMission = useMemo(
-    () => missions.find((mission) => mission.id === missionId),
-    [missions, missionId]
+  const selectedExistingProject = useMemo(
+    () => projects.find((entry) => entry.id === selectedProjectId),
+    [projects, selectedProjectId]
   );
-  const wizardSteps = useMemo(
-    () => getChecklistWizardSteps(deploymentType, checklistPhase),
-    [deploymentType, checklistPhase]
+  const projectForUnitDetection =
+    isManualMode && selectedExistingProject ? selectedExistingProject : project;
+
+  useEffect(() => {
+    if (sourceChecklistId && checklistPhase === "closing") return;
+    const nextShift = resolveCurrentProjectShift(projectForUnitDetection?.shiftSchedule);
+    setResolvedShift(nextShift);
+    setShiftKey(nextShift.shiftName);
+    setDateKey(nextShift.shiftDate);
+  }, [checklistPhase, projectForUnitDetection, sourceChecklistId]);
+
+  const unitOptions = useMemo(() => {
+    const assignedUnitIds = getProjectAssignedUnitIds(projectForUnitDetection);
+    const embeddedProjectUnits = Array.isArray(projectForUnitDetection?.assignedAmbulances)
+      ? projectForUnitDetection.assignedAmbulances.map((unit: any) =>
+          typeof unit === "string" ? { id: unit, unitId: unit, unitCode: unit } : unit
+        )
+      : [];
+    const projectUnits =
+      assignedUnitIds.size > 0
+        ? ambulances.filter((unit) => assignedUnitIds.has(getUnitIdFromRecord(unit)))
+        : ambulances;
+
+    return mergeUnitOptions(projectUnits, embeddedProjectUnits, projectMissionUnits);
+  }, [ambulances, projectForUnitDetection, projectMissionUnits]);
+  const selectedUnit = useMemo(
+    () => unitOptions.find((unit) => getUnitIdFromRecord(unit) === selectedUnitId),
+    [unitOptions, selectedUnitId]
   );
+  const selectedUnitCode = selectedUnit ? getUnitCodeFromRecord(selectedUnit) : selectedUnitId;
+  const assignedUnitDisplay = selectedUnit
+    ? getUnitOptionLabel(selectedUnit)
+    : selectedUnitId
+    ? getUnitDisplayName({ unitCode: selectedUnitId, unitId: selectedUnitId }) || selectedUnitId
+    : unitOptions.length > 0
+    ? "Not detected for this user"
+    : "No project unit found";
+  const canSaveChecklist = isManualMode
+    ? Boolean(manualUnitId.trim())
+    : Boolean(selectedUnitId) && !selectedUnitClosedChecklist;
+  const shouldShowProjectUnitPicker =
+    unitOptions.length > 1 && (!isManualMode || Boolean(selectedProjectId));
+  const shouldRequireProjectUnitSelection =
+    shouldShowProjectUnitPicker && !unitIdFromUrl && !sourceChecklistId;
+  const hasLockedUnitContext = Boolean(unitIdFromUrl || sourceChecklistId);
+  const shouldAllowProjectUnitPicker = shouldShowProjectUnitPicker && !hasLockedUnitContext;
+  const canReturnToUnitSelection =
+    shouldShowProjectUnitPicker && hasLockedUnitContext && !isManualMode;
+  const readinessUnitCards = useMemo(() => {
+    const normalizedDeployment = normalizeDeploymentType(deploymentType);
+    const projectIdForChecklist = isManualMode ? selectedProjectId : params.projectId;
+
+    return unitOptions.map((unit) => {
+      const unitId = getUnitIdFromRecord(unit);
+      const relevant = projectChecklists
+        .filter((entry) => {
+          if (!unitId || entry.unitId !== unitId) return false;
+          if (projectIdForChecklist && entry.projectId && entry.projectId !== projectIdForChecklist) return false;
+          if (entry.dateKey !== dateKey) return false;
+          if (!doesChecklistShiftMatch(entry, shiftKey, resolvedShift.shiftId)) return false;
+          return (
+            normalizeDeploymentType(entry.deploymentType || entry.checklistCategory || "Ambulance") ===
+            normalizedDeployment
+          );
+        })
+        .sort((a, b) => getChecklistCreatedMs(b) - getChecklistCreatedMs(a));
+      const opening = relevant.find((entry) => (entry.checklistPhase || "opening") === "opening");
+      const closing = relevant.find((entry) => (entry.checklistPhase || "opening") === "closing");
+      const openingDone = isChecklistComplete(opening);
+      const closingDone = isChecklistComplete(closing);
+
+      return {
+        unit,
+        unitId,
+        unitLabel: getUnitOptionLabel(unit),
+        opening,
+        closing,
+        openingDone,
+        closingDone,
+      };
+    });
+  }, [
+    dateKey,
+    deploymentType,
+    isManualMode,
+    params.projectId,
+    projectChecklists,
+    resolvedShift.shiftId,
+    selectedProjectId,
+    shiftKey,
+    unitOptions,
+  ]);
+  const usesAutomaticReadinessSettings = Boolean(projectForUnitDetection);
+  const wizardSteps = useMemo(() => {
+    const steps = getChecklistWizardSteps(deploymentType, checklistPhase);
+    if (!usesAutomaticReadinessSettings) return steps;
+    return steps.filter((label) => label !== "Service" && label !== "Deploy");
+  }, [checklistPhase, deploymentType, usesAutomaticReadinessSettings]);
   const currentStepLabel = wizardSteps[step] || "Submit";
+
+  useEffect(() => {
+    if (!usesAutomaticReadinessSettings) return;
+    const settings = getProjectReadinessSettings(projectForUnitDetection, selectedUnitId);
+    setServiceType(settings.serviceType);
+    setDeploymentType(settings.deploymentType);
+  }, [projectForUnitDetection, selectedUnitId, usesAutomaticReadinessSettings]);
+
+  useEffect(() => {
+    if (!unitIdFromUrl || selectedUnitId === unitIdFromUrl) return;
+    const unit = unitOptions.find((option) => getUnitIdFromRecord(option) === unitIdFromUrl);
+    setSelectedUnitId(unitIdFromUrl);
+    setUnitSelectionTouched(true);
+    if (isManualMode && selectedProjectId) {
+      setManualUnitId(unitIdFromUrl);
+      setManualUnitCode(unit ? getUnitCodeFromRecord(unit) : unitIdFromUrl);
+    }
+  }, [isManualMode, selectedProjectId, selectedUnitId, unitIdFromUrl, unitOptions]);
+
+  useEffect(() => {
+    if (!shouldRequireProjectUnitSelection || unitSelectionTouched || !selectedUnitId) return;
+    setSelectedUnitId("");
+    if (isManualMode && selectedProjectId) {
+      setManualUnitId("");
+      setManualUnitCode("");
+    }
+  }, [
+    isManualMode,
+    selectedProjectId,
+    selectedUnitId,
+    shouldRequireProjectUnitSelection,
+    unitSelectionTouched,
+  ]);
+
+  useEffect(() => {
+    if (isManualMode || selectedUnitId || unitOptions.length === 0) return;
+    if (!unitIdFromUrl && unitOptions.length > 1) return;
+
+    const userUnitIds = getUserUnitIds(user);
+    const userUnit = unitOptions.find((unit) => {
+      const unitId = getUnitIdFromRecord(unit);
+      if (userUnitIds.has(unitId)) return true;
+      return user?.uid && getUnitAssignedUserIds(unit).has(user.uid);
+    });
+
+    const automaticUnit = userUnit || (unitOptions.length === 1 ? unitOptions[0] : null);
+    if (automaticUnit) setSelectedUnitId(getUnitIdFromRecord(automaticUnit));
+  }, [isManualMode, selectedUnitId, unitIdFromUrl, unitOptions, user]);
+
+  useEffect(() => {
+    if (!isManualMode || !selectedProjectId || unitOptions.length === 0) return;
+    if (!unitIdFromUrl && unitOptions.length > 1) return;
+
+    const userUnitIds = getUserUnitIds(user);
+    const userUnit = unitOptions.find((unit) => {
+      const unitId = getUnitIdFromRecord(unit);
+      if (userUnitIds.has(unitId)) return true;
+      return user?.uid && getUnitAssignedUserIds(unit).has(user.uid);
+    });
+    const automaticUnit = userUnit || (unitOptions.length === 1 ? unitOptions[0] : null);
+    if (!automaticUnit) return;
+
+    const unitId = getUnitIdFromRecord(automaticUnit);
+    const unitCode = getUnitCodeFromRecord(automaticUnit) || unitId;
+    setSelectedUnitId(unitId);
+    setManualUnitId(unitId);
+    setManualUnitCode(unitCode);
+  }, [isManualMode, selectedProjectId, unitIdFromUrl, unitOptions, user]);
 
   useEffect(() => {
     setItems((current) => {
@@ -464,6 +791,109 @@ export default function NewProjectChecklistPage({
       setStep(Math.max(0, wizardSteps.length - 1));
     }
   }, [step, wizardSteps.length]);
+
+  useEffect(() => {
+    if (
+      (isManualMode && !selectedProjectId) ||
+      shouldRequireProjectUnitSelection ||
+      !selectedUnitId ||
+      !dateKey ||
+      !shiftKey ||
+      !deploymentType
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function enforceOpeningSequence() {
+      const existingClosing = await findDuplicateChecklist(
+        selectedUnitId,
+        dateKey,
+        shiftKey,
+        deploymentType,
+        "closing",
+        resolvedShift.shiftId
+      );
+
+      if (cancelled) return;
+
+      if (existingClosing) {
+        if (!unitIdFromUrl && unitSelectionTouched && shouldShowProjectUnitPicker) return;
+        const existing = existingClosing as any;
+        router.replace(`/projects/${existing.projectId || params.projectId}/checklists/${existing.id}`);
+        return;
+      }
+
+      if (checklistPhase === "closing") return;
+
+      const existingOpening = await findDuplicateChecklist(
+        selectedUnitId,
+        dateKey,
+        shiftKey,
+        deploymentType,
+        "opening",
+        resolvedShift.shiftId
+      );
+
+      if (cancelled || !existingOpening) return;
+
+      const existing = existingOpening as any;
+      if (isChecklistComplete(existing)) {
+        const redirectParams = new URLSearchParams({
+          unitId: selectedUnitId,
+          shift: shiftKey,
+          phase: "closing",
+          sourceChecklistId: existing.id,
+        });
+        router.replace(`/projects/${existing.projectId || params.projectId}/checklists/new?${redirectParams.toString()}`);
+        return;
+      }
+
+      router.replace(`/projects/${existing.projectId || params.projectId}/checklists/${existing.id}`);
+    }
+
+    void enforceOpeningSequence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checklistPhase, dateKey, deploymentType, isManualMode, params.projectId, resolvedShift.shiftId, router, selectedProjectId, selectedUnitId, shiftKey, shouldRequireProjectUnitSelection, shouldShowProjectUnitPicker, unitIdFromUrl, unitSelectionTouched]);
+
+  useEffect(() => {
+    setSelectedUnitClosedChecklist(null);
+    if (
+      (isManualMode && !selectedProjectId) ||
+      shouldRequireProjectUnitSelection ||
+      !selectedUnitId ||
+      !dateKey ||
+      !shiftKey ||
+      !deploymentType
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkSelectedUnitCompletion() {
+      const existingClosing = await findDuplicateChecklist(
+        selectedUnitId,
+        dateKey,
+        shiftKey,
+        deploymentType,
+        "closing",
+        resolvedShift.shiftId
+      );
+
+      if (!cancelled) setSelectedUnitClosedChecklist(existingClosing || null);
+    }
+
+    void checkSelectedUnitCompletion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dateKey, deploymentType, isManualMode, resolvedShift.shiftId, selectedProjectId, selectedUnitId, shiftKey, shouldRequireProjectUnitSelection]);
 
   useEffect(() => {
     pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -509,15 +939,6 @@ export default function NewProjectChecklistPage({
       setActiveIssueItemId("");
     }
   }, [items, stepItems, validationIssues.length, activeIssueItemId]);
-
-  function missionOptionLabel(mission: any) {
-    return [
-      getMissionLabel(mission),
-      getUnitDisplayName({ unitCode: getUnitCodeFromMission(mission) }),
-    ]
-      .filter(Boolean)
-      .join(" - ");
-  }
 
   function updateItem(id: string, patch: Partial<ReadinessChecklistItem>) {
     setItems((prev) =>
@@ -618,24 +1039,20 @@ export default function NewProjectChecklistPage({
           setError("Select an existing project or enter a manual project name.");
           return false;
         }
-        if (!missionId && !manualMissionLabel.trim()) {
-          setError("Select a mission or enter a manual mission name.");
-          return false;
-        }
-        if (!missionId && !manualUnitId.trim()) {
+        if (!manualUnitId.trim()) {
           setError("Enter the unit or ambulance code for the manual checklist.");
           return false;
         }
-      } else if (!missionId) {
-        setError("Select an active mission, Riyadh date, and shift.");
+      } else if (!selectedUnitId) {
+        setError("No assigned unit was detected for your account in this project. Contact the control room or project admin.");
         return false;
       }
     }
-    if (step === 1 && !serviceType) {
+    if (currentStepLabel === "Service" && !serviceType) {
       setError("Select BLS, BLS+, ALS, or ALS+.");
       return false;
     }
-    if (step === 2 && !deploymentType) {
+    if (currentStepLabel === "Deploy" && !deploymentType) {
       setError("Select Clinic, Ambulance, Ambulance + Clinic, or Walking Team.");
       return false;
     }
@@ -665,26 +1082,38 @@ export default function NewProjectChecklistPage({
       alert("Please confirm the submission acknowledgement before submitting.");
       return;
     }
-    const selectedProject = projects.find((entry) => entry.id === selectedProjectId);
     const resolvedProjectId = isManualMode
       ? selectedProjectId || "_manual"
       : isB2CMode
       ? "_b2c"
       : params.projectId;
     const resolvedProjectName = isManualMode
-      ? selectedProject?.projectName || selectedProject?.name || manualProjectName.trim()
-      : project?.projectName || selectedMission?.projectName || (isB2CMode ? "B2C Transport" : "");
-    const resolvedMissionId =
-      selectedMission?.id || `manual-${startedAtMs}`;
-    const resolvedMissionLabel =
-      selectedMission ? getMissionLabel(selectedMission) : manualMissionLabel.trim();
-    const unitId = selectedMission ? getUnitIdFromMission(selectedMission) : manualUnitId.trim();
-    const unitCode = selectedMission
-      ? getUnitCodeFromMission(selectedMission)
-      : manualUnitCode.trim() || manualUnitId.trim();
+      ? selectedExistingProject?.projectName || selectedExistingProject?.name || manualProjectName.trim()
+      : project?.projectName || project?.name || (isB2CMode ? "B2C Transport" : "");
+    const unitId = isManualMode
+      ? manualUnitId.trim()
+      : selectedUnitId;
+    const unitCode = isManualMode
+      ? manualUnitCode.trim() || manualUnitId.trim()
+      : selectedUnitCode || unitId;
     if (!unitId) {
-      alert("This mission does not have an assigned ambulance/unit.");
+      alert("Select the assigned unit or ambulance before saving the checklist.");
       return;
+    }
+    if (!isManualMode || selectedProjectId) {
+      const existingChecklist = await findDuplicateChecklist(
+        unitId,
+        dateKey,
+        shiftKey,
+        deploymentType,
+        checklistPhase,
+        resolvedShift.shiftId
+      );
+      if (existingChecklist) {
+        const existing = existingChecklist as any;
+        router.push(`/projects/${existing.projectId || resolvedProjectId}/checklists/${existing.id}`);
+        return;
+      }
     }
     if (status === "submitted") {
       const issues = getValidationIssues(items);
@@ -705,14 +1134,17 @@ export default function NewProjectChecklistPage({
         {
           projectId: resolvedProjectId,
           projectName: resolvedProjectName,
-          missionId: resolvedMissionId,
-          missionLabel: resolvedMissionLabel,
           unitId,
           unitCode,
           inspectorUserId: user.uid,
           inspectorName: inspectorName(user),
           inspectorEmployeeId: user.employeeId || user.employeeID || user.badgeNo || "",
+          shiftId: resolvedShift.shiftId,
           shiftKey,
+          shiftName: resolvedShift.shiftName,
+          shiftDate: resolvedShift.shiftDate,
+          shiftStartTime: resolvedShift.shiftStartTime,
+          shiftEndTime: resolvedShift.shiftEndTime,
           serviceType,
           deploymentType,
           checklistCategory: deploymentType,
@@ -735,8 +1167,7 @@ export default function NewProjectChecklistPage({
                 }
               : undefined,
           manualProjectName: isManualMode ? manualProjectName.trim() : undefined,
-          manualMissionLabel: isManualMode ? manualMissionLabel.trim() : undefined,
-          allowDuplicate: isManualMode,
+          allowDuplicate: isManualMode && !selectedProjectId,
           items,
         },
         status
@@ -916,7 +1347,96 @@ export default function NewProjectChecklistPage({
         </div>
       )}
 
-      {step === 0 && (
+      {shouldRequireProjectUnitSelection && (
+        <section className={`${cardClass} space-y-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black text-[#274C5A]">Select Unit Readiness</h3>
+              <p className={mutedTextClass}>
+                Choose the unit first. Completed units can only be opened for review.
+              </p>
+            </div>
+            <div className="rounded-full border border-[#86A7B2]/35 bg-[#f8fbfc] px-3 py-1 text-xs font-black text-[#274C5A]">
+              {readinessUnitCards.length} unit{readinessUnitCards.length === 1 ? "" : "s"}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {readinessUnitCards.map((card) => {
+              const startOpeningHref = `/projects/${params.projectId}/checklists/new?unitId=${encodeURIComponent(
+                card.unitId
+              )}&shift=${encodeURIComponent(shiftKey)}`;
+              const startClosingHref = `/projects/${params.projectId}/checklists/new?unitId=${encodeURIComponent(
+                card.unitId
+              )}&shift=${encodeURIComponent(shiftKey)}&phase=closing&sourceChecklistId=${encodeURIComponent(
+                card.opening?.id || ""
+              )}`;
+              const reviewHref = `/projects/${params.projectId}/checklists/${
+                card.closing?.id || card.opening?.id || ""
+              }`;
+
+              return (
+                <article
+                  key={card.unitId}
+                  className={`rounded-2xl border p-5 ${
+                    card.closingDone
+                      ? "border-emerald-300 bg-emerald-50"
+                      : card.openingDone
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-[#86A7B2]/25 bg-white"
+                  }`}
+                >
+                  <div className="flex min-h-[190px] flex-col justify-between gap-5">
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="badge">
+                          {card.closingDone ? "Completed" : card.openingDone ? "Opening done" : "Not started"}
+                        </span>
+                        <span className="text-xs font-black uppercase tracking-wide text-[#7F7F7F]">
+                          {shiftKey}
+                        </span>
+                      </div>
+                      <h4 className="mt-4 text-xl font-black text-[#274C5A]">{card.unitLabel}</h4>
+                      <p className="mt-2 text-sm font-semibold text-[#7F7F7F]">
+                        Date {dateKey} / {resolvedShift.shiftStartTime} - {resolvedShift.shiftEndTime}
+                      </p>
+                    </div>
+
+                    {card.closingDone ? (
+                      <Link className={secondaryButtonClass} href={reviewHref}>
+                        Review Completed
+                      </Link>
+                    ) : card.opening && !card.openingDone ? (
+                      <Link
+                        className={primaryButtonClass}
+                        href={`/projects/${card.opening.projectId || params.projectId}/checklists/${card.opening.id}`}
+                      >
+                        Continue Opening
+                      </Link>
+                    ) : card.openingDone ? (
+                      <Link className={primaryButtonClass} href={startClosingHref}>
+                        Start Closing
+                      </Link>
+                    ) : (
+                      <Link className={primaryButtonClass} href={startOpeningHref}>
+                        Start Opening
+                      </Link>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {readinessUnitCards.length === 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-800">
+              No units were found for this project. Check the project ambulance assignment or active CAD missions.
+            </div>
+          )}
+        </section>
+      )}
+
+      {!shouldRequireProjectUnitSelection && step === 0 && (
         <section className={`${cardClass} space-y-5`}>
           <div>
             <h3 className="text-lg font-black text-[#274C5A]">Info</h3>
@@ -932,7 +1452,13 @@ export default function NewProjectChecklistPage({
                   <select
                     className="select"
                     value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedProjectId(e.target.value);
+                      setUnitSelectionTouched(false);
+                      setSelectedUnitId("");
+                      setManualUnitId("");
+                      setManualUnitCode("");
+                    }}
                   >
                     <option value="">Manual project name</option>
                     {projects.map((entry) => (
@@ -965,62 +1491,145 @@ export default function NewProjectChecklistPage({
                 {user?.employeeId || user?.employeeID || user?.badgeNo || "Not available"}
               </div>
             </div>
-            <label className="space-y-2">
-              <span className={labelClass}>Riyadh Date</span>
-              <input className="input" type="date" value={dateKey} onChange={(e) => setDateKey(e.target.value)} />
-            </label>
-            <label className="space-y-2 lg:col-span-2">
-              <span className={labelClass}>Assigned Mission / Unit</span>
-              <select className="select" value={missionId} onChange={(e) => setMissionId(e.target.value)}>
-                <option value="">
-                  {isManualMode ? "Optional: select active mission" : "Select active mission"}
-                </option>
-                {missions.map((mission) => (
-                  <option key={mission.id} value={mission.id}>
-                    {missionOptionLabel(mission)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isManualMode && !missionId && (
-              <>
-                <label className="space-y-2">
-                  <span className={labelClass}>Manual Mission Name</span>
-                  <input
-                    className="input"
-                    value={manualMissionLabel}
-                    onChange={(e) => setManualMissionLabel(e.target.value)}
-                    placeholder="Mission, task, or standby name"
-                  />
+            <div className={metricCardClass}>
+              <div className="text-sm text-[#7F7F7F]">Riyadh Date</div>
+              <div className="mt-1 font-bold text-[#274C5A]">{dateKey}</div>
+            </div>
+            {isManualMode && selectedProjectId ? (
+              shouldAllowProjectUnitPicker ? (
+                <label className="space-y-2 lg:col-span-2">
+                  <span className={labelClass}>Assigned Unit / Ambulance</span>
+                  <select
+                    className="select"
+                    value={selectedUnitId}
+                    onChange={(e) => {
+                      const unitId = e.target.value;
+                      const unit = unitOptions.find((option) => getUnitIdFromRecord(option) === unitId);
+                      const unitCode = unit ? getUnitCodeFromRecord(unit) : unitId;
+                      setUnitSelectionTouched(true);
+                      setSelectedUnitId(unitId);
+                      setManualUnitId(unitId);
+                      setManualUnitCode(unitCode);
+                    }}
+                  >
+                    <option value="">Select project unit</option>
+                    {unitOptions.map((unit) => {
+                      const unitId = getUnitIdFromRecord(unit);
+                      return (
+                        <option key={unitId} value={unitId}>
+                          {getUnitOptionLabel(unit)}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </label>
-                <label className="space-y-2">
-                  <span className={labelClass}>Unit ID</span>
-                  <input
-                    className="input"
-                    value={manualUnitId}
+              ) : (
+                <div
+                  className={`${metricCardClass} lg:col-span-2 ${
+                    manualUnitId ? "" : "border-amber-400/50 bg-amber-50"
+                  }`}
+                >
+                  <div className="text-sm text-[#7F7F7F]">Assigned Unit / Ambulance</div>
+                  <div className="mt-1 font-bold text-[#274C5A]">
+                    {manualUnitCode || manualUnitId || "Not detected for this project"}
+                  </div>
+                </div>
+              )
+            ) : isManualMode ? (
+              <label className="space-y-2 lg:col-span-2">
+                <span className={labelClass}>Assigned Unit / Ambulance</span>
+                <input
+                  className="input"
+                  value={manualUnitId}
                     onChange={(e) => setManualUnitId(e.target.value)}
                     placeholder="Ambulance / clinic / team"
                   />
                 </label>
-                <label className="space-y-2">
-                  <span className={labelClass}>Unit Display Code</span>
-                  <input
-                    className="input"
-                    value={manualUnitCode}
-                    onChange={(e) => setManualUnitCode(e.target.value)}
-                    placeholder="Shown in dashboard"
-                  />
-                </label>
+            ) : shouldAllowProjectUnitPicker ? (
+              <label className="space-y-2 lg:col-span-2">
+                <span className={labelClass}>Assigned Unit / Ambulance</span>
+                <select
+                  className="select"
+                  value={selectedUnitId}
+                  onChange={(e) => {
+                    setUnitSelectionTouched(true);
+                    setSelectedUnitId(e.target.value);
+                  }}
+                >
+                  <option value="">Select project unit</option>
+                  {unitOptions.map((unit) => {
+                    const unitId = getUnitIdFromRecord(unit);
+                    return (
+                      <option key={unitId} value={unitId}>
+                        {getUnitOptionLabel(unit)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            ) : (
+              <div
+                className={`${metricCardClass} lg:col-span-2 ${
+                  selectedUnitId ? "" : "border-amber-400/50 bg-amber-50"
+                }`}
+              >
+                <div className="text-sm text-[#7F7F7F]">Assigned Unit / Ambulance</div>
+                <div className="mt-1 font-bold text-[#274C5A]">{assignedUnitDisplay}</div>
+              </div>
+            )}
+            {isManualMode && selectedProjectId ? (
+              <div className={metricCardClass}>
+                <div className="text-sm text-[#7F7F7F]">Unit Display Code</div>
+                <div className="mt-1 font-bold text-[#274C5A]">
+                  {manualUnitCode || manualUnitId || "Not available"}
+                </div>
+              </div>
+            ) : isManualMode && (
+              <label className="space-y-2">
+                <span className={labelClass}>Unit Display Code</span>
+                <input
+                  className="input"
+                  value={manualUnitCode}
+                  onChange={(e) => setManualUnitCode(e.target.value)}
+                  placeholder="Shown in dashboard"
+                />
+              </label>
+            )}
+            <div className={metricCardClass}>
+              <div className="text-sm text-[#7F7F7F]">Shift</div>
+              <div className="mt-1 font-bold text-[#274C5A]">{shiftKey}</div>
+              <div className="mt-1 text-xs font-semibold text-[#7F7F7F]">
+                {resolvedShift.shiftStartTime} - {resolvedShift.shiftEndTime}
+              </div>
+            </div>
+            {usesAutomaticReadinessSettings && (
+              <>
+                <div className={metricCardClass}>
+                  <div className="text-sm text-[#7F7F7F]">Service Level</div>
+                  <div className="mt-1 font-bold text-[#274C5A]">{serviceType}</div>
+                </div>
+                <div className={metricCardClass}>
+                  <div className="text-sm text-[#7F7F7F]">Deployment Type</div>
+                  <div className="mt-1 font-bold text-[#274C5A]">{deploymentType}</div>
+                </div>
               </>
             )}
-            <label className="space-y-2">
-              <span className={labelClass}>Shift</span>
-              <select className="select" value={shiftKey} onChange={(e) => setShiftKey(e.target.value)}>
-                {SHIFT_OPTIONS.map((shift) => (
-                  <option key={shift} value={shift}>{shift}</option>
-                ))}
-              </select>
-            </label>
+            {selectedUnitClosedChecklist && (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 lg:col-span-3">
+                <div className="font-black text-emerald-800">
+                  This unit has already completed today&apos;s readiness checklist.
+                </div>
+                <div className="mt-1 text-sm font-semibold text-emerald-700">
+                  Opening and closing are already recorded for {selectedUnitCode || selectedUnitId}. Select another unit to continue.
+                </div>
+                <Link
+                  className="mt-3 inline-flex rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                  href={`/projects/${selectedUnitClosedChecklist.projectId || params.projectId}/checklists/${selectedUnitClosedChecklist.id}`}
+                >
+                  Open existing checklist
+                </Link>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1216,7 +1825,12 @@ export default function NewProjectChecklistPage({
               {READINESS_ACKNOWLEDGEMENT_TEXT}
               <span className="mt-2 block text-xs font-bold text-[#7F7F7F]">
                 Please review all checklist requirements carefully before submission. By submitting, you confirm that you have read and agree to the applicable{" "}
-                <Link href={READINESS_POLICIES_URL} className="text-[#274C5A] underline underline-offset-4">
+                <Link
+                  href={READINESS_POLICIES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#274C5A] underline underline-offset-4"
+                >
                   terms, policies, and operational requirements
                 </Link>
                 .
@@ -1226,12 +1840,17 @@ export default function NewProjectChecklistPage({
         </section>
       )}
 
+      {!shouldRequireProjectUnitSelection && (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           className={secondaryButtonClass}
-          disabled={step === 0 || saving}
+          disabled={saving || (step === 0 && !canReturnToUnitSelection)}
           onClick={() => {
             setError("");
+            if (step === 0 && canReturnToUnitSelection) {
+              router.push(`/projects/${params.projectId}/checklists/new`);
+              return;
+            }
             setStep((current) => Math.max(0, current - 1));
           }}
         >
@@ -1239,13 +1858,13 @@ export default function NewProjectChecklistPage({
         </button>
 
         <div className="flex flex-wrap gap-2">
-          <button className={secondaryButtonClass} disabled={saving || !selectedMission} onClick={() => save("draft")}>
+          <button className={secondaryButtonClass} disabled={saving || !canSaveChecklist} onClick={() => save("draft")}>
             {saving ? "Saving..." : "Save Draft"}
           </button>
           {currentStepLabel !== "Submit" ? (
             <button
               className={primaryButtonClass}
-              disabled={saving}
+              disabled={saving || !canSaveChecklist}
               onClick={() => {
                 if (validateStep()) setStep((current) => current + 1);
               }}
@@ -1253,12 +1872,13 @@ export default function NewProjectChecklistPage({
               Continue
             </button>
           ) : (
-            <button className={primaryButtonClass} disabled={saving || !selectedMission || !submitAcknowledged} onClick={() => save("submitted")}>
+            <button className={primaryButtonClass} disabled={saving || !canSaveChecklist || !submitAcknowledged} onClick={() => save("submitted")}>
               {saving ? "Submitting..." : "Submit"}
             </button>
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

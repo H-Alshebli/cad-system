@@ -47,8 +47,35 @@ export type DeploymentType =
   | "Walking Team"
   | "With Ambulance"
   | "Medical Team Standby";
+export type ProjectReadinessSettings = {
+  serviceType: ServiceType;
+  deploymentType: Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">;
+};
+export type ProjectReadinessUnitOverride = Partial<ProjectReadinessSettings> & {
+  useProjectDefault?: boolean;
+};
 export type InputType = "check" | "quantity" | "fuel" | "psi" | "seal" | "code";
 export type VehicleSeverity = "red" | "yellow" | "green";
+
+export type ProjectShift = {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  crossesMidnight?: boolean;
+  active?: boolean;
+  order?: number;
+};
+
+export type ResolvedProjectShift = {
+  shiftId: string;
+  shiftKey: string;
+  shiftName: string;
+  shiftDate: string;
+  shiftStartTime: string;
+  shiftEndTime: string;
+  crossesMidnight: boolean;
+};
 
 export type ReadinessChecklistItem = {
   id: string;
@@ -74,19 +101,26 @@ export type ReadinessChecklistItem = {
 export type ReadinessChecklistPayload = {
   projectId: string;
   projectName?: string;
-  missionId: string;
+  missionId?: string;
   missionLabel?: string;
   unitId: string;
   unitCode?: string;
   inspectorUserId: string;
   inspectorName?: string;
   inspectorEmployeeId?: string;
+  shiftId?: string;
   shiftKey: string;
+  shiftName?: string;
+  shiftDate?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   serviceType?: ServiceType | string;
   deploymentType?: DeploymentType | string;
   checklistCategory?: DeploymentType | string;
   checklistPhase?: ChecklistPhase;
   sourceChecklistId?: string;
+  startedFromMissionId?: string;
+  linkedMissionIds?: string[];
   dateKey: string;
   notes?: string;
   startedAtMs?: number;
@@ -124,7 +158,70 @@ export const WIZARD_STEPS = [
   "Submit",
 ];
 
-export const SHIFT_OPTIONS = ["Day", "Night", "Morning", "Evening", "Custom"];
+export const SHIFT_OPTIONS = ["24H", "Day", "Night", "Morning", "Evening", "Custom"];
+export const DEFAULT_PROJECT_SHIFTS: ProjectShift[] = [
+  {
+    id: "24h",
+    name: "24H",
+    startTime: "00:00",
+    endTime: "23:59",
+    crossesMidnight: false,
+    active: true,
+    order: 1,
+  },
+];
+export const PROJECT_SHIFT_PRESETS: Record<string, ProjectShift[]> = {
+  one: DEFAULT_PROJECT_SHIFTS,
+  two: [
+    {
+      id: "day",
+      name: "Day",
+      startTime: "06:00",
+      endTime: "18:00",
+      crossesMidnight: false,
+      active: true,
+      order: 1,
+    },
+    {
+      id: "night",
+      name: "Night",
+      startTime: "18:00",
+      endTime: "06:00",
+      crossesMidnight: true,
+      active: true,
+      order: 2,
+    },
+  ],
+  three: [
+    {
+      id: "morning",
+      name: "Morning",
+      startTime: "06:00",
+      endTime: "14:00",
+      crossesMidnight: false,
+      active: true,
+      order: 1,
+    },
+    {
+      id: "evening",
+      name: "Evening",
+      startTime: "14:00",
+      endTime: "22:00",
+      crossesMidnight: false,
+      active: true,
+      order: 2,
+    },
+    {
+      id: "night",
+      name: "Night",
+      startTime: "22:00",
+      endTime: "06:00",
+      crossesMidnight: true,
+      active: true,
+      order: 3,
+    },
+  ],
+};
 export const SERVICE_TYPES: ServiceType[] = ["BLS", "BLS+", "ALS", "ALS+"];
 export const DEPLOYMENT_TYPES: DeploymentType[] = [
   "Clinic",
@@ -132,6 +229,126 @@ export const DEPLOYMENT_TYPES: DeploymentType[] = [
   "Ambulance + Clinic",
   "Walking Team",
 ];
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = String(value || "00:00")
+    .split(":")
+    .map((part) => Number(part));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return Math.max(0, Math.min(1439, hours * 60 + minutes));
+}
+
+function getRiyadhDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "00";
+
+  return {
+    dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+}
+
+function addDaysToDateKey(dateKey: string, days: number) {
+  const date = new Date(`${dateKey}T12:00:00+03:00`);
+  date.setDate(date.getDate() + days);
+  return getRiyadhDateKey(date);
+}
+
+export function normalizeProjectShifts(shifts: any): ProjectShift[] {
+  if (!Array.isArray(shifts) || shifts.length === 0) return DEFAULT_PROJECT_SHIFTS;
+
+  const normalized = shifts
+    .map((shift, index) => {
+      const id = String(shift?.id || shift?.name || `shift-${index + 1}`)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      const startTime = String(shift?.startTime || "00:00").slice(0, 5);
+      const endTime = String(shift?.endTime || "23:59").slice(0, 5);
+      const start = timeToMinutes(startTime);
+      const end = timeToMinutes(endTime);
+
+      return {
+        id: id || `shift-${index + 1}`,
+        name: String(shift?.name || shift?.label || id || `Shift ${index + 1}`),
+        startTime,
+        endTime,
+        crossesMidnight: Boolean(shift?.crossesMidnight ?? end <= start),
+        active: shift?.active !== false,
+        order: Number.isFinite(Number(shift?.order)) ? Number(shift.order) : index + 1,
+      };
+    })
+    .filter((shift) => shift.active);
+
+  return normalized.length > 0
+    ? normalized.sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+    : DEFAULT_PROJECT_SHIFTS;
+}
+
+export function resolveCurrentProjectShift(shifts: any, now = new Date()): ResolvedProjectShift {
+  const activeShifts = normalizeProjectShifts(shifts);
+  const current = getRiyadhDateParts(now);
+  const currentMinutes = current.minutes;
+  const matched =
+    activeShifts.find((shift) => {
+      const start = timeToMinutes(shift.startTime);
+      const end = timeToMinutes(shift.endTime);
+      if (shift.crossesMidnight) return currentMinutes >= start || currentMinutes < end;
+      return currentMinutes >= start && currentMinutes < end;
+    }) || activeShifts[0];
+
+  const shiftStart = timeToMinutes(matched.startTime);
+  const shiftEnd = timeToMinutes(matched.endTime);
+  const crossesMidnight = Boolean(matched.crossesMidnight ?? shiftEnd <= shiftStart);
+  const shiftDate =
+    crossesMidnight && currentMinutes < shiftEnd
+      ? addDaysToDateKey(current.dateKey, -1)
+      : current.dateKey;
+
+  return {
+    shiftId: matched.id,
+    shiftKey: matched.name,
+    shiftName: matched.name,
+    shiftDate,
+    shiftStartTime: matched.startTime,
+    shiftEndTime: matched.endTime,
+    crossesMidnight,
+  };
+}
+
+export function doesChecklistShiftMatch(
+  checklist: any,
+  shiftKey: string,
+  shiftId?: string
+) {
+  const entryShiftId = String(checklist?.shiftId || "").trim();
+  const entryShiftKey = String(checklist?.shiftKey || "").trim();
+  const desiredShiftId = String(shiftId || "").trim();
+  const desiredShiftKey = String(shiftKey || "").trim();
+
+  if (desiredShiftId && entryShiftId && entryShiftId === desiredShiftId) return true;
+  if (entryShiftKey && desiredShiftKey && entryShiftKey === desiredShiftKey) return true;
+
+  // Backward compatibility: older opening checklists were stored as Day/Night
+  // before project-level 24H shifts existed. A single 24H project shift should
+  // still see the old same-day checklist and move the user to closing.
+  if (desiredShiftId === "24h" && !entryShiftId) {
+    return ["24h", "day", "night", "morning", "evening", "custom"].includes(
+      entryShiftKey.toLowerCase()
+    );
+  }
+
+  return false;
+}
 
 function item(
   id: string,
@@ -415,6 +632,30 @@ export function normalizeDeploymentType(
   if (normalized.includes("clinic")) return "Clinic";
   if (normalized.includes("walking") || normalized.includes("standby")) return "Walking Team";
   return "Ambulance";
+}
+
+export function getProjectReadinessSettings(
+  project: any,
+  unitId?: string
+): ProjectReadinessSettings {
+  const defaults = project?.readinessDefaults || {};
+  const details = project?.projectDetails || {};
+  const overrides = project?.readinessUnitOverrides || {};
+  const override = unitId ? overrides?.[unitId] : null;
+  const useOverride = override && override.useProjectDefault !== true;
+
+  return {
+    serviceType: normalizeServiceType(
+      useOverride && override?.serviceType
+        ? override.serviceType
+        : defaults.serviceType || details.readinessServiceType || details.serviceType || "BLS"
+    ),
+    deploymentType: normalizeDeploymentType(
+      useOverride && override?.deploymentType
+        ? override.deploymentType
+        : defaults.deploymentType || details.readinessDeploymentType || project?.readinessDeploymentType || "Ambulance"
+    ),
+  };
 }
 
 function servicesFrom(minimum: ServiceType): ServiceType[] {
@@ -1638,6 +1879,39 @@ export function getUnitCodeFromMission(mission: any) {
   );
 }
 
+export function getChecklistDateKeyFromMission(mission: any, fallbackDate: Date = new Date()) {
+  const rawDate =
+    mission?.dateKey ||
+    mission?.shiftDate ||
+    mission?.missionDate ||
+    mission?.checklistDateKey ||
+    fallbackDate;
+  const date = rawDate instanceof Date ? rawDate : new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? getRiyadhDateKey(fallbackDate) : getRiyadhDateKey(date);
+}
+
+export function getChecklistShiftKeyFromMission(mission: any, fallbackShift = "Day") {
+  return (
+    mission?.shiftKey ||
+    mission?.shift ||
+    mission?.assignedShift ||
+    mission?.missionShift ||
+    fallbackShift
+  );
+}
+
+export function getChecklistDeploymentTypeFromMission(mission: any, fallbackDeployment: DeploymentType | string = "Ambulance") {
+  return normalizeDeploymentType(
+    mission?.checklistDeploymentType ||
+      mission?.deploymentType ||
+      mission?.checklistCategory ||
+      mission?.serviceScope ||
+      mission?.coverageType ||
+      mission?.unitType ||
+      fallbackDeployment
+  );
+}
+
 export function isProjectMission(mission: any) {
   const source = String(mission?.sourceType || mission?.caseType || "").trim().toLowerCase();
   if (source.includes("general")) return false;
@@ -1667,25 +1941,29 @@ export function getMissionLabel(mission: any) {
 }
 
 export async function findDuplicateChecklist(
-  projectId: string,
   unitId: string,
   dateKey: string,
   shiftKey: string,
-  checklistPhase: ChecklistPhase = "opening"
+  deploymentType: DeploymentType | string,
+  checklistPhase: ChecklistPhase = "opening",
+  shiftId?: string
 ) {
-  if (!projectId || !unitId || !dateKey || !shiftKey) return null;
+  if (!unitId || !dateKey || !shiftKey || !deploymentType) return null;
+  const normalizedDeployment = normalizeDeploymentType(deploymentType);
   const q = query(
     collection(db, CHECKLIST_COLLECTION),
-    where("projectId", "==", projectId),
     where("unitId", "==", unitId),
-    where("dateKey", "==", dateKey),
-    where("shiftKey", "==", shiftKey),
-    limit(20)
+    limit(100)
   );
   const snap = await getDocs(q);
   const first = snap.docs.find((entry) => {
     const data: any = entry.data();
-    return (data.checklistPhase || "opening") === checklistPhase;
+    return (
+      data.dateKey === dateKey &&
+      doesChecklistShiftMatch(data, shiftKey, shiftId) &&
+      (data.checklistPhase || "opening") === checklistPhase &&
+      normalizeDeploymentType(data.deploymentType || data.checklistCategory || "Ambulance") === normalizedDeployment
+    );
   });
   return first ? { id: first.id, ...first.data() } : null;
 }
@@ -1696,14 +1974,15 @@ export async function createReadinessChecklist(
 ) {
   if (!payload.allowDuplicate) {
     const duplicate = await findDuplicateChecklist(
-      payload.projectId,
       payload.unitId,
       payload.dateKey,
       payload.shiftKey,
-      payload.checklistPhase || "opening"
+      payload.deploymentType || payload.checklistCategory || "Ambulance",
+      payload.checklistPhase || "opening",
+      payload.shiftId
     );
     if (duplicate) {
-      throw new Error("A checklist already exists for this unit, date, shift, and phase.");
+      throw new Error("A checklist already exists for this unit, date, shift, phase, and deployment type.");
     }
   }
   const cleanPayload = removeUndefinedValues(payload);

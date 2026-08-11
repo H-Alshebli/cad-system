@@ -660,7 +660,12 @@ export default function ChecklistDetailsPage({
                 {READINESS_ACKNOWLEDGEMENT_TEXT}
                 <span className="mt-2 block text-xs font-bold text-[#7F7F7F]">
                   Please review all checklist requirements carefully before submission. By submitting, you confirm that you have read and agree to the applicable{" "}
-                  <Link href={READINESS_POLICIES_URL} className="text-[#274C5A] underline underline-offset-4">
+                  <Link
+                    href={READINESS_POLICIES_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#274C5A] underline underline-offset-4"
+                  >
                     terms, policies, and operational requirements
                   </Link>
                   .

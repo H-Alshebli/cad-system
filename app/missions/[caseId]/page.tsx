@@ -2,12 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { acknowledgeCase } from "@/lib/cases";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
-import { isMissionActive, isProjectMission } from "@/lib/readinessChecklist";
+import {
+  doesChecklistShiftMatch,
+  getChecklistDateKeyFromMission,
+  getChecklistDeploymentTypeFromMission,
+  getChecklistShiftKeyFromMission,
+  getUnitIdFromMission,
+  isMissionActive,
+  isProjectMission,
+  normalizeDeploymentType,
+  resolveCurrentProjectShift,
+} from "@/lib/readinessChecklist";
 import { getCaseDisplayCode, getCaseDisplayTitle } from "@/lib/displayLabels";
 
 export default function MissionAcknowledgePage({
@@ -19,6 +29,7 @@ export default function MissionAcknowledgePage({
   const { can } = usePermissions(user?.role);
 
   const [caseData, setCaseData] = useState<any>(null);
+  const [projectData, setProjectData] = useState<any>(null);
   const [missionChecklists, setMissionChecklists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [ackLoading, setAckLoading] = useState(false);
@@ -34,13 +45,59 @@ export default function MissionAcknowledgePage({
   }, [params.caseId]);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "projectChecklists"),
-      where("missionId", "==", params.caseId)
-    );
+    const projectId = caseData?.projectId || caseData?.assignedProjectId;
+    if (!projectId || String(projectId).startsWith("_")) {
+      setProjectData(null);
+      return;
+    }
+
+    let cancelled = false;
+    getDoc(doc(db, "projects", projectId)).then((snap) => {
+      if (cancelled) return;
+      setProjectData(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseData?.assignedProjectId, caseData?.projectId]);
+
+  useEffect(() => {
+    if (!caseData) return;
+
+    const unitId = getUnitIdFromMission(caseData);
+    const resolvedShift = resolveCurrentProjectShift(projectData?.shiftSchedule);
+    const dateKey = projectData?.shiftSchedule
+      ? resolvedShift.shiftDate
+      : getChecklistDateKeyFromMission(caseData);
+    const shiftKey = projectData?.shiftSchedule
+      ? resolvedShift.shiftName
+      : getChecklistShiftKeyFromMission(caseData);
+    const shiftId = projectData?.shiftSchedule ? resolvedShift.shiftId : "";
+    const q = unitId
+      ? query(
+          collection(db, "projectChecklists"),
+          where("unitId", "==", unitId)
+        )
+      : query(
+          collection(db, "projectChecklists"),
+          where("missionId", "==", params.caseId)
+        );
 
     const unsub = onSnapshot(q, (snap) => {
-      const rows: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const deploymentType = getChecklistDeploymentTypeFromMission(caseData);
+      const rows: any[] = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .filter((entry) => {
+          if (entry.missionId === params.caseId) return true;
+          const linkedMissionIds = Array.isArray(entry.linkedMissionIds) ? entry.linkedMissionIds : [];
+          if (linkedMissionIds.includes(params.caseId)) return true;
+          return (
+            entry.dateKey === dateKey &&
+            doesChecklistShiftMatch(entry, shiftKey, shiftId) &&
+            normalizeDeploymentType(entry.deploymentType || entry.checklistCategory || "Ambulance") === deploymentType
+          );
+        });
       rows.sort((a, b) => {
         const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
         const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
@@ -50,7 +107,7 @@ export default function MissionAcknowledgePage({
     });
 
     return () => unsub();
-  }, [params.caseId]);
+  }, [caseData, params.caseId, projectData?.shiftSchedule]);
 
   const normalizedRole = String(user?.role || "").toLowerCase();
 

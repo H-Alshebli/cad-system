@@ -19,6 +19,15 @@ import {
   getCrewDeploymentReadiness,
   isCrewComplianceSubject,
 } from "@/lib/crewProfile";
+import {
+  DEPLOYMENT_TYPES as READINESS_DEPLOYMENT_TYPES,
+  PROJECT_SHIFT_PRESETS,
+  ProjectShift,
+  ProjectReadinessUnitOverride,
+  SERVICE_TYPES as READINESS_SERVICE_TYPES,
+  ServiceType,
+  DeploymentType,
+} from "@/lib/readinessChecklist";
 
 const REQUEST_TYPES = [
   "Clinic",
@@ -28,7 +37,9 @@ const REQUEST_TYPES = [
   "Other",
 ];
 
-const SERVICE_TYPES = ["BLS", "ALS"];
+const READINESS_DEPLOYMENT_OPTIONS = READINESS_DEPLOYMENT_TYPES.filter(
+  (type) => type !== "With Ambulance" && type !== "Medical Team Standby"
+);
 
 const EVENT_TYPES = [
   "Factory",
@@ -97,6 +108,7 @@ type CrewComplianceOverrides = Record<
     blockers: string[];
   }
 >;
+type ReadinessUnitOverrides = Record<string, ProjectReadinessUnitOverride>;
 
 function ambulanceIsFree(amb: Ambulance) {
   const status = String(amb.status || "").toLowerCase();
@@ -140,7 +152,6 @@ export default function NewProjectPage() {
   const [client, setClient] = useState("");
   const [siteDetails, setSiteDetails] = useState("");
   const [requestType, setRequestType] = useState("");
-  const [serviceType, setServiceType] = useState("");
   const [eventType, setEventType] = useState("");
   const [equipment, setEquipment] = useState("");
   const [medicalBagNumber, setMedicalBagNumber] = useState("");
@@ -148,6 +159,13 @@ export default function NewProjectPage() {
   const [organizerName, setOrganizerName] = useState("");
   const [organizerMobile, setOrganizerMobile] = useState("");
   const [eventLocation, setEventLocation] = useState("");
+  const [shiftPreset, setShiftPreset] = useState<"one" | "two" | "three">("one");
+  const [defaultReadinessServiceType, setDefaultReadinessServiceType] =
+    useState<ServiceType>("BLS");
+  const [defaultReadinessDeploymentType, setDefaultReadinessDeploymentType] =
+    useState<Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">>("Ambulance");
+  const [readinessUnitOverrides, setReadinessUnitOverrides] =
+    useState<ReadinessUnitOverrides>({});
 
   const [users, setUsers] = useState<User[]>([]);
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
@@ -228,6 +246,49 @@ export default function NewProjectPage() {
     () => hospitals.filter((h) => selectedHospitalIds.includes(h.id)),
     [hospitals, selectedHospitalIds]
   );
+
+  const selectedShiftSchedule = useMemo<ProjectShift[]>(() => {
+    return PROJECT_SHIFT_PRESETS[shiftPreset].map((shift) => ({ ...shift }));
+  }, [shiftPreset]);
+
+  const getReadinessOverrideForAmbulance = (ambulanceId: string) => {
+    return readinessUnitOverrides[ambulanceId] || { useProjectDefault: true };
+  };
+
+  const updateReadinessOverride = (
+    ambulanceId: string,
+    patch: ProjectReadinessUnitOverride
+  ) => {
+    setReadinessUnitOverrides((prev) => ({
+      ...prev,
+      [ambulanceId]: {
+        useProjectDefault: true,
+        serviceType: defaultReadinessServiceType,
+        deploymentType: defaultReadinessDeploymentType,
+        ...(prev[ambulanceId] || {}),
+        ...patch,
+      },
+    }));
+  };
+
+  const cleanReadinessUnitOverrides = () => {
+    return Object.fromEntries(
+      selectedAmbulanceIds
+        .map((ambulanceId) => {
+          const override = readinessUnitOverrides[ambulanceId];
+          if (!override || override.useProjectDefault !== false) return null;
+          return [
+            ambulanceId,
+            {
+              useProjectDefault: false,
+              serviceType: override.serviceType || defaultReadinessServiceType,
+              deploymentType: override.deploymentType || defaultReadinessDeploymentType,
+            },
+          ];
+        })
+        .filter(Boolean) as Array<[string, ProjectReadinessUnitOverride]>
+    );
+  };
 
   const visibleUsers = useMemo(() => {
     return users.filter((u) => u.role !== "admin");
@@ -593,8 +654,16 @@ export default function NewProjectPage() {
         status: a.status || "",
         crewUserIds: crewMembers.map((member) => member.userId),
         crewMembers,
+        readinessOverride:
+          readinessUnitOverrides[a.id]?.useProjectDefault === false
+            ? {
+                serviceType: readinessUnitOverrides[a.id]?.serviceType || defaultReadinessServiceType,
+                deploymentType: readinessUnitOverrides[a.id]?.deploymentType || defaultReadinessDeploymentType,
+              }
+            : null,
       };
     });
+    const cleanedReadinessUnitOverrides = cleanReadinessUnitOverrides();
 
     const docRef = await addDoc(collection(db, "projects"), {
       projectName: projectName.trim(),
@@ -611,6 +680,13 @@ export default function NewProjectPage() {
 
       assignedAmbulanceIds: selectedAmbulanceIds,
       assignedAmbulances: assignedAmbulancesPayload,
+      shiftSchedule: selectedShiftSchedule,
+      shiftSchedulePreset: shiftPreset,
+      readinessDefaults: {
+        serviceType: defaultReadinessServiceType,
+        deploymentType: defaultReadinessDeploymentType,
+      },
+      readinessUnitOverrides: cleanedReadinessUnitOverrides,
 
       projectHospitalIds: selectedHospitalIds,
       projectHospitals: selectedHospitals.map((h) => ({
@@ -625,7 +701,9 @@ export default function NewProjectPage() {
       projectDetails: {
         siteDetails: siteDetails.trim(),
         requestType,
-        serviceType,
+        serviceType: defaultReadinessServiceType,
+        readinessServiceType: defaultReadinessServiceType,
+        readinessDeploymentType: defaultReadinessDeploymentType,
         eventType,
         ambulanceNumber: selectedAmbulances.map(getAmbulanceLabel).join(", "),
         equipment: equipment.trim(),
@@ -754,7 +832,7 @@ export default function NewProjectPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className={labelClass}>Request Type</label>
                     <select
@@ -770,15 +848,31 @@ export default function NewProjectPage() {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Service Type</label>
+                    <label className={labelClass}>Service Level</label>
                     <select
                       className={selectClass}
-                      value={serviceType}
-                      onChange={(e) => setServiceType(e.target.value)}
+                      value={defaultReadinessServiceType}
+                      onChange={(e) => setDefaultReadinessServiceType(e.target.value as ServiceType)}
                     >
-                      <option value="">Select</option>
-                      {SERVICE_TYPES.map((x) => (
-                        <option key={x}>{x}</option>
+                      {READINESS_SERVICE_TYPES.map((x) => (
+                        <option key={x} value={x}>{x}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Deployment Type</label>
+                    <select
+                      className={selectClass}
+                      value={defaultReadinessDeploymentType}
+                      onChange={(e) =>
+                        setDefaultReadinessDeploymentType(
+                          e.target.value as Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">
+                        )
+                      }
+                    >
+                      {READINESS_DEPLOYMENT_OPTIONS.map((x) => (
+                        <option key={x} value={x}>{x}</option>
                       ))}
                     </select>
                   </div>
@@ -798,6 +892,43 @@ export default function NewProjectPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className={cardClass}>
+            <h2 className="mb-4 text-sm font-black text-[#123746]">
+              Shift Schedule
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { id: "one", title: "One shift", note: "24H coverage" },
+                { id: "two", title: "Two shifts", note: "Day / Night" },
+                { id: "three", title: "Three shifts", note: "Morning / Evening / Night" },
+              ].map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setShiftPreset(preset.id as "one" | "two" | "three")}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    shiftPreset === preset.id
+                      ? "border-[#274C5A] bg-[#274C5A]/10"
+                      : "border-[#86A7B2]/25 bg-[#f8fbfc] hover:border-[#274C5A]/40"
+                  }`}
+                >
+                  <div className="font-black text-[#123746]">{preset.title}</div>
+                  <div className="mt-1 text-xs font-semibold text-[#607482]">{preset.note}</div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+              {selectedShiftSchedule.map((shift) => (
+                <div key={shift.id} className="rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-3 text-sm">
+                  <div className="font-black text-[#123746]">{shift.name}</div>
+                  <div className="mt-1 font-semibold text-[#607482]">
+                    {shift.startTime} - {shift.endTime}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1145,6 +1276,8 @@ export default function NewProjectPage() {
                 <div className="space-y-3">
                   {selectedAmbulances.map((amb) => {
                     const crewRows = ambulanceCrewAssignments[amb.id] || [""];
+                    const readinessOverride = getReadinessOverrideForAmbulance(amb.id);
+                    const usesProjectDefault = readinessOverride.useProjectDefault !== false;
 
                     return (
                       <div
@@ -1222,6 +1355,72 @@ export default function NewProjectPage() {
                         >
                           + Add Crew Member
                         </button>
+
+                        <div className="mt-4 rounded-xl border border-[#c8dce2] bg-white p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-black uppercase tracking-[0.12em] text-[#274C5A]">
+                                Readiness Settings
+                              </div>
+                              <p className="mt-1 text-xs font-semibold text-[#607482]">
+                                Default: {defaultReadinessServiceType} / {defaultReadinessDeploymentType}
+                              </p>
+                            </div>
+
+                            <label className="flex items-center gap-2 text-xs font-black text-[#274C5A]">
+                              <input
+                                type="checkbox"
+                                checked={usesProjectDefault}
+                                onChange={(e) =>
+                                  updateReadinessOverride(amb.id, {
+                                    useProjectDefault: e.target.checked,
+                                  })
+                                }
+                              />
+                              Use project default
+                            </label>
+                          </div>
+
+                          {!usesProjectDefault && (
+                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                              <div>
+                                <label className={labelClass}>Service Level</label>
+                                <select
+                                  className={selectClass}
+                                  value={readinessOverride.serviceType || defaultReadinessServiceType}
+                                  onChange={(e) =>
+                                    updateReadinessOverride(amb.id, {
+                                      useProjectDefault: false,
+                                      serviceType: e.target.value as ServiceType,
+                                    })
+                                  }
+                                >
+                                  {READINESS_SERVICE_TYPES.map((type) => (
+                                    <option key={type} value={type}>{type}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className={labelClass}>Deployment Type</label>
+                                <select
+                                  className={selectClass}
+                                  value={readinessOverride.deploymentType || defaultReadinessDeploymentType}
+                                  onChange={(e) =>
+                                    updateReadinessOverride(amb.id, {
+                                      useProjectDefault: false,
+                                      deploymentType: e.target.value as Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">,
+                                    })
+                                  }
+                                >
+                                  {READINESS_DEPLOYMENT_OPTIONS.map((type) => (
+                                    <option key={type} value={type}>{type}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
