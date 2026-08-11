@@ -25,6 +25,7 @@ type CrewComplianceOverrides = Record<
     reason: string;
     approvedById: string;
     approvedByName: string;
+    approvedByRole: string;
     approvedAt: string;
     complianceStatus: string;
     blockers: string[];
@@ -125,6 +126,11 @@ function getAmbulanceCrewDisplay(amb: Ambulance) {
 export default function AmbulancesPage() {
   const { user: currentUser } = useCurrentUser();
   const { isAdmin } = usePermissions(currentUser?.role);
+  const normalizedCurrentRole = String(currentUser?.role || "")
+    .trim()
+    .toLowerCase();
+  const isDispatch = normalizedCurrentRole.includes("dispatch");
+  const canOverrideCrewCompliance = isAdmin || isDispatch;
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -220,7 +226,9 @@ export default function AmbulancesPage() {
     if (ambulance?.crewComplianceOverrides?.[user.id]) {
       return " - Override approved";
     }
-    return isAdmin ? " - Override required" : " - Assignment blocked";
+    return canOverrideCrewCompliance
+      ? " - Override required"
+      : " - Assignment blocked";
   };
 
   const getSelectedCrewMembers = (firstUserId: string, secondUserId: string) => {
@@ -259,7 +267,7 @@ export default function AmbulancesPage() {
         continue;
       }
 
-      if (!isAdmin) {
+      if (!canOverrideCrewCompliance) {
         alert(
           `${getUserDisplayName(user)} cannot be assigned because their crew profile is not compliant.\n\n${readiness.blockers.join("\n")}`
         );
@@ -276,6 +284,7 @@ export default function AmbulancesPage() {
         approvedById: currentUser?.uid || "unknown",
         approvedByName:
           currentUser?.name || currentUser?.email || currentUser?.uid || "Admin",
+        approvedByRole: currentUser?.role || (isAdmin ? "Admin" : "Dispatch"),
         approvedAt: new Date().toISOString(),
         complianceStatus: readiness.complianceStatus,
         blockers: readiness.blockers,
