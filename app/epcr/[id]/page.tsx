@@ -2691,6 +2691,22 @@ function SignatureBox({
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const drawing = React.useRef(false);
 
+  const getCanvasPoint = (e: any) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches?.[0]?.clientX ?? e.clientX;
+    const clientY = e.touches?.[0]?.clientY ?? e.clientY;
+
+    if (clientX === undefined || clientY === undefined) return null;
+
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -2708,16 +2724,26 @@ function SignatureBox({
 
   const start = (e: any) => {
     if (disabled) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    const point = getCanvasPoint(e);
+    if (!ctx || !point) return;
+
+    e.preventDefault?.();
     drawing.current = true;
-    draw(e);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
   };
 
-  const end = () => {
+  const end = (e?: any) => {
     if (!drawing.current || disabled) return;
+    e?.preventDefault?.();
     drawing.current = false;
 
     const canvas = canvasRef.current;
     if (canvas) {
+      canvas.getContext("2d")?.closePath();
       onChange(canvas.toDataURL("image/png"));
     }
   };
@@ -2727,20 +2753,17 @@ function SignatureBox({
 
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    const point = getCanvasPoint(e);
+    if (!canvas || !ctx || !point) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
-    const y = (e.touches?.[0]?.clientY ?? e.clientY) - rect.top;
-
+    e.preventDefault?.();
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = "#F00";
 
-    ctx.lineTo(x, y);
+    ctx.lineTo(point.x, point.y);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
   };
 
   const clear = () => {
@@ -2760,12 +2783,14 @@ function SignatureBox({
           ref={canvasRef}
           width={400}
           height={150}
-          className="w-full rounded-xl bg-white"
+          className="w-full touch-none rounded-xl bg-white"
           onMouseDown={start}
           onMouseUp={end}
+          onMouseLeave={end}
           onMouseMove={draw}
           onTouchStart={start}
           onTouchEnd={end}
+          onTouchCancel={end}
           onTouchMove={draw}
         />
       </div>
