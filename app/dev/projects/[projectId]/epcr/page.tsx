@@ -36,29 +36,33 @@ export default function ProjectEpcrPage({
     return () => unsub();
   }, [params.projectId]);
 
-  if (loading) return <div className="p-4">Loading ePCR...</div>;
+  if (loading) return <div className="p-6 text-sm font-semibold text-[#607482]">Loading ePCR records...</div>;
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Project ePCR</h2>
+    <div className="space-y-5 text-[#274C5A]">
+      <div className="rounded-2xl bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#9ee3ec]">Electronic Patient Care Reports</p>
+        <h2 className="mt-2 text-2xl font-black">Project ePCR</h2>
+        <p className="mt-1 text-sm font-medium text-white/75">Review the patient care reports recorded for this project.</p>
+      </div>
 
       {epcrs.length === 0 && (
-        <div className="text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-[#b9d3da] bg-[#f7fbfc] p-8 text-center text-sm font-semibold text-[#607482]">
           No ePCR records for this project yet.
         </div>
       )}
 
-      <div className="grid gap-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {epcrs.map((e) => (
           <Link
             key={e.id}
-          href={`/epcr/${e.id}`}
-            className="p-4 bg-card border rounded block"
+            href={`/epcr/${e.id}`}
+            className="group block rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#74cdda] hover:shadow-md"
           >
-            <div className="font-semibold">
+            <div className="font-black text-[#274C5A] group-hover:text-[#166575]">
               Case: {e.caseId}
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="mt-2 text-sm font-semibold text-[#607482]">
               Created:{" "}
               {e.createdAt?.seconds
                 ? new Date(
@@ -66,6 +70,7 @@ export default function ProjectEpcrPage({
                   ).toLocaleString()
                 : "-"}
             </div>
+            <div className="mt-4 text-xs font-black uppercase tracking-wide text-[#166575]">Open ePCR</div>
           </Link>
         ))}
       </div>

@@ -144,7 +144,7 @@ export default function DataSharingConsentPage({
   };
 
   if (loading) {
-    return <div className="p-6 text-white">Loading...</div>;
+    return <div className="min-h-screen bg-[#f5f8f9] p-6 text-sm font-semibold text-[#607482]">Loading consent form...</div>;
   }
 
   const chiefComplaint =
@@ -156,14 +156,15 @@ export default function DataSharingConsentPage({
   const consentMessage = `Do you agree to share and disclose your medical case report number (${epcrId}) dated ____ / ____ / ${currentYear} with ${projectName}?`;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-white space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Data Sharing Consent Form</h1>
+    <div className="min-h-screen bg-[#f5f8f9] px-4 py-6 text-[#274C5A] sm:px-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex flex-col gap-5 rounded-2xl bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#9ee3ec]">ePCR Supporting Form</p><h1 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">Data Sharing Consent Form</h1><p className="mt-2 text-sm font-medium text-white/75">Document the patient or guardian decision to share the medical case report.</p></div>
         <button
           onClick={() => router.back()}
-          className="px-4 py-2 rounded border border-gray-600 hover:bg-gray-800"
+          className="self-start rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-black transition hover:bg-white/20"
         >
-          Back
+          Back to ePCR
         </button>
       </div>
 
@@ -196,7 +197,7 @@ export default function DataSharingConsentPage({
       </Section>
 
       <Section title="Consent Details">
-        <div className="rounded-lg border border-cyan-700 bg-cyan-950/30 p-4 text-sm leading-7 text-cyan-100">
+        <div className="rounded-xl border border-[#b9dce2] bg-[#edf8fa] p-4 text-sm font-semibold leading-7 text-[#274C5A]">
           {consentMessage}
         </div>
 
@@ -220,7 +221,7 @@ export default function DataSharingConsentPage({
         </div>
 
         <div>
-          <label className="block text-sm mb-3">Approval Given By</label>
+          <label className="mb-3 block text-sm font-black text-[#274C5A]">Approval Given By</label>
           <div className="flex gap-6">
             <label className="flex items-center gap-2">
               <input
@@ -275,7 +276,7 @@ export default function DataSharingConsentPage({
       </Section>
 
       <Section title="Declaration & Signatures">
-        <div className="rounded-lg border border-gray-700 bg-[#020617] p-4 text-sm text-gray-200">
+        <div className="rounded-xl border border-[#d8e6ea] bg-[#f7fbfc] p-4 text-sm font-semibold text-[#607482]">
           I acknowledge that the information and data entered in this form are
           correct.
         </div>
@@ -306,10 +307,11 @@ export default function DataSharingConsentPage({
       <div className="flex justify-end gap-3">
         <button
           onClick={saveForm}
-          className="px-5 py-2 rounded bg-blue-600 hover:bg-blue-700"
+          className="rounded-xl bg-[#274C5A] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
         >
           Save Form
         </button>
+      </div>
       </div>
     </div>
   );
@@ -323,10 +325,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-gray-700 rounded-lg p-6 bg-[#0F172A] space-y-4">
-      <h2 className="text-xl font-bold">{title}</h2>
-      {children}
-    </div>
+    <section className="overflow-hidden rounded-2xl border border-[#d8e6ea] bg-white shadow-sm shadow-[#274C5A]/5">
+      <div className="border-b border-[#dce9ed] bg-[#edf5f6] px-5 py-3"><h2 className="text-sm font-black uppercase tracking-wide text-[#274C5A]">{title}</h2></div>
+      <div className="space-y-5 p-5 sm:p-6">{children}</div>
+    </section>
   );
 }
 
@@ -336,10 +338,10 @@ function Input({
 }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1.5 block text-sm font-black text-[#274C5A]">{label}</label>
       <input
         {...props}
-        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+        className="w-full rounded-xl border border-[#c8dce2] bg-white px-3 py-2.5 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#74cdda] focus:ring-2 focus:ring-[#74cdda]/20 disabled:bg-[#f1f5f6] disabled:text-[#718995]"
       />
     </div>
   );
@@ -351,10 +353,10 @@ function Textarea({
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1.5 block text-sm font-black text-[#274C5A]">{label}</label>
       <textarea
         {...props}
-        className="w-full h-28 p-2 rounded bg-[#020617] border border-gray-700"
+        className="min-h-28 w-full resize-y rounded-xl border border-[#c8dce2] bg-white px-3 py-2.5 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#74cdda] focus:ring-2 focus:ring-[#74cdda]/20 disabled:bg-[#f1f5f6] disabled:text-[#718995]"
       />
     </div>
   );
@@ -370,10 +372,10 @@ function Select({
 }) {
   return (
     <div>
-      <label className="block text-sm mb-1">{label}</label>
+      <label className="mb-1.5 block text-sm font-black text-[#274C5A]">{label}</label>
       <select
         {...props}
-        className="w-full p-2 rounded bg-[#020617] border border-gray-700"
+        className="w-full rounded-xl border border-[#c8dce2] bg-white px-3 py-2.5 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#74cdda] focus:ring-2 focus:ring-[#74cdda]/20"
       >
         {children}
       </select>
@@ -421,9 +423,10 @@ function SignatureBox({
     const clientX = e.touches?.[0]?.clientX ?? e.clientX;
     const clientY = e.touches?.[0]?.clientY ?? e.clientY;
 
+    if (clientX === undefined || clientY === undefined || !rect.width || !rect.height) return null;
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
     };
   };
 
@@ -434,6 +437,7 @@ function SignatureBox({
     const ctx = canvas?.getContext("2d");
     if (!point || !canvas || !ctx) return;
 
+    e.preventDefault?.();
     drawing.current = true;
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
@@ -450,20 +454,22 @@ function SignatureBox({
 
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#ff0000";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#274C5A";
     ctx.lineTo(point.x, point.y);
     ctx.stroke();
   };
 
-  const end = () => {
-    if (disabled) return;
+  const end = (e?: any) => {
+    if (!drawing.current || disabled) return;
+    e?.preventDefault?.();
     drawing.current = false;
 
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    ctx.beginPath();
+    ctx.closePath();
     onChange(canvas.toDataURL("image/png"));
   };
 
@@ -478,14 +484,14 @@ function SignatureBox({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm">{label}</label>
+      <label className="text-sm font-black text-[#274C5A]">{label}</label>
 
-      <div className="border border-gray-700 rounded bg-[#020617] p-2">
+      <div className="overflow-hidden rounded-2xl border border-[#c8dce2] bg-[#f7fbfc] p-2 shadow-inner">
         <canvas
           ref={canvasRef}
           width={400}
           height={150}
-          className="w-full rounded bg-black touch-none"
+          className="block w-full touch-none rounded-xl bg-white"
           onMouseDown={start}
           onMouseMove={draw}
           onMouseUp={end}
@@ -493,6 +499,7 @@ function SignatureBox({
           onTouchStart={start}
           onTouchMove={draw}
           onTouchEnd={end}
+          onTouchCancel={end}
         />
       </div>
 
@@ -500,7 +507,7 @@ function SignatureBox({
         <button
           type="button"
           onClick={clear}
-          className="text-xs underline text-gray-400"
+          className="text-xs font-black text-[#607482] underline decoration-[#74cdda] underline-offset-4"
         >
           Clear signature
         </button>

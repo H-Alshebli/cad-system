@@ -2760,7 +2760,7 @@ function SignatureBox({
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#F00";
+    ctx.strokeStyle = "#274C5A";
 
     ctx.lineTo(point.x, point.y);
     ctx.stroke();
