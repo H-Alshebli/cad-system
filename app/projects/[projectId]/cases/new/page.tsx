@@ -6,6 +6,8 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
+import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -80,6 +82,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [isFromMapLink, setIsFromMapLink] = useState(false);
+  const [selectedProjectLocation, setSelectedProjectLocation] = useState<ProjectLocation | null>(null);
 
   const [unitType, setUnitType] = useState<"ambulance" | "clinic" | "roaming" | "">("ambulance");
   const [units, setUnits] = useState<any[]>([]);
@@ -214,8 +217,11 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       chiefComplaint: chiefComplaint === "Other" ? otherComplaint : chiefComplaint,
       level: triageLevel,
       patientName,
-      location: { text: locationText, lat, lng, googleMapLink, source: isFromMapLink ? "google_link" : "manual" },
+      location: { text: locationText, lat, lng, googleMapLink, source: selectedProjectLocation ? "project_location" : isFromMapLink ? "google_link" : "manual" },
       locationText,
+      projectLocationId: selectedProjectLocation?.id || null,
+      projectLocationNumber: selectedProjectLocation?.siteNumber || null,
+      projectLocationName: selectedProjectLocation?.siteName || null,
       paymentStatus: "NotRequired",
       dispatchStatus: "Assigned",
       assignedUserIds,
@@ -308,6 +314,26 @@ if (unitType === "ambulance") {
 
           <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
             <h3 className="text-sm font-black text-[#123746]">Location</h3>
+            <ProjectLocationSelector
+              locations={readProjectLocations(projectData)}
+              selectedId={selectedProjectLocation?.id || ""}
+              onSelect={(location) => {
+                setSelectedProjectLocation(location);
+                setLocationText(location.siteName);
+                setLat(location.lat);
+                setLng(location.lng);
+                setMapLink(`https://www.google.com/maps?q=${location.lat},${location.lng}`);
+                setIsFromMapLink(true);
+              }}
+              onManual={() => {
+                setSelectedProjectLocation(null);
+                setLocationText("");
+                setMapLink("");
+                setLat(null);
+                setLng(null);
+                setIsFromMapLink(false);
+              }}
+            />
             <div><FieldLabel text="Location Description *" /><input className={inputClass} value={locationText} onChange={(e) => setLocationText(e.target.value)} /></div>
             <div><FieldLabel text="Google Maps Link (Auto-Pin)" /><input className={inputClass} value={mapLink} onChange={(e) => { const value = e.target.value; setMapLink(value); const coords = extractLatLngFromGoogleMaps(value); if (coords) { setLat(coords.lat); setLng(coords.lng); setIsFromMapLink(true); } }} /></div>
             <div className="grid grid-cols-2 gap-3">

@@ -46,6 +46,7 @@ export default function ProjectLayout({
     { label: "Dashboard", href: `/projects/${params.projectId}` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
+    { label: "Locations", href: `/projects/${params.projectId}/locations` },
     { label: "Checklist Review", href: `/projects/${params.projectId}/checklists` },
     { label: "Create Checklist", href: `/projects/${params.projectId}/checklists/new` },
   ];

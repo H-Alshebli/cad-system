@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -180,6 +181,7 @@ export default function EditProjectPage({
   const [loading, setLoading] = useState(true);
 
   const [projectName, setProjectName] = useState("");
+  const [projectLocationsCount, setProjectLocationsCount] = useState(0);
   const [client, setClient] = useState("");
   const [siteDetails, setSiteDetails] = useState("");
   const [requestType, setRequestType] = useState("");
@@ -243,6 +245,11 @@ export default function EditProjectPage({
       const details = data.projectDetails || {};
 
       setProjectName(data.projectName || "");
+      setProjectLocationsCount(
+        Array.isArray(data.projectLocations)
+          ? data.projectLocations.filter((item: any) => item?.status !== "archived").length
+          : Number(data.projectLocationsCount || 0)
+      );
       setClient(data.client || "");
       setAssignedUsers(data.assignedUsers || {});
       setCrewComplianceOverrides(data.crewComplianceOverrides || {});
@@ -908,6 +915,24 @@ return (
           <p className="mt-1 text-sm font-semibold text-[#607482]">
             Update project details, team, ambulances, and hospitals.
           </p>
+        </div>
+
+        <div className={`${cardClass} flex flex-col gap-4 md:flex-row md:items-center md:justify-between`}>
+          <div>
+            <h2 className="text-sm font-black text-[#123746]">Project Locations</h2>
+            <p className="mt-1 text-sm font-semibold text-[#607482]">
+              Manage the factories and operational sites used when creating project cases.
+            </p>
+            <div className="mt-3 inline-flex rounded-full border border-[#c8dce2] bg-[#f7fbfc] px-3 py-1 text-xs font-black text-[#274C5A]">
+              {projectLocationsCount} active {projectLocationsCount === 1 ? "location" : "locations"}
+            </div>
+          </div>
+          <Link
+            href={`/projects/${projectId}/locations`}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#274C5A] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
+          >
+            {projectLocationsCount > 0 ? "Manage Locations" : "Add Project Locations"}
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

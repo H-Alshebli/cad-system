@@ -18,6 +18,8 @@ import dynamic from "next/dynamic";
 
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
+import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -53,6 +55,7 @@ type ClientProject = {
   assignedAmbulances?: any[];
   projectHospitalIds?: string[];
   projectHospitals?: any[];
+  projectLocations?: ProjectLocation[];
 };
 
 const FieldLabel = ({ text }: { text: string }) => (
@@ -151,6 +154,7 @@ export default function ClientNewCasePage() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [isFromMapLink, setIsFromMapLink] = useState(false);
+  const [selectedProjectLocation, setSelectedProjectLocation] = useState<ProjectLocation | null>(null);
 
   const [unitType, setUnitType] = useState<UnitType>("ambulance");
   const [units, setUnits] = useState<any[]>([]);
@@ -206,6 +210,12 @@ export default function ClientNewCasePage() {
     setProjectData(selected);
     setSelectedUnitId("");
     setUnits([]);
+    setSelectedProjectLocation(null);
+    setLocationText("");
+    setMapLink("");
+    setLat(null);
+    setLng(null);
+    setIsFromMapLink(false);
   }, [projectId, projects]);
 
   useEffect(() => {
@@ -344,11 +354,18 @@ export default function ClientNewCasePage() {
           lat,
           lng,
           googleMapLink,
-          source: isFromMapLink ? "google_link" : "manual",
+          source: selectedProjectLocation
+            ? "project_location"
+            : isFromMapLink
+            ? "google_link"
+            : "manual",
         },
 
         locationDescription: locationText,
         googleMapsLink: mapLink,
+        projectLocationId: selectedProjectLocation?.id || null,
+        projectLocationNumber: selectedProjectLocation?.siteNumber || null,
+        projectLocationName: selectedProjectLocation?.siteName || null,
 
         assignedUnit: {
           type: unitType,
@@ -545,6 +562,27 @@ export default function ClientNewCasePage() {
                   <h3 className="text-sm font-black text-[#123746]">
                     Location
                   </h3>
+
+                  <ProjectLocationSelector
+                    locations={readProjectLocations(projectData)}
+                    selectedId={selectedProjectLocation?.id || ""}
+                    onSelect={(location) => {
+                      setSelectedProjectLocation(location);
+                      setLocationText(location.siteName);
+                      setLat(location.lat);
+                      setLng(location.lng);
+                      setMapLink(`https://www.google.com/maps?q=${location.lat},${location.lng}`);
+                      setIsFromMapLink(true);
+                    }}
+                    onManual={() => {
+                      setSelectedProjectLocation(null);
+                      setLocationText("");
+                      setMapLink("");
+                      setLat(null);
+                      setLng(null);
+                      setIsFromMapLink(false);
+                    }}
+                  />
 
                   <div>
                     <FieldLabel text="Location Description *" />
