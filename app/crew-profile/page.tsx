@@ -10,7 +10,6 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   AlertCircle,
   BadgeCheck,
@@ -27,7 +26,7 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { storage } from "@/lib/firebase";
+import { uploadStorageFile } from "@/lib/storageUploads";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import {
   CREW_PROFILE_SECTIONS,
@@ -101,12 +100,6 @@ function toStoredProfile(values: CrewProfileValues) {
           : String(value || "").trim(),
       ])
   );
-}
-
-function safeFileName(fileName: string) {
-  return String(fileName || "file")
-    .replace(/\s+/g, "_")
-    .replace(/[^\w.\-]/g, "");
 }
 
 function buildFullName(profile: Record<string, string>, language: "en" | "ar") {
@@ -232,15 +225,11 @@ export default function CrewProfilePage() {
     setError("");
 
     try {
-      const fileName = `${Date.now()}_${safeFileName(file.name)}`;
-      const path = `crew-profiles/${user.uid}/${field.key}/${fileName}`;
-      const fileRef = ref(storage, path);
-
-      await uploadBytes(fileRef, file, {
-        contentType: file.type || "application/octet-stream",
+      const uploadedFile = await uploadStorageFile(file, {
+        category: "crew-profile",
+        fieldKey: field.key,
       });
-
-      const url = await getDownloadURL(fileRef);
+      const { url, path } = uploadedFile;
       const fileData = {
         name: file.name,
         url,
