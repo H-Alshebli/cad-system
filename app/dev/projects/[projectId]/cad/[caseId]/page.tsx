@@ -17,6 +17,11 @@ type CaseType = {
   status: string;
   lazemCode?: string;
   projectId?: string | null;
+  ambulanceId?: string | null;
+  assignedUnit?: {
+    type?: string;
+    id?: string;
+  } | null;
   timeline?: Record<string, any>;
 };
 
@@ -125,6 +130,11 @@ export default function CaseDetailsPage({
         <StatusButtons
           caseId={caseData.id}
           currentStatus={caseData.status}
+          assignedAmbulanceId={
+            caseData.assignedUnit?.type === "ambulance"
+              ? caseData.assignedUnit.id
+              : caseData.ambulanceId || undefined
+          }
         />
 
         {caseData.timeline && (

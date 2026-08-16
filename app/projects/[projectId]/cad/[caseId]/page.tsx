@@ -74,6 +74,11 @@ type CaseType = {
   contactNumber?: string;
   chiefComplaint?: string;
   level?: string;
+  ambulanceId?: string | null;
+  assignedUnit?: {
+    type?: string;
+    id?: string;
+  } | null;
 };
 
 
@@ -240,6 +245,11 @@ export default function CaseDetailsPage({
         <StatusButtons
   caseId={caseData.id}
   currentStatus={caseData.status}
+  assignedAmbulanceId={
+    caseData.assignedUnit?.type === "ambulance"
+      ? caseData.assignedUnit.id
+      : caseData.ambulanceId || undefined
+  }
   caseLocation={caseData.location}
   projectHospitals={caseData.projectHospitals || []}
   onDestinationSelected={(destination) => {

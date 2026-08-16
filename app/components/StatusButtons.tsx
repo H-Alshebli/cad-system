@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { updateDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 /* =============================
@@ -52,6 +52,7 @@ type Destination = {
 type StatusButtonsProps = {
   caseId: string;
   currentStatus: string;
+  assignedAmbulanceId?: string;
   caseLocation?: CaseLocation;
   projectHospitals?: ProjectHospital[];
 
@@ -171,6 +172,7 @@ lng:
 export default function StatusButtons({
   caseId,
   currentStatus,
+  assignedAmbulanceId,
   caseLocation,
   projectHospitals = [],
 
@@ -255,6 +257,22 @@ export default function StatusButtons({
       status: newStatus,
       [`timeline.${newStatus}`]: serverTimestamp(),
     });
+
+    if (newStatus === "Closed" && assignedAmbulanceId) {
+      const ambulanceRef = doc(db, "ambulances", assignedAmbulanceId);
+      const ambulanceSnapshot = await getDoc(ambulanceRef);
+      const ambulance = ambulanceSnapshot.data();
+      const currentCaseId = ambulance?.currentCaseId || ambulance?.currentCase;
+
+      if (currentCaseId === caseId) {
+        await updateDoc(ambulanceRef, {
+          status: "available",
+          currentCase: null,
+          currentCaseId: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
   };
 
   /* =============================

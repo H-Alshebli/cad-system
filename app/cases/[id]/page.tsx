@@ -397,6 +397,11 @@ export default function CaseDetailsPage({
             <StatusButtons
               caseId={caseData.id}
               currentStatus={caseData.status}
+              assignedAmbulanceId={
+                caseData.assignedUnit?.type === "ambulance"
+                  ? caseData.assignedUnit.id
+                  : caseData.ambulanceId || undefined
+              }
               caseLocation={pickupLocation}
               projectHospitals={caseData.projectHospitals || []}
               sourceType={sourceType}
