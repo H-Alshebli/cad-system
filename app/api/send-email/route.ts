@@ -44,14 +44,6 @@ export async function POST(req: Request) {
     const body = (await req.json()) as SendEmailBody;
 
     // ✅ Debug logs (visible in Vercel function logs)
-    console.log("[send-email] body =>", {
-      recipientGroup: body?.recipientGroup,
-      to: body?.to,
-      subject: body?.subject,
-      hasText: Boolean(body?.text && body.text.trim()),
-      hasHtml: Boolean(body?.html && body.html.trim()),
-    });
-
     const { recipientGroup, to, subject, text, html } = body ?? {};
 
     // ✅ Validate subject
@@ -81,12 +73,6 @@ export async function POST(req: Request) {
         {
           ok: false,
           error: "Missing recipients: provide 'to' or valid 'recipientGroup'.",
-          debug: {
-            recipientGroup,
-            to,
-            opsEnvLoaded: Boolean(process.env.OPS_EMAILS),
-            salesEnvLoaded: Boolean(process.env.SALES_EMAILS),
-          },
         },
         { status: 400 }
       );
@@ -101,24 +87,11 @@ export async function POST(req: Request) {
     const finalCc = normalizeTo(body.cc);
     const finalBcc = normalizeTo(body.bcc);
 
-    console.log("[send-email] FINAL RECIPIENTS =>", {
-  to: finalTo,
-  cc: finalCc,
-  bcc: finalBcc,
-});
-
-
     if (!host || !user || !pass || !from) {
       return NextResponse.json(
         {
           ok: false,
           error: "SMTP env vars are missing (SMTP_HOST/SMTP_USER/SMTP_PASS/SMTP_FROM).",
-          debug: {
-            hasHost: Boolean(host),
-            hasUser: Boolean(user),
-            hasPass: Boolean(pass),
-            hasFrom: Boolean(from),
-          },
         },
         { status: 500 }
       );
@@ -152,20 +125,13 @@ export async function POST(req: Request) {
       sentTo: finalTo,
       messageId: info.messageId,
     });
-  } catch (e: any) {
-    console.error("[send-email] error =>", e);
+  } catch {
+    console.error("[send-email] delivery failed");
 
     return NextResponse.json(
       {
         ok: false,
-        error: e?.message || "Send failed",
-        debug: {
-          code: e?.code,
-          command: e?.command,
-          responseCode: e?.responseCode,
-          response: e?.response,
-          hostname: e?.hostname,
-        },
+        error: "Send failed",
       },
       { status: 500 }
     );

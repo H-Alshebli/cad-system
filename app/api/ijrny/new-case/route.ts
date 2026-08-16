@@ -8,21 +8,13 @@ const API_KEY = process.env.IJRNY_API_KEY;
 
 function isAuthorized(req: Request) {
   const key = req.headers.get("authorization");
-  console.log("CLIENT Authorization Header:", key);
 
   if (!key) {
-    console.log("AUTH RESULT: No Authorization header found.");
     return false;
   }
 
   const token = key.replace("Bearer ", "").trim();
-  console.log("Extracted TOKEN:", token);
-  console.log("ENV IJRNY_API_KEY:", API_KEY);
-
-  const valid = token === API_KEY;
-  console.log("AUTH RESULT:", valid ? "VALID" : "INVALID");
-
-  return valid;
+  return Boolean(API_KEY) && token === API_KEY;
 }
 
 export async function POST(req: Request) {
@@ -44,8 +36,7 @@ export async function POST(req: Request) {
       { status: 201 }
     );
 
-  } catch (err) {
-    console.error("API ERROR:", err);
+  } catch {
     return NextResponse.json({ error: "Server Error" }, { status: 500 });
   }
 }

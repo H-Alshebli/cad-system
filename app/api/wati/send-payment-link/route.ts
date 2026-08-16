@@ -109,13 +109,6 @@ export async function POST(req: Request) {
       ],
     };
 
-    console.log("Sending WATI payment link:", {
-      url,
-      phone,
-      templateName,
-      payload,
-    });
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -136,11 +129,7 @@ export async function POST(req: Request) {
     }
 
     if (!response.ok) {
-      console.error("WATI API error:", {
-        status: response.status,
-        data,
-        sentPayload: payload,
-      });
+      console.error("WATI API error", { status: response.status });
 
       const itemError = Array.isArray(data?.items) ? data.items[0] : null;
 
@@ -154,8 +143,6 @@ export async function POST(req: Request) {
             data?.errors?.[0]?.message ||
             "WATI API failed.",
           status: response.status,
-          data,
-          sentPayload: payload,
         },
         { status: response.status }
       );
@@ -166,13 +153,13 @@ export async function POST(req: Request) {
       message: "Payment link sent successfully.",
       data,
     });
-  } catch (error: any) {
-    console.error("WATI payment link error:", error);
+  } catch {
+    console.error("WATI payment link request failed");
 
     return NextResponse.json(
       {
         success: false,
-        message: error?.message || "Failed to send payment link.",
+        message: "Failed to send payment link.",
       },
       { status: 500 }
     );
