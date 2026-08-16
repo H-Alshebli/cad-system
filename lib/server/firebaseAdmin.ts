@@ -1,5 +1,7 @@
 import { cert, getApps, initializeApp, applicationDefault } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 function getPrivateKey() {
   const rawValue = String(process.env.FIREBASE_ADMIN_PRIVATE_KEY || "").trim();
@@ -46,14 +48,27 @@ function initializeAdminApp() {
         clientEmail,
         privateKey,
       }),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
     });
   }
 
   return initializeApp({
     credential: applicationDefault(),
     projectId,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   });
 }
 
 export const adminApp = initializeAdminApp();
+export const adminAuth = getAuth(adminApp);
 export const adminDb = getFirestore(adminApp);
+
+export function getAdminStorageBucket() {
+  const bucketName = String(process.env.FIREBASE_STORAGE_BUCKET || "").trim();
+
+  if (!bucketName) {
+    throw new Error("Missing required environment variable: FIREBASE_STORAGE_BUCKET");
+  }
+
+  return getStorage(adminApp).bucket(bucketName);
+}
