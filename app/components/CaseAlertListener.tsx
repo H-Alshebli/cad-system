@@ -386,11 +386,18 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
       where("clientUserIds", "array-contains", user.uid)
     );
 
-    return onSnapshot(q, (snap) => {
-      setClientProjects(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-      );
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        setClientProjects(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+        );
+      },
+      (error) => {
+        console.warn("Client project alert listener failed", error);
+        setClientProjects([]);
+      }
+    );
   }, [loading, user?.uid, isClient]);
 
   // Load projects where a team user is assigned.
@@ -478,26 +485,32 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
     const listenerKey = "dispatch:all-cases";
     listenersReadyRef.current[listenerKey] = false;
 
-    return onSnapshot(collection(db, "cases"), (snap) => {
-      const changes = snap
-        .docChanges()
-        .filter((change) => change.type === "added");
+    return onSnapshot(
+      collection(db, "cases"),
+      (snap) => {
+        const changes = snap
+          .docChanges()
+          .filter((change) => change.type === "added");
 
-      if (!listenersReadyRef.current[listenerKey]) {
-        changes.forEach((change) =>
-          seenCaseIdsRef.current.add(`dispatch:${change.doc.id}`)
-        );
-        listenersReadyRef.current[listenerKey] = true;
-        return;
+        if (!listenersReadyRef.current[listenerKey]) {
+          changes.forEach((change) =>
+            seenCaseIdsRef.current.add(`dispatch:${change.doc.id}`)
+          );
+          listenersReadyRef.current[listenerKey] = true;
+          return;
+        }
+
+        changes.forEach((change) => {
+          openAlert(
+            { id: change.doc.id, ...(change.doc.data() as any) },
+            "dispatch"
+          );
+        });
+      },
+      (error) => {
+        console.warn("Dispatch case alert listener failed", error);
       }
-
-      changes.forEach((change) => {
-        openAlert(
-          { id: change.doc.id, ...(change.doc.data() as any) },
-          "dispatch"
-        );
-      });
-    });
+    );
   }, [loading, user?.uid, isDispatch]);
 
   // Client listener: alert only for cases created inside the client's projects.
@@ -514,26 +527,32 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
 
       const q = query(collection(db, "cases"), where("projectId", "in", ids));
 
-      return onSnapshot(q, (snap) => {
-        const changes = snap
-          .docChanges()
-          .filter((change) => change.type === "added");
+      return onSnapshot(
+        q,
+        (snap) => {
+          const changes = snap
+            .docChanges()
+            .filter((change) => change.type === "added");
 
-        if (!listenersReadyRef.current[listenerKey]) {
-          changes.forEach((change) =>
-            seenCaseIdsRef.current.add(`client:${change.doc.id}`)
-          );
-          listenersReadyRef.current[listenerKey] = true;
-          return;
+          if (!listenersReadyRef.current[listenerKey]) {
+            changes.forEach((change) =>
+              seenCaseIdsRef.current.add(`client:${change.doc.id}`)
+            );
+            listenersReadyRef.current[listenerKey] = true;
+            return;
+          }
+
+          changes.forEach((change) => {
+            openAlert(
+              { id: change.doc.id, ...(change.doc.data() as any) },
+              "client"
+            );
+          });
+        },
+        (error) => {
+          console.warn("Client case alert listener failed", error);
         }
-
-        changes.forEach((change) => {
-          openAlert(
-            { id: change.doc.id, ...(change.doc.data() as any) },
-            "client"
-          );
-        });
-      });
+      );
     });
 
     return () => unsubs.forEach((unsub) => unsub());
@@ -563,33 +582,39 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
 
     listenersReadyRef.current[listenerKey] = false;
 
-    return onSnapshot(collection(db, "cases"), (snap) => {
-      const changes = snap
-        .docChanges()
-        .filter(
-          (change) => change.type === "added" || change.type === "modified"
-        );
+    return onSnapshot(
+      collection(db, "cases"),
+      (snap) => {
+        const changes = snap
+          .docChanges()
+          .filter(
+            (change) => change.type === "added" || change.type === "modified"
+          );
 
-      if (!listenersReadyRef.current[listenerKey]) {
-        snap.docs.forEach((docSnap) =>
-          seenCaseIdsRef.current.add(`team:${docSnap.id}`)
-        );
+        if (!listenersReadyRef.current[listenerKey]) {
+          snap.docs.forEach((docSnap) =>
+            seenCaseIdsRef.current.add(`team:${docSnap.id}`)
+          );
 
-        listenersReadyRef.current[listenerKey] = true;
-        return;
-      }
-
-      changes.forEach((change) => {
-        const c = {
-          id: change.doc.id,
-          ...(change.doc.data() as any),
-        } as AlertCase;
-
-        if (caseMatchesAmbulance(c, teamAmbulanceIds, teamAmbulanceCodes)) {
-          openAlert(c, "team");
+          listenersReadyRef.current[listenerKey] = true;
+          return;
         }
-      });
-    });
+
+        changes.forEach((change) => {
+          const c = {
+            id: change.doc.id,
+            ...(change.doc.data() as any),
+          } as AlertCase;
+
+          if (caseMatchesAmbulance(c, teamAmbulanceIds, teamAmbulanceCodes)) {
+            openAlert(c, "team");
+          }
+        });
+      },
+      (error) => {
+        console.warn("Team case alert listener failed", error);
+      }
+    );
   }, [
     loading,
     user?.uid,

@@ -414,25 +414,28 @@ export default function MyMissionsPage() {
   const [showClosedMissions, setShowClosedMissions] = useState(false);
 
   useEffect(() => {
-    const unsubCases = onSnapshot(collection(db, "cases"), (snap) => {
-      setCases(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    if (loading || !user?.uid || user.active === false) return;
 
-    const unsubB2C = onSnapshot(collection(db, "b2cRequests"), (snap) => {
-      setB2CRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const listen = (
+      collectionName: string,
+      onData: (rows: any[]) => void
+    ) =>
+      onSnapshot(
+        collection(db, collectionName),
+        (snap) => {
+          onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        },
+        (error) => {
+          console.warn(`Missions ${collectionName} listener failed`, error);
+          onData([]);
+        }
+      );
 
-    const unsubChecklists = onSnapshot(collection(db, "projectChecklists"), (snap) => {
-      setChecklists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubProjects = onSnapshot(collection(db, "projects"), (snap) => {
-      setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubAmbulances = onSnapshot(collection(db, "ambulances"), (snap) => {
-      setAmbulances(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsubCases = listen("cases", setCases);
+    const unsubB2C = listen("b2cRequests", setB2CRequests);
+    const unsubChecklists = listen("projectChecklists", setChecklists);
+    const unsubProjects = listen("projects", setProjects);
+    const unsubAmbulances = listen("ambulances", setAmbulances);
 
     return () => {
       unsubCases();
@@ -441,7 +444,7 @@ export default function MyMissionsPage() {
       unsubProjects();
       unsubAmbulances();
     };
-  }, []);
+  }, [loading, user?.uid, user?.active]);
 
   const normalizedRole = String(user?.role || "").toLowerCase();
   const isAdmin =

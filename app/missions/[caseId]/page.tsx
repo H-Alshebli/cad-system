@@ -36,13 +36,23 @@ export default function MissionAcknowledgePage({
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "cases", params.caseId), (snap) => {
-      setCaseData(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-      setLoading(false);
-    });
+    if (userLoading || !user?.uid || user.active === false) return;
+
+    const unsub = onSnapshot(
+      doc(db, "cases", params.caseId),
+      (snap) => {
+        setCaseData(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn("Mission case listener failed", error);
+        setCaseData(null);
+        setLoading(false);
+      }
+    );
 
     return () => unsub();
-  }, [params.caseId]);
+  }, [params.caseId, userLoading, user?.uid, user?.active]);
 
   useEffect(() => {
     const projectId = caseData?.projectId || caseData?.assignedProjectId;
@@ -63,7 +73,7 @@ export default function MissionAcknowledgePage({
   }, [caseData?.assignedProjectId, caseData?.projectId]);
 
   useEffect(() => {
-    if (!caseData) return;
+    if (userLoading || !user?.uid || user.active === false || !caseData) return;
 
     const unitId = getUnitIdFromMission(caseData);
     const resolvedShift = resolveCurrentProjectShift(projectData?.shiftSchedule);
@@ -84,30 +94,48 @@ export default function MissionAcknowledgePage({
           where("missionId", "==", params.caseId)
         );
 
-    const unsub = onSnapshot(q, (snap) => {
-      const deploymentType = getChecklistDeploymentTypeFromMission(caseData);
-      const rows: any[] = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .filter((entry) => {
-          if (entry.missionId === params.caseId) return true;
-          const linkedMissionIds = Array.isArray(entry.linkedMissionIds) ? entry.linkedMissionIds : [];
-          if (linkedMissionIds.includes(params.caseId)) return true;
-          return (
-            entry.dateKey === dateKey &&
-            doesChecklistShiftMatch(entry, shiftKey, shiftId) &&
-            normalizeDeploymentType(entry.deploymentType || entry.checklistCategory || "Ambulance") === deploymentType
-          );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const deploymentType = getChecklistDeploymentTypeFromMission(caseData);
+        const rows: any[] = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as any))
+          .filter((entry) => {
+            if (entry.missionId === params.caseId) return true;
+            const linkedMissionIds = Array.isArray(entry.linkedMissionIds)
+              ? entry.linkedMissionIds
+              : [];
+            if (linkedMissionIds.includes(params.caseId)) return true;
+            return (
+              entry.dateKey === dateKey &&
+              doesChecklistShiftMatch(entry, shiftKey, shiftId) &&
+              normalizeDeploymentType(
+                entry.deploymentType || entry.checklistCategory || "Ambulance"
+              ) === deploymentType
+            );
+          });
+        rows.sort((a, b) => {
+          const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
+          const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
+          return bd - ad;
         });
-      rows.sort((a, b) => {
-        const ad = a.createdAt?.toDate?.()?.getTime?.() || 0;
-        const bd = b.createdAt?.toDate?.()?.getTime?.() || 0;
-        return bd - ad;
-      });
-      setMissionChecklists(rows);
-    });
+        setMissionChecklists(rows);
+      },
+      (error) => {
+        console.warn("Mission checklist listener failed", error);
+        setMissionChecklists([]);
+      }
+    );
 
     return () => unsub();
-  }, [caseData, params.caseId, projectData?.shiftSchedule]);
+  }, [
+    caseData,
+    params.caseId,
+    projectData?.shiftSchedule,
+    userLoading,
+    user?.uid,
+    user?.active,
+  ]);
 
   const normalizedRole = String(user?.role || "").toLowerCase();
 
