@@ -119,6 +119,10 @@ export default function CasesOverview({
     (c) => ["Transporting", "Hospital"].includes(c.status)
   ).length;
 
+  const returningCases = cases.filter(
+    (c) => c.status === "Returning"
+  ).length;
+
   const transportingHospitalCases = cases.filter(
     (c) =>
       ["Transporting", "Hospital"].includes(c.status) &&
@@ -168,6 +172,8 @@ export default function CasesOverview({
           sub={`Hospital: ${transportingHospitalCases} - Clinic: ${transportingClinicCases}`}
           color="orange"
         />
+
+        <Card title="Returning" value={returningCases} />
 
         <Card
           title="Treated"

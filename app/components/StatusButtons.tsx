@@ -87,6 +87,8 @@ type StatusButtonsProps = {
   destinationLng?: number | null;
   destinationFloor?: string;
 
+  onOpenEpcr?: () => void | Promise<void>;
+
 onDestinationSelected?: (destination: any) => void;};
 
 const STATUSES = [
@@ -96,8 +98,39 @@ const STATUSES = [
   "OnScene",
   "Transporting",
   "Hospital",
+  "Returning",
   "Closed",
 ] as const;
+
+const NO_TRANSPORT_REASONS = [
+  { value: "treatment_on_scene", label: "Treatment on scene" },
+  { value: "patient_refused", label: "Patient refused transport" },
+  { value: "no_patient_found", label: "No patient found" },
+  { value: "cancelled_by_command", label: "Cancelled by command" },
+  { value: "other", label: "Other" },
+] as const;
+
+const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  PendingPayment: [],
+  ReadyForDispatch: ["Assigned"],
+  Received: ["Assigned"],
+  Assigned: ["EnRoute"],
+  TeamAcknowledged: ["EnRoute"],
+  EnRoute: ["OnScene"],
+  OnScene: ["Transporting", "Returning"],
+  Transporting: ["Hospital"],
+  Hospital: ["Returning"],
+  Returning: ["Closed"],
+  Closed: [],
+  Cancelled: [],
+};
+
+function statusActionLabel(status: string) {
+  if (status === "Transporting") return "Start Transport";
+  if (status === "Returning") return "Return";
+  if (status === "Closed") return "Close Case";
+  return status;
+}
 
 /* =============================
    HELPERS
@@ -187,6 +220,8 @@ export default function StatusButtons({
   destinationLng,
   destinationFloor,
 
+  onOpenEpcr,
+
   onDestinationSelected,
 }: StatusButtonsProps) {
   const [showTypePopup, setShowTypePopup] = useState(false);
@@ -194,9 +229,15 @@ export default function StatusButtons({
     useState<"hospital" | "clinic" | null>(null);
   const [showDestinationList, setShowDestinationList] = useState(false);
   const [showB2CConfirm, setShowB2CConfirm] = useState(false);
+  const [showReturnReason, setShowReturnReason] = useState(false);
+  const [noTransportReason, setNoTransportReason] = useState("");
+  const [noTransportReasonOther, setNoTransportReasonOther] = useState("");
+  const [showEpcrRequired, setShowEpcrRequired] = useState(false);
 
   const currentIsB2C = isB2CCase(sourceType, caseType);
   const isFinalStatus = isFinalCaseStatus(currentStatus);
+  const availableStatuses =
+    STATUS_TRANSITIONS[currentStatus] || STATUSES.filter((status) => status !== currentStatus);
 
   const resolvedB2CDestination = buildB2CDestination({
     b2cDestination,
@@ -211,8 +252,45 @@ export default function StatusButtons({
   /* =============================
      BASIC STATUS UPDATE
   ============================= */
+  const persistStatus = async (
+    newStatus: string,
+    extra: Record<string, unknown> = {}
+  ) => {
+    const timelineKey = `${newStatus.charAt(0).toLowerCase()}${newStatus.slice(1)}At`;
+
+    await updateDoc(doc(db, "cases", caseId), {
+      status: newStatus,
+      [`timeline.${newStatus}`]: serverTimestamp(),
+      [`timeline.${timelineKey}`]: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ...extra,
+    });
+  };
+
   const updateStatus = async (newStatus: string) => {
     if (isFinalCaseStatus(currentStatus)) return;
+
+    if (newStatus === "Returning") {
+      if (currentStatus === "OnScene") {
+        setShowReturnReason(true);
+        return;
+      }
+
+      await persistStatus("Returning");
+      return;
+    }
+
+    if (newStatus === "Closed") {
+      const epcrSnapshot = await getDoc(doc(db, "epcr", caseId));
+      if (
+        !epcrSnapshot.exists() ||
+        !epcrSnapshot.data()?.finalizedAt ||
+        epcrSnapshot.data()?.locked !== true
+      ) {
+        setShowEpcrRequired(true);
+        return;
+      }
+    }
 
     /**
      * Special handling for Transporting:
@@ -253,10 +331,7 @@ export default function StatusButtons({
       return;
     }
 
-    await updateDoc(doc(db, "cases", caseId), {
-      status: newStatus,
-      [`timeline.${newStatus}`]: serverTimestamp(),
-    });
+    await persistStatus(newStatus);
 
     if (newStatus === "Closed" && assignedAmbulanceId) {
       const ambulanceRef = doc(db, "ambulances", assignedAmbulanceId);
@@ -273,6 +348,30 @@ export default function StatusButtons({
         });
       }
     }
+  };
+
+  const confirmNoTransportReturn = async () => {
+    if (!noTransportReason) {
+      alert("Select a reason for no transport.");
+      return;
+    }
+
+    if (noTransportReason === "other" && !noTransportReasonOther.trim()) {
+      alert("Enter the other reason.");
+      return;
+    }
+
+    await persistStatus("Returning", {
+      transportOutcome: "NoTransport",
+      transportRequired: false,
+      noTransportReason,
+      noTransportReasonOther:
+        noTransportReason === "other" ? noTransportReasonOther.trim() : "",
+    });
+
+    setShowReturnReason(false);
+    setNoTransportReason("");
+    setNoTransportReasonOther("");
   };
 
   /* =============================
@@ -391,7 +490,7 @@ export default function StatusButtons({
       <h3 className="mb-2 font-black text-[#274C5A]">Update Status</h3>
 
       <div className="grid grid-cols-2 gap-3 max-w-md">
-        {STATUSES.map((s) => (
+        {availableStatuses.map((s) => (
           <button
             key={s}
             disabled={isFinalStatus}
@@ -406,7 +505,7 @@ export default function StatusButtons({
                 : ""
             }`}
           >
-            {s}
+            {statusActionLabel(s)}
           </button>
         ))}
       </div>
@@ -415,6 +514,87 @@ export default function StatusButtons({
         <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
           This CAD case has been cancelled. Status changes are locked.
         </div>
+      )}
+
+      {showReturnReason && (
+        <Modal>
+          <h2 className="mb-2 text-lg font-black text-[#274C5A]">
+            Reason for No Transport
+          </h2>
+          <p className="mb-4 text-sm font-semibold text-[#607482]">
+            Select why the case is returning without patient transport.
+          </p>
+
+          <div className="space-y-2">
+            {NO_TRANSPORT_REASONS.map((reason) => (
+              <label
+                key={reason.value}
+                className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#86A7B2]/30 p-3 hover:bg-[#f8fbfc]"
+              >
+                <input
+                  type="radio"
+                  name="noTransportReason"
+                  value={reason.value}
+                  checked={noTransportReason === reason.value}
+                  onChange={(event) => setNoTransportReason(event.target.value)}
+                />
+                <span className="font-bold text-[#274C5A]">{reason.label}</span>
+              </label>
+            ))}
+          </div>
+
+          {noTransportReason === "other" && (
+            <textarea
+              className="mt-3 min-h-24 w-full rounded-xl border border-[#86A7B2]/40 p-3 text-sm outline-none focus:border-[#274C5A]"
+              placeholder="Enter the reason"
+              value={noTransportReasonOther}
+              onChange={(event) => setNoTransportReasonOther(event.target.value)}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={confirmNoTransportReturn}
+            className="mt-4 w-full rounded-xl bg-[#274C5A] p-2 font-bold text-white hover:bg-[#1f3f4c]"
+          >
+            Confirm Return
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowReturnReason(false)}
+            className="mt-2 w-full text-sm font-bold text-[#7F7F7F] hover:text-[#274C5A]"
+          >
+            Cancel
+          </button>
+        </Modal>
+      )}
+
+      {showEpcrRequired && (
+        <Modal>
+          <h2 className="mb-2 text-lg font-black text-[#274C5A]">
+            Complete the Medical Report
+          </h2>
+          <p className="mb-4 text-sm font-semibold text-[#607482]">
+            The ePCR must be finalized before this case can be closed.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setShowEpcrRequired(false);
+              onOpenEpcr?.();
+            }}
+            className="w-full rounded-xl bg-[#274C5A] p-2 font-bold text-white hover:bg-[#1f3f4c]"
+          >
+            Open ePCR
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEpcrRequired(false)}
+            className="mt-2 w-full text-sm font-bold text-[#7F7F7F] hover:text-[#274C5A]"
+          >
+            Cancel
+          </button>
+        </Modal>
       )}
 
       {/* =============================

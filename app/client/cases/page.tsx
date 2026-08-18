@@ -59,6 +59,7 @@ function clientStatus(status?: string) {
     OnScene: "Team arrived",
     Transporting: "Transporting patient",
     Hospital: "Arrived at destination",
+    Returning: "Team returning",
     Closed: "Completed",
   };
 
@@ -195,6 +196,7 @@ export default function ClientCasesPage() {
                 <option value="OnScene">Team arrived</option>
                 <option value="Transporting">Transporting</option>
                 <option value="Hospital">Arrived at destination</option>
+                <option value="Returning">Team returning</option>
               </select>
             </div>
             <p className="text-sm font-semibold text-[#607482]">

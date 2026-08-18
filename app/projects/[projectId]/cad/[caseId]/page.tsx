@@ -252,6 +252,7 @@ export default function CaseDetailsPage({
   }
   caseLocation={caseData.location}
   projectHospitals={caseData.projectHospitals || []}
+  onOpenEpcr={handleEpcr}
   onDestinationSelected={(destination) => {
     setCaseData((prev) =>
       prev ? { ...prev, destination } : prev

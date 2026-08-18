@@ -55,6 +55,7 @@ function clientStatus(status?: string) {
     OnScene: "Team arrived",
     Transporting: "Transporting patient",
     Hospital: "Arrived at destination",
+    Returning: "Team returning",
     Closed: "Completed",
   };
 

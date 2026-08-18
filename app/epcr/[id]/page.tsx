@@ -451,6 +451,42 @@ const NO_TRANSFER_REASONS = [
   "Other",
 ] as const;
 
+function getNoTransportOutcomeFromCase(caseData: any): Partial<Outcome> | null {
+  if (caseData?.transportOutcome !== "NoTransport") return null;
+
+  const reason = String(caseData?.noTransportReason || "");
+  const other = String(caseData?.noTransportReasonOther || "").trim();
+
+  if (reason === "treatment_on_scene") {
+    return {
+      destination: "Treated on Scene",
+      noTransferReason: "Transport No Longer Required",
+      noTransferReasonOther: "",
+    };
+  }
+
+  if (reason === "patient_refused") {
+    return {
+      destination: NO_TRANSPORT_DESTINATION,
+      noTransferReason: "Patient Refused Transport",
+      noTransferReasonOther: "",
+    };
+  }
+
+  const otherReason =
+    reason === "no_patient_found"
+      ? "No patient found"
+      : reason === "cancelled_by_command"
+      ? "Cancelled by command"
+      : other;
+
+  return {
+    destination: NO_TRANSPORT_DESTINATION,
+    noTransferReason: "Other",
+    noTransferReasonOther: otherReason,
+  };
+}
+
 const MEDICATIONS_LIST = [
   "Oxygen",
   "IV Fluids",
@@ -754,6 +790,24 @@ if (isB2C) {
         }
         const destinationHospitalName = getCaseDestinationHospitalName(caseData);
 
+        const noTransportOutcome = getNoTransportOutcomeFromCase(caseData);
+        if (noTransportOutcome && !epcrData.outcome?.destination) {
+          const nextOutcome = {
+            ...(epcrData.outcome ?? emptyOutcome()),
+            ...noTransportOutcome,
+          } as Outcome;
+
+          await updateDoc(epcrRef, {
+            outcome: nextOutcome,
+            updatedAt: new Date(),
+          });
+
+          epcrData.outcome = nextOutcome;
+          setData(epcrData);
+          setLoading(false);
+          return;
+        }
+
 if (destinationHospitalName && !epcrData.outcome?.hospitalName) {
   const nextOutcome = {
     ...(epcrData.outcome ?? emptyOutcome()),
@@ -810,8 +864,12 @@ if (destinationHospitalName && !epcrData.outcome?.hospitalName) {
           fill("arrivalTime", "onSceneAt", "OnScene");
           fill("arrivalToPTTime", "onSceneAt", "OnScene");
           fill("leavingSceneTime", "transportingAt", "Transporting");
+          if (!newTime.leavingSceneTime?.timeHHMM) {
+            fill("leavingSceneTime", "returningAt", "Returning");
+          }
           fill("hospitalTime", "hospitalAt", "Hospital");
-          fill("backTime", "closedAt", "Closed");
+          fill("backTime", "returningAt", "Returning");
+          if (!newTime.backTime?.timeHHMM) fill("backTime", "closedAt", "Closed");
 
           if (timeUpdated) {
             await updateDoc(epcrRef, {

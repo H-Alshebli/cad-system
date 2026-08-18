@@ -78,6 +78,7 @@ function clientStatus(status?: string) {
     OnScene: "Team arrived",
     Transporting: "Transporting patient",
     Hospital: "Arrived at destination",
+    Returning: "Team returning",
     Closed: "Completed",
   };
 
@@ -96,6 +97,7 @@ function normalizeTimelineForClient(timeline: Record<string, any> = {}) {
     OnScene: timeline.OnScene || timeline.onSceneAt || null,
     Transporting: timeline.Transporting || timeline.transportingAt || null,
     Hospital: timeline.Hospital || timeline.hospitalAt || null,
+    Returning: timeline.Returning || timeline.returningAt || null,
     Closed: timeline.Closed || timeline.closedAt || null,
   };
 }
@@ -267,6 +269,10 @@ export default function ClientTimelineDashboardPage() {
     ["Transporting", "Hospital"].includes(c.status || "")
   ).length;
 
+  const returningCases = filteredCases.filter(
+    (c) => c.status === "Returning"
+  ).length;
+
   const completedCases = filteredCases.filter(
     (c) => c.status === "Closed"
   ).length;
@@ -397,6 +403,7 @@ export default function ClientTimelineDashboardPage() {
               {transportingClinicCases}
             </p>
           </div>
+          <KpiCard title="Returning" value={returningCases} valueClass="text-blue-600" />
           <KpiCard
             title="Completed"
             value={completedCases}

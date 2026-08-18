@@ -18,6 +18,8 @@ export type DispatchStatus =
   | "EnRoute"
   | "OnScene"
   | "Transporting"
+  | "Hospital"
+  | "Returning"
   | "Closed";
 
 export async function createB2CCase(input: any) {

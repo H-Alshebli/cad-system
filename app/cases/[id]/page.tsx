@@ -413,6 +413,7 @@ export default function CaseDetailsPage({
               destinationLat={caseData.destinationLat}
               destinationLng={caseData.destinationLng}
               destinationFloor={caseData.destinationFloor}
+              onOpenEpcr={handleEpcr}
               onDestinationSelected={() => {}}
             />
 

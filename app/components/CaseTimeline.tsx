@@ -18,6 +18,7 @@ const STEPS = [
   { label: "OnScene", newKey: "onSceneAt", oldKey: "OnScene" },
   { label: "Transporting", newKey: "transportingAt", oldKey: "Transporting" },
   { label: "Hospital", newKey: "hospitalAt", oldKey: "Hospital" },
+  { label: "Returning", newKey: "returningAt", oldKey: "Returning" },
   { label: "Closed", newKey: "closedAt", oldKey: "Closed" },
 ];
 

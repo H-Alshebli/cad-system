@@ -135,6 +135,7 @@ export default function CaseDetailsPage({
               ? caseData.assignedUnit.id
               : caseData.ambulanceId || undefined
           }
+          onOpenEpcr={handleEpcr}
         />
 
         {caseData.timeline && (

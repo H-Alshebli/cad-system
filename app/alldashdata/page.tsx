@@ -78,6 +78,9 @@ export default function Dashboard() {
   const transportingCases = filteredCases.filter(
     (c) => ["Transporting", "Hospital"].includes(c.status) 
   ).length;
+  const returningCases = filteredCases.filter(
+    (c) => c.status === "Returning"
+  ).length;
    const closedHospitalCases = filteredCases.filter(
   (c) =>
     c.status === "Closed" &&
@@ -141,6 +144,11 @@ const closedclinicCases = filteredCases.filter(
            <p className="text-gray-400">
               Hospital: {transportingHospitalCases} - Clinic: {transportingClinicCases}
             </p>
+        </div>
+
+        <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
+          <h3 className="text-sm text-gray-400">Returning</h3>
+          <p className="text-2xl font-bold text-blue-600">{returningCases}</p>
         </div>
 
         <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">

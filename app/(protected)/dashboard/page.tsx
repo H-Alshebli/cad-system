@@ -224,6 +224,10 @@ export default function Dashboard() {
     (c) => ["Transporting", "Hospital"].includes(c.status)
   ).length;
 
+  const returningCases = filteredCases.filter(
+    (c) => c.status === "Returning"
+  ).length;
+
   const closedHospitalCases = filteredCases.filter(
     (c) =>
       c.status === "Closed" &&
@@ -376,6 +380,11 @@ return (
           <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
             Hospital: {transportingHospitalCases} - Clinic: {transportingClinicCases}
           </p>
+        </div>
+
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+          <h3 className="text-sm font-bold text-[#7F7F7F]">Returning</h3>
+          <p className="mt-2 text-2xl font-black text-[#274C5A]">{returningCases}</p>
         </div>
 
         <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
