@@ -25,11 +25,32 @@ steps:
       - --build-arg
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${_FIREBASE_MEASUREMENT_ID}
       - --tag
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:${SHORT_SHA}
+      - --tag
       - me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:production-latest
       - .
 
-images:
-  - me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:production-latest
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:${SHORT_SHA}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - lazem-dispatch
+      - --project=${PROJECT_ID}
+      - --region=me-central2
+      - --image=me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:${SHORT_SHA}
+      - --service-account=lazem-dispatch-runtime@${PROJECT_ID}.iam.gserviceaccount.com
+      - --quiet
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/lazem-dispatch/web:production-latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
