@@ -1,3 +1,5 @@
+import { findCrewOrganizationRole } from "@/lib/crewOrganization";
+
 export type CrewProfileFieldType =
   | "text"
   | "email"
@@ -56,10 +58,12 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
           "Sudan",
           "India",
           "Pakistan",
+          "Bangladesh",
           "Philippines",
           "Other",
         ],
       },
+      { key: "otherNationality", label: "Other Nationality", type: "text" },
       {
         key: "identityType",
         label: "Identity Type",
@@ -108,7 +112,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         options: ["+966", "+971", "+973", "+965", "+968", "+974", "+20", "+962", "+249", "+91", "+92", "+63", "Other"],
       },
       { key: "alternateMobile", label: "Alternate Mobile", type: "tel" },
-      { key: "email", label: "HCAD Email", type: "email" },
+      { key: "email", label: "Email Address", type: "email" },
       { key: "personalEmail", label: "Personal Email", type: "email" },
       {
         key: "city",
@@ -136,8 +140,6 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
           "Other",
         ],
       },
-      { key: "district", label: "District", type: "text" },
-      { key: "address", label: "Address", type: "textarea" },
     ],
   },
   {
@@ -146,29 +148,23 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
     description: "Operational profile data used for assignments and supervisor follow-up.",
     fields: [
       { key: "employeeId", label: "Employee ID", type: "text" },
-      { key: "jobTitle", label: "Job Title", type: "select", optionsSource: "roles" },
       {
-        key: "clinicalRank",
-        label: "Clinical Rank",
+        key: "roleCategory",
+        label: "Role Category",
         type: "select",
-        options: ["EMT", "Paramedic", "Nurse", "Doctor", "Supervisor", "Dispatcher"],
+        options: ["Medical Role", "Non-Medical Role"],
       },
+      { key: "jobTitle", label: "Job Title", type: "select", optionsSource: "roles" },
       { key: "department", label: "Department", type: "text" },
+      { key: "supervisorName", label: "Supervisor Name", type: "text" },
       {
         key: "employmentType",
         label: "Employment Type",
         type: "select",
-        options: ["Full Time", "Part Time", "Contract", "Volunteer", "Collaborator"],
+        options: ["Full Time", "Part Time", "Volunteer", "Trainee"],
       },
       { key: "joiningDate", label: "Joining Date", type: "date" },
       { key: "contractEndDate", label: "End of Contract Date", type: "date" },
-      { key: "supervisorName", label: "Supervisor Name", type: "text" },
-      {
-        key: "coverageScope",
-        label: "Clinical Coverage Scope",
-        type: "select",
-        options: ["Adult", "Pediatric", "Adult & Pediatric", "Event Populations"],
-      },
       {
         key: "drivesAmbulance",
         label: "Will This Employee Drive an Ambulance?",
@@ -179,7 +175,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         key: "workLocation",
         label: "Work Location",
         type: "select",
-        options: ["Lazem HQ", "Project", "Not assigned yet"],
+        options: ["Lazem Center / Event", "Project", "Not assigned yet"],
       },
       {
         key: "primaryProjectId",
@@ -247,7 +243,8 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
     title: "Bank Details",
     description: "Payroll payment information. Saudi IBANs are stored without spaces.",
     fields: [
-      { key: "bankName", label: "Bank Name", type: "text" },
+      { key: "bankName", label: "Bank Name", type: "select" },
+      { key: "otherBankName", label: "Other Bank Name", type: "text" },
       {
         key: "accountNumber",
         label: "Account Number",
@@ -256,7 +253,12 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
       },
       { key: "iban", label: "IBAN", type: "text", placeholder: "SA0000000000000000000000" },
       { key: "ibanAttachment", label: "IBAN Certificate Attachment", type: "file" },
-      { key: "alternativeBankName", label: "Alternative Bank Name", type: "text" },
+      { key: "alternativeBankName", label: "Alternative Bank Name", type: "select" },
+      {
+        key: "otherAlternativeBankName",
+        label: "Other Alternative Bank Name",
+        type: "text",
+      },
       {
         key: "alternativeAccountNumber",
         label: "Alternative Account Number",
@@ -308,7 +310,12 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         key: "outsideCityMaxDuration",
         label: "Maximum Work Duration Outside Your City",
         type: "select",
-        options: ["1 Day", "3 Days", "1 Week", "1 Month", "By Agreement"],
+        options: ["1 Day", "3 Days", "1 Week", "1 Month", "By Agreement", "Other"],
+      },
+      {
+        key: "outsideCityMaxDurationOther",
+        label: "Other Duration (Days)",
+        type: "text",
       },
     ],
   },
@@ -402,8 +409,10 @@ export const CREW_PROFILE_BASE_REQUIRED_KEYS = [
   "mobile",
   "email",
   "city",
-  "employeeId",
+  "roleCategory",
   "jobTitle",
+  "department",
+  "supervisorName",
   "employmentType",
   "joiningDate",
   "workLocation",
@@ -477,9 +486,7 @@ const passportRequirements = [
   credential("passportAttachment", "Passport Attachment"),
 ];
 
-const plannedBaseRequirements = [
-  credential("contractEndDate", "End of Contract Date", true),
-];
+const plannedBaseRequirements: CrewCredentialRequirement[] = [];
 
 const plannedNonSaudiRequirements = [
   credential("iqamaExpiry", "Iqama Expiry Date", true),
@@ -539,22 +546,7 @@ export function getCrewProfileRequirements(values: CrewProfileValues) {
     titleGroup === "paramedic" && values.drivesAmbulance === "Yes"
       ? [...driverLicense, ...evoc]
       : [];
-  const coverageScope = String(values.coverageScope || "").toLowerCase();
-  const pediatricCoverage =
-    coverageScope.includes("pediatric") || coverageScope.includes("event");
-  const coverageRequirements = pediatricCoverage
-    ? titleGroup === "ccc_admin" || titleGroup === "ambulance_driver"
-      ? []
-      : palsRequirements
-    : titleGroup === "physician" && coverageScope
-    ? atlsRequirements
-    : [];
   const workflowRequirements = [
-    ...(["physician", "registered_nurse", "paramedic", "emt"].includes(
-      titleGroup
-    )
-      ? [credential("coverageScope", "Clinical Coverage Scope")]
-      : []),
     ...(titleGroup === "paramedic"
       ? [
           credential(
@@ -564,6 +556,20 @@ export function getCrewProfileRequirements(values: CrewProfileValues) {
         ]
       : []),
   ];
+  const conditionalRequirements = [
+    ...(values.nationality === "Other"
+      ? [credential("otherNationality", "Other Nationality")]
+      : []),
+    ...(values.bankName === "Other"
+      ? [credential("otherBankName", "Other Bank Name")]
+      : []),
+    ...(values.alternativeBankName === "Other"
+      ? [credential("otherAlternativeBankName", "Other Alternative Bank Name")]
+      : []),
+    ...(values.outsideCityMaxDuration === "Other"
+      ? [credential("outsideCityMaxDurationOther", "Other Duration (Days)")]
+      : []),
+  ];
 
   const allRequirements = [
     ...baseRequirements,
@@ -571,8 +577,8 @@ export function getCrewProfileRequirements(values: CrewProfileValues) {
     ...titleRequirements,
     ...nationalityRequirements,
     ...drivingRequirements,
-    ...coverageRequirements,
     ...workflowRequirements,
+    ...conditionalRequirements,
   ];
   const uniqueRequirements = Array.from(
     new Map(allRequirements.map((item) => [item.key, item])).values()
@@ -599,7 +605,7 @@ const evocKeys = requirementKeys(evoc);
 const passportKeys = requirementKeys(passportRequirements);
 const atlsKeys = requirementKeys(atlsRequirements);
 const palsKeys = requirementKeys(palsRequirements);
-const physicianOptionalDocumentKeys = new Set([
+const medicalOptionalDocumentKeys = new Set([
   "medicalDegreeAttachment",
   "malpracticeInsuranceAttachment",
 ]);
@@ -624,7 +630,14 @@ export function isCrewProfileFieldVisible(
   ].includes(titleGroup);
 
   if (fieldKey === "iqamaExpiry") return isNonSaudi;
-  if (fieldKey === "coverageScope") return hasJobTitle && clinicalTitle;
+  if (fieldKey === "otherNationality") return values.nationality === "Other";
+  if (fieldKey === "otherBankName") return values.bankName === "Other";
+  if (fieldKey === "otherAlternativeBankName") {
+    return values.alternativeBankName === "Other";
+  }
+  if (fieldKey === "outsideCityMaxDurationOther") {
+    return values.outsideCityMaxDuration === "Other";
+  }
   if (fieldKey === "drivesAmbulance") return titleGroup === "paramedic";
   if (!credentialFieldKeys.has(fieldKey)) return true;
   if (!hasJobTitle) return false;
@@ -632,7 +645,7 @@ export function isCrewProfileFieldVisible(
   if (passportKeys.has(fieldKey)) return isNonSaudi;
   // Unknown/custom titles remain visible for safe manual capture until mapped.
   if (titleGroup === "other") return true;
-  if (physicianOptionalDocumentKeys.has(fieldKey)) return titleGroup === "physician";
+  if (medicalOptionalDocumentKeys.has(fieldKey)) return clinicalTitle;
   if (scfhsKeys.has(fieldKey)) return clinicalTitle;
   if (blsKeys.has(fieldKey)) return titleGroup !== "ccc_admin";
   if (aclsKeys.has(fieldKey)) return clinicalTitle;
@@ -779,8 +792,10 @@ export function getCrewProfileCompletion(
     );
     return daysRemaining <= 90;
   });
-  const isMappedJobTitle =
-    Boolean(String(values.jobTitle || "").trim()) && titleGroup !== "other";
+  const isMappedJobTitle = Boolean(
+    String(values.jobTitle || "").trim() &&
+      (titleGroup !== "other" || findCrewOrganizationRole(values.jobTitle))
+  );
   const isComplete =
     missing.length === 0 &&
     pendingVerification.length === 0 &&

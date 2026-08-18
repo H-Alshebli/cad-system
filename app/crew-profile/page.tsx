@@ -3,11 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
-  doc,
   onSnapshot,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import {
@@ -21,11 +18,12 @@ import {
   IdCard,
   Mail,
   Save,
+  Send,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
 
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { uploadStorageFile } from "@/lib/storageUploads";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import {
@@ -43,6 +41,13 @@ import {
   sanitizeSaudiIban,
 } from "@/lib/crewProfile";
 import { getProjectDisplayName } from "@/lib/displayLabels";
+import {
+  CREW_ORGANIZATION_ROLES,
+  SAUDI_BANKS,
+  SAUDI_COVERAGE_CITIES,
+  WEEK_DAYS,
+  findCrewOrganizationRole,
+} from "@/lib/crewOrganization";
 
 const sectionIcons: Record<string, React.ReactNode> = {
   personal: <IdCard size={18} />,
@@ -63,7 +68,29 @@ type CrewExpiryNotification = {
 };
 
 function fieldSpan(field: CrewProfileField) {
+  if (field.key === "roleCategory") return "md:col-span-3";
   return field.type === "textarea" ? "md:col-span-2" : "";
+}
+
+function parseStringList(value: string) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+}
+
+function parseAvailability(value: string) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 function cleanValue(field: CrewProfileField, value: string) {
@@ -120,11 +147,12 @@ export default function CrewProfilePage() {
   const [values, setValues] = useState<CrewProfileValues>({});
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState("");
-  const [roles, setRoles] = useState<string[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<CrewProfileAttachments>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("draft");
+  const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false);
   const [expiryNotifications, setExpiryNotifications] = useState<
     CrewExpiryNotification[]
   >([]);
@@ -133,7 +161,12 @@ export default function CrewProfilePage() {
     if (!user) return;
     setValues(getCrewProfileValues(user));
     setAttachments(user.crewProfileAttachments || {});
+    setReviewStatus(user.crewProfileReviewStatus || "draft");
   }, [user]);
+
+  const isEditable = ["draft", "changes_required", "reopened", ""].includes(
+    reviewStatus
+  );
 
   const completion = useMemo(
     () => getCrewProfileCompletion(values, attachments),
@@ -143,14 +176,6 @@ export default function CrewProfilePage() {
     () => new Set(completion.requiredKeys),
     [completion.requiredKeys.join("|")]
   );
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "roles"), (snap) => {
-      setRoles(snap.docs.map((item) => item.id).sort((a, b) => a.localeCompare(b)));
-    });
-
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -213,6 +238,20 @@ export default function CrewProfilePage() {
         next.identityType = value === "Saudi Arabia" ? "National ID" : "Iqama";
       }
 
+      if (field.key === "roleCategory") {
+        next.jobTitle = "";
+        next.department = "";
+        next.supervisorName = "";
+      }
+
+      if (field.key === "jobTitle") {
+        const organizationRole = findCrewOrganizationRole(value);
+        if (organizationRole) {
+          next.department = `${organizationRole.department} / ${organizationRole.team}`;
+          next.supervisorName = organizationRole.supervisorName;
+        }
+      }
+
       return next;
     });
   }
@@ -260,37 +299,8 @@ export default function CrewProfilePage() {
         ...values,
         [field.key]: url,
       };
-      const nextCompletion = getCrewProfileCompletion(
-        nextValues,
-        nextAttachments
-      );
-
       setAttachments(nextAttachments);
       setValues(nextValues);
-
-      await updateDoc(doc(db, "users", user.uid), {
-        crewProfileAttachments: nextAttachments,
-        crewProfileCompletion: nextCompletion.percent,
-        crewProfileMissingFields: nextCompletion.missing.map(
-          (item) => item.key
-        ),
-        crewProfilePendingVerificationFields:
-          nextCompletion.pendingVerification.map((item) => item.key),
-        crewProfileRejectedFields: nextCompletion.rejected.map(
-          (item) => item.key
-        ),
-        crewProfileExpiredFields: nextCompletion.expired.map(
-          (item) => item.key
-        ),
-        crewProfileExpiringSoonFields: nextCompletion.expiringSoon.map(
-          (item) => item.key
-        ),
-        crewProfileStatus: nextCompletion.status,
-        crewProfileComplianceStatus: nextCompletion.complianceStatus,
-        crewProfileIsComplete: nextCompletion.isComplete,
-        crewProfileIsCompliant: nextCompletion.isCompliant,
-        profileUpdatedAt: serverTimestamp(),
-      });
 
       setMessage(`${field.label} uploaded successfully.`);
     } catch (err) {
@@ -303,7 +313,14 @@ export default function CrewProfilePage() {
 
   function getSelectOptions(field: CrewProfileField) {
     if (field.optionsSource === "roles") {
-      return roles.map((role) => ({ value: role, label: role }));
+      const category = values.roleCategory === "Medical Role" ? "medical" : "non_medical";
+      const configured = CREW_ORGANIZATION_ROLES.filter(
+        (role) => role.category === category
+      ).map((role) => role.title);
+
+      return Array.from(new Set(configured))
+        .sort((a, b) => a.localeCompare(b))
+        .map((role) => ({ value: role, label: role }));
     }
 
     if (field.optionsSource === "projects") {
@@ -317,17 +334,21 @@ export default function CrewProfilePage() {
       ];
     }
 
+    if (field.key === "bankName" || field.key === "alternativeBankName") {
+      return SAUDI_BANKS.map((bank) => ({ value: bank, label: bank }));
+    }
+
     return (field.options || []).map((option) => ({ value: option, label: option }));
   }
 
-  async function saveProfile() {
+  async function saveProfile(action: "save_draft" | "submit" = "save_draft") {
     if (!user?.uid) return;
 
-    if (!isValidSaudiIban(values.iban || "")) {
+    if (values.iban && !isValidSaudiIban(values.iban || "")) {
       setError("IBAN must start with SA followed by exactly 22 digits (24 characters total).");
       return;
     }
-    if (!/^\d{18}$/.test(values.accountNumber || "")) {
+    if (values.accountNumber && !/^\d{18}$/.test(values.accountNumber || "")) {
       setError("Account Number must contain exactly 18 digits.");
       return;
     }
@@ -360,51 +381,67 @@ export default function CrewProfilePage() {
         .filter(Boolean)
         .join(" ");
 
-      await updateDoc(doc(db, "users", user.uid), {
-        crewProfile,
-        crewProfileAttachments: attachments,
-        crewProfileCompletion: completion.percent,
-        crewProfileMissingFields: completion.missing.map((field) => field.key),
-        crewProfilePendingVerificationFields: completion.pendingVerification.map(
-          (field) => field.key
-        ),
-        crewProfileRejectedFields: completion.rejected.map((field) => field.key),
-        crewProfileExpiredFields: completion.expired.map((field) => field.key),
-        crewProfileExpiringSoonFields: completion.expiringSoon.map(
-          (field) => field.key
-        ),
-        crewProfileStatus: completion.status,
-        crewProfileComplianceStatus: completion.complianceStatus,
-        crewProfileIsComplete: completion.isComplete,
-        crewProfileIsCompliant: completion.isCompliant,
-        profileUpdatedAt: serverTimestamp(),
-        name:
-          fullNameEn ||
-          fullNameAr ||
-          user.name ||
-          user.displayName ||
-          user.email ||
-          "",
-        fullNameEn,
-        fullNameAr,
-        employeeId: crewProfile.employeeId || user.employeeId || "",
-        mobile: mobileWithCode || user.mobile || "",
-        iban: crewProfile.iban || "",
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("You must be signed in.");
+      const response = await fetch("/api/crew-profile", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          crewProfile,
+          fullNameEn,
+          fullNameAr,
+          mobileWithCode,
+        }),
       });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save the profile.");
 
       setValues((current) => ({
         ...current,
         iban: formatIban(current.iban || ""),
         alternativeIban: formatIban(current.alternativeIban || ""),
       }));
+      setReviewStatus(result.status || reviewStatus);
+      setShowSubmitConfirmation(false);
       setMessage(
-        completion.isCompliant
-          ? "Crew profile saved and marked compliant."
-          : "Crew profile saved as a draft. Complete the required fields to become compliant."
+        action === "submit"
+          ? "Profile submitted successfully and locked for HR review."
+          : "Draft saved successfully."
       );
     } catch (err) {
       console.error("Failed to save crew profile", err);
-      setError("Could not save the profile. Please try again.");
+      setError(err instanceof Error ? err.message : "Could not save the profile.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function requestProfileUpdate() {
+    const reason = window.prompt("Why do you need HR to reopen this profile?");
+    if (!reason?.trim()) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/crew-profile", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "request_update", reason }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not send the request.");
+      setReviewStatus("update_requested");
+      setMessage("Your update request was sent to HR.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the request.");
     } finally {
       setSaving(false);
     }
@@ -438,11 +475,51 @@ export default function CrewProfilePage() {
           </p>
         </div>
 
-        <button onClick={saveProfile} disabled={saving} className="btn-primary gap-2">
-          <Save size={16} />
-          {saving ? "Saving..." : "Save Profile"}
-        </button>
+        {isEditable ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => saveProfile("save_draft")}
+              disabled={saving}
+              className="btn-secondary gap-2"
+            >
+              <Save size={16} />
+              {saving ? "Saving..." : "Save Draft"}
+            </button>
+            <button
+              onClick={() => setShowSubmitConfirmation(true)}
+              disabled={saving}
+              className="btn-primary gap-2"
+            >
+              <Send size={16} />
+              Submit
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={requestProfileUpdate}
+            disabled={saving || reviewStatus === "update_requested"}
+            className="btn-secondary"
+          >
+            {reviewStatus === "update_requested" ? "Update Requested" : "Request an Update"}
+          </button>
+        )}
       </div>
+
+      {!isEditable && (
+        <div className="notice-warning mb-4">
+          <div className="font-black">
+            {reviewStatus === "verified"
+              ? "Verified - تم التحقق من البيانات"
+              : reviewStatus === "update_requested"
+              ? "Update request pending HR approval"
+              : "Submitted - Your profile is under HR review"}
+          </div>
+          <p className="mt-1 text-sm">
+            This profile is locked. HR approval is required before any data or attachment can be changed.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
@@ -644,6 +721,13 @@ export default function CrewProfilePage() {
                 </div>
               </div>
 
+              {section.key === "personal" && (
+                <div className="notice-danger mb-4 font-black">
+                  يجب كتابة الاسم بالعربية والإنجليزية مطابقًا تمامًا لجواز السفر.
+                  <div className="mt-1">Arabic and English names must match the passport exactly.</div>
+                </div>
+              )}
+
               {section.key === "credentials" && !values.jobTitle && (
                 <div className="notice-warning mb-4">
                   Select a Job Title in Employment Details to load the applicable
@@ -661,7 +745,11 @@ export default function CrewProfilePage() {
                   </div>
                 )}
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div
+                className={`grid gap-4 ${
+                  section.key === "employment" ? "md:grid-cols-3" : "md:grid-cols-2"
+                }`}
+              >
                 {visibleFields.map((field) => (
                   <label key={field.key} className={fieldSpan(field)}>
                     <span className="field-label">
@@ -671,10 +759,114 @@ export default function CrewProfilePage() {
                       )}
                     </span>
 
-                    {field.type === "select" ? (
+                    {field.key === "roleCategory" ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {["Medical Role", "Non-Medical Role"].map((option) => (
+                          <span
+                            key={option}
+                            className="flex items-center gap-2 rounded-2xl border border-slate-200 p-3 dark:border-slate-700"
+                          >
+                            <input
+                              type="radio"
+                              name="roleCategory"
+                              value={option}
+                              checked={values.roleCategory === option}
+                              disabled={!isEditable}
+                              onChange={() => updateField(field, option)}
+                            />
+                            <span className="font-bold">{option}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : field.key === "availableWeekDays" ? (
+                      <div className="space-y-2">
+                        {WEEK_DAYS.map((day) => {
+                          const availability = parseAvailability(values.availableWeekDays || "");
+                          const selected = Boolean(availability[day]);
+                          const setDay = (nextValue: any) =>
+                            updateField(
+                              field,
+                              JSON.stringify({ ...availability, [day]: nextValue })
+                            );
+                          return (
+                            <div key={day} className="grid items-center gap-2 rounded-xl border border-slate-200 p-2 sm:grid-cols-[130px_1fr_1fr] dark:border-slate-700">
+                              <label className="flex items-center gap-2 font-bold">
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  disabled={!isEditable}
+                                  onChange={(event) => {
+                                    const next = { ...availability };
+                                    if (event.target.checked) next[day] = { from: "", to: "" };
+                                    else delete next[day];
+                                    updateField(field, JSON.stringify(next));
+                                  }}
+                                />
+                                {day}
+                              </label>
+                              <input
+                                className="input"
+                                type="time"
+                                aria-label={`${day} available from`}
+                                disabled={!isEditable || !selected}
+                                value={availability[day]?.from || ""}
+                                onChange={(event) => setDay({ ...availability[day], from: event.target.value })}
+                              />
+                              <input
+                                className="input"
+                                type="time"
+                                aria-label={`${day} available to`}
+                                disabled={!isEditable || !selected}
+                                value={availability[day]?.to || ""}
+                                onChange={(event) => setDay({ ...availability[day], to: event.target.value })}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : field.key === "coverageCitiesWithin48h" ? (
+                      <select
+                        className="select min-h-48"
+                        multiple
+                        disabled={!isEditable}
+                        value={parseStringList(values.coverageCitiesWithin48h || "")}
+                        onChange={(event) =>
+                          updateField(
+                            field,
+                            JSON.stringify(
+                              Array.from(event.currentTarget.selectedOptions).map(
+                                (option) => option.value
+                              )
+                            )
+                          )
+                        }
+                      >
+                        {SAUDI_COVERAGE_CITIES.map((city) => (
+                          <option key={city} value={city}>{city}</option>
+                        ))}
+                      </select>
+                    ) : field.key === "bankName" || field.key === "alternativeBankName" ? (
+                      <>
+                        <input
+                          className="input"
+                          list={`${field.key}-options`}
+                          value={values[field.key] || ""}
+                          disabled={!isEditable}
+                          placeholder="Search or select a bank"
+                          onChange={(event) => updateField(field, event.target.value)}
+                        />
+                        <datalist id={`${field.key}-options`}>
+                          {SAUDI_BANKS.map((bank) => <option key={bank} value={bank} />)}
+                        </datalist>
+                      </>
+                    ) : field.type === "select" ? (
                       <select
                         className="select"
                         value={values[field.key] || ""}
+                        disabled={
+                          !isEditable ||
+                          (field.key === "jobTitle" && !values.roleCategory)
+                        }
                         onChange={(event) => updateField(field, event.target.value)}
                       >
                         <option value="">Select</option>
@@ -689,6 +881,7 @@ export default function CrewProfilePage() {
                         <input
                           className="input"
                           type="file"
+                          disabled={!isEditable}
                           onChange={(event) =>
                             uploadAttachment(field, event.target.files?.[0])
                           }
@@ -718,6 +911,7 @@ export default function CrewProfilePage() {
                       <textarea
                         className="textarea"
                         value={values[field.key] || ""}
+                        disabled={!isEditable}
                         placeholder={field.placeholder || ""}
                         onChange={(event) => updateField(field, event.target.value)}
                       />
@@ -726,6 +920,8 @@ export default function CrewProfilePage() {
                         className="input"
                         type={field.type}
                         value={values[field.key] || ""}
+                        readOnly={field.key === "department" || field.key === "supervisorName"}
+                        disabled={!isEditable}
                         placeholder={field.placeholder || ""}
                         maxLength={
                           field.key === "iban" || field.key === "alternativeIban"
@@ -756,14 +952,48 @@ export default function CrewProfilePage() {
             );
           })}
 
-          <div className="sticky bottom-4 flex justify-end">
-            <button onClick={saveProfile} disabled={saving} className="btn-primary gap-2">
-              <Save size={16} />
-              {saving ? "Saving..." : "Save Profile"}
-            </button>
-          </div>
+          {isEditable && (
+            <div className="sticky bottom-4 flex justify-end gap-2">
+              <button
+                onClick={() => saveProfile("save_draft")}
+                disabled={saving}
+                className="btn-secondary gap-2"
+              >
+                <Save size={16} />
+                {saving ? "Saving..." : "Save Draft"}
+              </button>
+              <button
+                onClick={() => setShowSubmitConfirmation(true)}
+                disabled={saving}
+                className="btn-primary gap-2"
+              >
+                <Send size={16} /> Submit
+              </button>
+            </div>
+          )}
         </main>
       </div>
+
+      {showSubmitConfirmation && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4">
+          <div className="card-modern w-full max-w-lg">
+            <h2 className="text-xl font-black">Confirm Profile Submission</h2>
+            <div className="notice-warning mt-4">
+              After submission, you will not be able to edit any data or attachment.
+              Any later change requires an update request approved by HR.
+            </div>
+            <p className="mt-4 font-bold">Are you sure all information is complete and correct?</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setShowSubmitConfirmation(false)}>
+                Cancel
+              </button>
+              <button className="btn-primary" disabled={saving} onClick={() => saveProfile("submit")}>
+                {saving ? "Submitting..." : "Confirm Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

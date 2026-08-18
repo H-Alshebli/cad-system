@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import PermissionGuard from "@/app/components/PermissionGuard";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { getProjectDisplayName } from "@/lib/displayLabels";
@@ -40,6 +40,9 @@ type CrewUser = {
   crewProfile?: Record<string, string>;
   crewProfileAttachments?: CrewProfileAttachments;
   profileUpdatedAt?: any;
+  crewProfileReviewStatus?: string;
+  crewProfileReviewNotes?: string;
+  crewProfileUpdateRequestReason?: string;
 };
 
 type CrewProject = {
@@ -165,7 +168,29 @@ function fieldDisplayValue(fieldKey: string, values: CrewProfileValues, attachme
     return attachments?.[fieldKey]?.name || "";
   }
 
-  return values[fieldKey] || "";
+  const rawValue = values[fieldKey] || "";
+  if (fieldKey === "coverageCitiesWithin48h") {
+    try {
+      const cities = JSON.parse(rawValue);
+      return Array.isArray(cities) ? cities.join(", ") : rawValue;
+    } catch {
+      return rawValue;
+    }
+  }
+  if (fieldKey === "availableWeekDays") {
+    try {
+      const availability = JSON.parse(rawValue);
+      return Object.entries(availability)
+        .map(([day, hours]: [string, any]) =>
+          `${day}: ${hours?.from || "-"} - ${hours?.to || "-"}`
+        )
+        .join(", ");
+    } catch {
+      return rawValue;
+    }
+  }
+
+  return rawValue;
 }
 
 function todayFileStamp() {
@@ -175,6 +200,18 @@ function todayFileStamp() {
   const day = String(now.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function contractDaysLabel(value: string) {
+  if (!value) return "No end date";
+  const end = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return "Invalid date";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+  if (days < 0) return `Expired ${Math.abs(days)}d ago`;
+  if (days === 0) return "Ends today";
+  return `${days} days left`;
 }
 
 export default function CrewProfilesDashboardPage() {
@@ -191,6 +228,7 @@ export default function CrewProfilesDashboardPage() {
   const [supervisorFilter, setSupervisorFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
   const [reviewingAttachment, setReviewingAttachment] = useState("");
+  const [reviewingProfile, setReviewingProfile] = useState(false);
   const canReviewAttachments =
     isAdmin || can("crew_profile", "edit_all");
 
@@ -482,6 +520,71 @@ export default function CrewProfilesDashboardPage() {
     }
   }
 
+  async function reviewProfile(
+    targetUser: CrewUser,
+    action: "verify" | "request_changes" | "reopen" | "reject_update"
+  ) {
+    if (!reviewer?.uid || !canReviewAttachments) return;
+    const notes =
+      action === "request_changes"
+        ? window.prompt("Enter the changes required from the employee:")
+        : action === "reject_update"
+        ? window.prompt("Optional reason for rejecting the update request:") || ""
+        : "";
+    if (action === "request_changes" && !String(notes || "").trim()) return;
+
+    setReviewingProfile(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/crew-profile/review", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: targetUser.id, action, notes }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not review the profile.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not review the profile.");
+    } finally {
+      setReviewingProfile(false);
+    }
+  }
+
+  async function updateContractEndDate(targetUser: CrewUser) {
+    const currentValue = getCrewProfileValues(targetUser).contractEndDate || "";
+    const contractEndDate = window.prompt(
+      "Enter the contract end date as YYYY-MM-DD. Leave blank to remove it:",
+      currentValue
+    );
+    if (contractEndDate === null) return;
+
+    setReviewingProfile(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/crew-profile/review", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: targetUser.id,
+          action: "update_contract",
+          contractEndDate,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update the contract date.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not update the contract date.");
+    } finally {
+      setReviewingProfile(false);
+    }
+  }
+
   function exportToExcel() {
     const exportRows = filteredRows.map((row) => {
       const attachments = row.user.crewProfileAttachments || {};
@@ -731,6 +834,7 @@ export default function CrewProfilesDashboardPage() {
                 <th className="p-4">Mobile</th>
                 <th className="p-4">City</th>
                 <th className="p-4">Project</th>
+                <th className="p-4">Contract</th>
                 <th className="p-4">Completion</th>
                 <th className="p-4">Missing</th>
                 <th className="p-4">Files</th>
@@ -742,13 +846,13 @@ export default function CrewProfilesDashboardPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={11}>
+                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={12}>
                     Loading crew profiles...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={11}>
+                  <td className="p-5 text-slate-500 dark:text-slate-400" colSpan={12}>
                     No crew profiles match the current filters.
                   </td>
                 </tr>
@@ -775,6 +879,21 @@ export default function CrewProfilesDashboardPage() {
                     </td>
                     <td className="p-4">{row.values.city || "-"}</td>
                     <td className="p-4 text-xs">{row.projectNames.join(", ") || "Unassigned"}</td>
+                    <td className="p-4">
+                      <span
+                        className={`badge ${
+                          row.values.contractEndDate &&
+                          contractDaysLabel(row.values.contractEndDate).includes("left") &&
+                          Number(contractDaysLabel(row.values.contractEndDate).split(" ")[0]) <= 90
+                            ? "border-amber-500/25 bg-amber-500/10 text-amber-700"
+                            : contractDaysLabel(row.values.contractEndDate).startsWith("Expired")
+                            ? "border-red-500/25 bg-red-500/10 text-red-700"
+                            : ""
+                        }`}
+                      >
+                        {contractDaysLabel(row.values.contractEndDate)}
+                      </span>
+                    </td>
                     <td className="p-4">
                       <span
                         className={`badge ${statusClass(row.completion.complianceStatus)}`}
@@ -851,6 +970,78 @@ export default function CrewProfilesDashboardPage() {
                   <div className="mt-1 text-2xl font-black">
                     {selectedRow.attachmentCount}
                   </div>
+                </div>
+              </div>
+
+              <div className="card-modern mb-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-slate-500">HR Review Status</div>
+                    <div className="mt-1 text-lg font-black capitalize">
+                      {(selectedRow.user.crewProfileReviewStatus || "draft").replaceAll("_", " ")}
+                    </div>
+                    {selectedRow.user.crewProfileReviewNotes && (
+                      <p className="mt-2 text-sm">{selectedRow.user.crewProfileReviewNotes}</p>
+                    )}
+                    {selectedRow.user.crewProfileUpdateRequestReason && (
+                      <div className="notice-warning mt-3">
+                        Update request: {selectedRow.user.crewProfileUpdateRequestReason}
+                      </div>
+                    )}
+                  </div>
+
+                  {canReviewAttachments && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={reviewingProfile}
+                        onClick={() => updateContractEndDate(selectedRow.user)}
+                        className="btn-secondary"
+                      >
+                        Edit Contract End
+                      </button>
+                      {selectedRow.user.crewProfileReviewStatus === "submitted" && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={reviewingProfile}
+                            onClick={() => reviewProfile(selectedRow.user, "request_changes")}
+                            className="btn-secondary"
+                          >
+                            Request Changes
+                          </button>
+                          <button
+                            type="button"
+                            disabled={reviewingProfile}
+                            onClick={() => reviewProfile(selectedRow.user, "verify")}
+                            className="btn-primary"
+                          >
+                            Verify Profile
+                          </button>
+                        </>
+                      )}
+                      {selectedRow.user.crewProfileReviewStatus === "update_requested" && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={reviewingProfile}
+                            onClick={() => reviewProfile(selectedRow.user, "reject_update")}
+                            className="btn-secondary"
+                          >
+                            Reject Request
+                          </button>
+                          <button
+                            type="button"
+                            disabled={reviewingProfile}
+                            onClick={() => reviewProfile(selectedRow.user, "reopen")}
+                            className="btn-primary"
+                          >
+                            Approve & Reopen
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

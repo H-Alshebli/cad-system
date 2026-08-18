@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 
-import { CREW_PROFILE_SECTIONS } from "@/lib/crewProfile";
+import {
+  CREW_PROFILE_SECTIONS,
+  getCrewProfileCompletion,
+  getCrewProfileValues,
+} from "@/lib/crewProfile";
 import { adminAuth, adminDb, getAdminStorageBucket } from "@/lib/server/firebaseAdmin";
 
 export const runtime = "nodejs";
@@ -13,6 +18,12 @@ const CREW_ATTACHMENT_KEYS = new Set(
     section.fields.filter((field) => field.type === "file").map((field) => field.key)
   )
 );
+const EDITABLE_PROFILE_STATUSES = new Set([
+  "",
+  "draft",
+  "changes_required",
+  "reopened",
+]);
 
 function safeFileName(fileName: string) {
   const cleaned = String(fileName || "file")
@@ -65,6 +76,20 @@ export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
     const file = form.get("file");
+    const category = String(form.get("category") || "");
+    const userRef = adminDb.collection("users").doc(user.uid);
+    const userSnapshot = await userRef.get();
+    const userData = userSnapshot.data() || {};
+
+    if (category === "crew-profile") {
+      const reviewStatus = String(userData.crewProfileReviewStatus || "draft");
+      if (!EDITABLE_PROFILE_STATUSES.has(reviewStatus)) {
+        return NextResponse.json(
+          { error: "This profile is locked. Request HR approval before uploading." },
+          { status: 423 }
+        );
+      }
+    }
 
     if (!(file instanceof File) || file.size === 0) {
       return NextResponse.json({ error: "A non-empty file is required." }, { status: 400 });
@@ -97,16 +122,66 @@ export async function POST(request: NextRequest) {
 
     const encodedPath = encodeURIComponent(path);
     const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+    const uploadedAt = new Date().toISOString();
+    const fieldKey = String(form.get("fieldKey") || "");
+    const fileData = {
+      name: file.name,
+      url,
+      path,
+      bucket: bucket.name,
+      contentType,
+      size: file.size,
+      uploadedAt,
+      uploadedById: user.uid,
+      uploadedByName:
+        userData.name || userData.displayName || user.email || "Crew Member",
+      status: "uploaded",
+      verificationHistory: [
+        ...(userData.crewProfileAttachments?.[fieldKey]?.verificationHistory || []),
+        {
+          action: "uploaded",
+          at: uploadedAt,
+          actorId: user.uid,
+          actorName:
+            userData.name || userData.displayName || user.email || "Crew Member",
+          actorEmail: user.email || "",
+        },
+      ],
+    };
+
+    if (category === "crew-profile") {
+      const nextAttachments = {
+        ...(userData.crewProfileAttachments || {}),
+        [fieldKey]: fileData,
+      };
+      const nextValues = {
+        ...getCrewProfileValues(userData),
+        [fieldKey]: url,
+      };
+      const completion = getCrewProfileCompletion(nextValues, nextAttachments);
+
+      await userRef.update({
+        crewProfileAttachments: nextAttachments,
+        crewProfileCompletion: completion.percent,
+        crewProfileMissingFields: completion.missing.map((item) => item.key),
+        crewProfilePendingVerificationFields: completion.pendingVerification.map(
+          (item) => item.key
+        ),
+        crewProfileRejectedFields: completion.rejected.map((item) => item.key),
+        crewProfileExpiredFields: completion.expired.map((item) => item.key),
+        crewProfileExpiringSoonFields: completion.expiringSoon.map(
+          (item) => item.key
+        ),
+        crewProfileStatus: completion.status,
+        crewProfileComplianceStatus: completion.complianceStatus,
+        crewProfileIsComplete: completion.isComplete,
+        crewProfileIsCompliant: completion.isCompliant,
+        profileUpdatedAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     return NextResponse.json({
-      file: {
-        name: file.name,
-        url,
-        path,
-        bucket: bucket.name,
-        contentType,
-        size: file.size,
-      },
+      file: fileData,
     });
   } catch (error) {
     console.error("Server-side Storage upload failed", error);
