@@ -18,6 +18,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import {
+  CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
   isCrewComplianceSubject,
 } from "@/lib/crewProfile";
@@ -513,6 +514,8 @@ export default function EditProjectPage({
   }, [hospitals, hospitalSearch]);
 
   const requestComplianceOverride = (user: User, forceCrew = false) => {
+    if (!CREW_COMPLIANCE_ENFORCEMENT_ENABLED) return true;
+
     const readiness = getCrewDeploymentReadiness(user);
     if ((!forceCrew && !isCrewComplianceSubject(user)) || readiness.ready) return true;
     if (crewComplianceOverrides[user.id]) return true;
@@ -705,7 +708,7 @@ export default function EditProjectPage({
         !getCrewDeploymentReadiness(user).ready &&
         !crewComplianceOverrides[user.id]
     );
-    if (blocked.length) {
+    if (CREW_COMPLIANCE_ENFORCEMENT_ENABLED && blocked.length) {
       alert(
         `Project cannot be saved. Resolve crew compliance for:\n${blocked
           .map((user) => `- ${getUserName(user)}`)
@@ -1212,7 +1215,9 @@ return (
                                         ? "Compliant"
                                         : overridden
                                         ? "Administrative override"
-                                        : `${readiness.complianceStatus} - assignment blocked`}
+                                        : CREW_COMPLIANCE_ENFORCEMENT_ENABLED
+                                        ? `${readiness.complianceStatus} - assignment blocked`
+                                        : "Profile pending - not enforced"}
                                     </span>
                                   )}
                                 </span>
@@ -1500,7 +1505,9 @@ return (
                                                 ? " - Compliant"
                                                 : crewComplianceOverrides[u.id]
                                                 ? " - Override approved"
-                                                : " - Blocked"}
+                                                : CREW_COMPLIANCE_ENFORCEMENT_ENABLED
+                                                ? " - Blocked"
+                                                : " - Profile pending"}
                                             </option>
                                           ))}
                                       </select>

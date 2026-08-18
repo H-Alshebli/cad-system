@@ -16,6 +16,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import {
+  CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
   isCrewComplianceSubject,
 } from "@/lib/crewProfile";
@@ -399,6 +400,8 @@ export default function NewProjectPage() {
   }, [hospitals, hospitalSearch]);
 
   const requestComplianceOverride = (user: User) => {
+    if (!CREW_COMPLIANCE_ENFORCEMENT_ENABLED) return true;
+
     const readiness = getCrewDeploymentReadiness(user);
     if (readiness.ready || crewComplianceOverrides[user.id]) return true;
 
@@ -631,7 +634,7 @@ export default function NewProjectPage() {
     const blocked = unique(
       [...blockedCrew, ...blockedAmbulanceCrew].map((user) => user.id)
     ).map((id) => users.find((user) => user.id === id) as User);
-    if (blocked.length) {
+    if (CREW_COMPLIANCE_ENFORCEMENT_ENABLED && blocked.length) {
       alert(
         `Project cannot be created. Resolve crew compliance for:\n${blocked
           .map((user) => `- ${getUserName(user)}`)
@@ -1055,7 +1058,9 @@ export default function NewProjectPage() {
                                           ? "Compliant"
                                           : overridden
                                           ? "Administrative override"
-                                          : `${readiness.complianceStatus} - assignment blocked`}
+                                          : CREW_COMPLIANCE_ENFORCEMENT_ENABLED
+                                          ? `${readiness.complianceStatus} - assignment blocked`
+                                          : "Profile pending - not enforced"}
                                       </span>
                                     )}
                                   </span>
@@ -1329,7 +1334,9 @@ export default function NewProjectPage() {
                                         ? " - Compliant"
                                         : crewComplianceOverrides[user.id]
                                         ? " - Override approved"
-                                        : " - Blocked"}
+                                        : CREW_COMPLIANCE_ENFORCEMENT_ENABLED
+                                        ? " - Blocked"
+                                        : " - Profile pending"}
                                     </option>
                                   )
                                 )}

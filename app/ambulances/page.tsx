@@ -15,6 +15,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import {
+  CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
 } from "@/lib/crewProfile";
 import { syncAmbulanceCrewAssignments } from "@/lib/ambulanceCrewSync";
@@ -223,6 +224,7 @@ export default function AmbulancesPage() {
 
   const getComplianceLabel = (user: AppUser, ambulance?: Ambulance) => {
     if (getCrewDeploymentReadiness(user).ready) return " - Compliant";
+    if (!CREW_COMPLIANCE_ENFORCEMENT_ENABLED) return " - Profile pending";
     if (ambulance?.crewComplianceOverrides?.[user.id]) {
       return " - Override approved";
     }
@@ -254,6 +256,8 @@ export default function AmbulancesPage() {
     crewUserIds: string[],
     existingOverrides: CrewComplianceOverrides = {}
   ): CrewComplianceOverrides | null => {
+    if (!CREW_COMPLIANCE_ENFORCEMENT_ENABLED) return existingOverrides;
+
     const overrides: CrewComplianceOverrides = {};
 
     for (const userId of Array.from(new Set(crewUserIds.filter(Boolean)))) {

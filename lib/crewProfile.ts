@@ -1,5 +1,9 @@
 import { findCrewOrganizationRole } from "@/lib/crewOrganization";
 
+// Temporary launch flag. Keep profile compliance reporting active while allowing
+// operational assignments until employees have been asked to complete profiles.
+export const CREW_COMPLIANCE_ENFORCEMENT_ENABLED = false;
+
 export type CrewProfileFieldType =
   | "text"
   | "email"
