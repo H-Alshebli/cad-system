@@ -235,11 +235,21 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
       { key: "passportExpiry", label: "Passport Expiry Date", type: "date" },
       { key: "passportAttachment", label: "Passport Attachment", type: "file" },
       { key: "medicalDegreeAttachment", label: "Medical Degree Attachment", type: "file" },
-      {
-        key: "malpracticeInsuranceAttachment",
-        label: "Malpractice Insurance Attachment",
-        type: "file",
-      },
+    {
+  key: "malpracticeInsuranceCertificateNumber",
+  label: "Malpractice Insurance Certificate Number",
+  type: "text",
+},
+{
+  key: "malpracticeInsuranceExpiry",
+  label: "Malpractice Insurance Expiry Date",
+  type: "date",
+},
+{
+  key: "malpracticeInsuranceAttachment",
+  label: "Malpractice Insurance Attachment",
+  type: "file",
+},
     ],
   },
   {
@@ -611,6 +621,8 @@ const atlsKeys = requirementKeys(atlsRequirements);
 const palsKeys = requirementKeys(palsRequirements);
 const medicalOptionalDocumentKeys = new Set([
   "medicalDegreeAttachment",
+  "malpracticeInsuranceCertificateNumber",
+  "malpracticeInsuranceExpiry",
   "malpracticeInsuranceAttachment",
 ]);
 const credentialFieldKeys = new Set(
