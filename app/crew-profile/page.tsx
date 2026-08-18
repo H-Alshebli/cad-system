@@ -825,26 +825,75 @@ export default function CrewProfilePage() {
                         })}
                       </div>
                     ) : field.key === "coverageCitiesWithin48h" ? (
-                      <select
-                        className="select min-h-48"
-                        multiple
-                        disabled={!isEditable}
-                        value={parseStringList(values.coverageCitiesWithin48h || "")}
-                        onChange={(event) =>
-                          updateField(
-                            field,
-                            JSON.stringify(
-                              Array.from(event.currentTarget.selectedOptions).map(
-                                (option) => option.value
-                              )
-                            )
-                          )
-                        }
-                      >
-                        {SAUDI_COVERAGE_CITIES.map((city) => (
-                          <option key={city} value={city}>{city}</option>
-                        ))}
-                      </select>
+                      <div className="space-y-2">
+                        {parseStringList(values.coverageCitiesWithin48h || "").length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {parseStringList(values.coverageCitiesWithin48h || "").map((city) => (
+                              <span
+                                key={city}
+                                className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-sm font-bold text-cyan-900 dark:bg-cyan-950 dark:text-cyan-100"
+                              >
+                                {city}
+                                {isEditable && (
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove ${city}`}
+                                    className="text-lg leading-none text-cyan-700 hover:text-red-600 dark:text-cyan-300"
+                                    onClick={() =>
+                                      updateField(
+                                        field,
+                                        JSON.stringify(
+                                          parseStringList(values.coverageCitiesWithin48h || "").filter(
+                                            (selectedCity) => selectedCity !== city
+                                          )
+                                        )
+                                      )
+                                    }
+                                  >
+                                    &times;
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <details className="group rounded-xl border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+                          <summary className="cursor-pointer list-none px-4 py-3 font-bold text-slate-700 dark:text-slate-200">
+                            {parseStringList(values.coverageCitiesWithin48h || "").length
+                              ? `${parseStringList(values.coverageCitiesWithin48h || "").length} cities selected — click to edit`
+                              : "Select cities"}
+                          </summary>
+                          <div className="max-h-64 space-y-1 overflow-y-auto border-t border-slate-200 p-2 dark:border-slate-700">
+                            {SAUDI_COVERAGE_CITIES.map((city) => {
+                              const selectedCities = parseStringList(values.coverageCitiesWithin48h || "");
+                              const checked = selectedCities.includes(city);
+                              return (
+                                <label
+                                  key={city}
+                                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={!isEditable}
+                                    onChange={() =>
+                                      updateField(
+                                        field,
+                                        JSON.stringify(
+                                          checked
+                                            ? selectedCities.filter((selectedCity) => selectedCity !== city)
+                                            : [...selectedCities, city]
+                                        )
+                                      )
+                                    }
+                                  />
+                                  <span>{city}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      </div>
                     ) : field.key === "bankName" || field.key === "alternativeBankName" ? (
                       <>
                         <input
