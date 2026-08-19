@@ -241,14 +241,12 @@ export default function CrewProfilePage() {
       if (field.key === "roleCategory") {
         next.jobTitle = "";
         next.department = "";
-        next.supervisorName = "";
       }
 
       if (field.key === "jobTitle") {
         const organizationRole = findCrewOrganizationRole(value);
         if (organizationRole) {
           next.department = `${organizationRole.department} / ${organizationRole.team}`;
-          next.supervisorName = organizationRole.supervisorName;
         }
       }
 
@@ -969,7 +967,7 @@ export default function CrewProfilePage() {
                         className="input"
                         type={field.type}
                         value={values[field.key] || ""}
-                        readOnly={field.key === "department" || field.key === "supervisorName"}
+                        readOnly={field.key === "department"}
                         disabled={!isEditable}
                         placeholder={field.placeholder || ""}
                         maxLength={

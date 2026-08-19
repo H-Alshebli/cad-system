@@ -21,7 +21,7 @@ export default function ProtectedLayout({
     }
 
     if (user.active === false) {
-      router.replace("/login");
+      router.replace("/crew-profile");
       return;
     }
 

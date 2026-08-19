@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
 import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
 import EnvironmentBanner from "./EnvironmentBanner";
+import { auth } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 const PUBLIC_ROUTES = ["/login", "/register"];
 
@@ -14,6 +17,8 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading } = useCurrentUser();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -25,8 +30,63 @@ export default function AppShell({
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
+  const isCrewProfileRoute =
+    pathname === "/crew-profile" || pathname.startsWith("/crew-profile/");
+
+  useEffect(() => {
+    if (isPublicRoute || loading) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    if (user.active === false && !isCrewProfileRoute) {
+      router.replace("/crew-profile");
+      return;
+    }
+    if (user.active !== false && (!user.role || user.role === "none") && !isCrewProfileRoute) {
+      router.replace("/login");
+    }
+  }, [isCrewProfileRoute, isPublicRoute, loading, router, user]);
+
   if (isPublicRoute) {
     return <>{children}</>;
+  }
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#eef4f6] text-sm font-semibold text-[#274C5A]">
+        Loading...
+      </div>
+    );
+  }
+
+  if (user.active === false) {
+    if (!isCrewProfileRoute) return null;
+
+    return (
+      <div className="min-h-screen bg-[#eef4f6] text-[#274C5A]">
+        <EnvironmentBanner />
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#86A7B2]/25 bg-white px-4 py-3 lg:px-6">
+          <div>
+            <div className="font-black">Lazem HCAD</div>
+            <div className="text-xs font-semibold text-[#607482]">
+              Account pending activation — complete your crew profile
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut(auth);
+              router.replace("/login");
+            }}
+            className="rounded-xl border border-[#c8dce2] bg-white px-4 py-2 text-sm font-black text-[#274C5A]"
+          >
+            Logout
+          </button>
+        </header>
+        <main className="mx-auto w-full max-w-[96rem] px-4 py-5 lg:px-6">{children}</main>
+      </div>
+    );
   }
 
   return (

@@ -19,6 +19,7 @@ type UserType = {
   email: string;
   role: string;
   active: boolean;
+  accountStatus?: "pending" | "active" | "suspended";
 };
 
 export default function UsersPage() {
@@ -33,7 +34,7 @@ export default function UsersPage() {
     Name: u.name,
     Email: u.email,
     Role: u.role,
-    Status: u.active ? "Active" : "Disabled",
+    Status: u.active ? "Active" : "Pending",
   }));
 
   // Create worksheet
@@ -61,10 +62,10 @@ export default function UsersPage() {
   ========================= */
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<UserType, "id">),
-      }));
+      const list = snap.docs.map((d) => {
+        const data = d.data() as Omit<UserType, "id">;
+        return { id: d.id, ...data, active: data.active !== false };
+      });
       setUsers(list);
       setLoading(false);
     });
@@ -96,8 +97,10 @@ export default function UsersPage() {
      TOGGLE ACTIVE
   ========================= */
   const toggleActive = async (user: UserType) => {
+    const active = !user.active;
     await updateDoc(doc(db, "users", user.id), {
-      active: !user.active,
+      active,
+      accountStatus: active ? "active" : "pending",
     });
   };
 
@@ -186,7 +189,7 @@ return (
                           : "border-[#c8dce2] bg-[#edf3f5] text-[#607482]"
                       }`}
                   >
-                    {u.active ? "Active" : "Disabled"}
+                    {u.active ? "Active" : "Pending"}
                   </button>
                 </td>
               </tr>

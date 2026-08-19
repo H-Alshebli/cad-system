@@ -23,8 +23,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (loading) return;
 
-    if (user && user.active === true && user.role && user.role !== "none") {
-      router.replace("/welcome");
+    if (user) {
+      if (user.active === false) router.replace("/crew-profile");
+      else if (user.role && user.role !== "none") router.replace("/welcome");
     }
   }, [user, loading, router]);
 
@@ -60,23 +61,22 @@ export default function LoginPage() {
           {
             email: fbUser.email,
             name: fbUser.displayName || email.split("@")[0],
-            active: true,
+            active: false,
+            accountStatus: "pending",
             role: "none",
             createdAt: serverTimestamp(),
           },
           { merge: true }
         );
 
-        setError("Your account is pending activation. Please contact admin.");
-        setSubmitting(false);
+        router.replace("/crew-profile");
         return;
       }
 
       const data = snap.data();
 
       if (data.active === false) {
-        setError("Your account is disabled");
-        setSubmitting(false);
+        router.replace("/crew-profile");
         return;
       }
 

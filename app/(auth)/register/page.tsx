@@ -31,15 +31,15 @@ export default function RegisterPage() {
         {
           name,
           email: fbUser.email,
-          active: true,
+          active: false,
+          accountStatus: "pending",
           role: "none",
           createdAt: serverTimestamp(),
         },
         { merge: true }
       );
 
-      alert("Account created. Please contact admin to activate your role.");
-      router.replace("/login");
+      router.replace("/crew-profile");
     } catch (err: any) {
       setError(err.message || "Registration failed");
       setSubmitting(false);
