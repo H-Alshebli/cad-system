@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   onSnapshot,
@@ -144,6 +144,8 @@ function buildFullName(profile: Record<string, string>, language: "en" | "ar") {
 
 export default function CrewProfilePage() {
   const { user, loading } = useCurrentUser();
+  const hydratedUserIdRef = useRef("");
+  const hasUnsavedChangesRef = useRef(false);
   const [values, setValues] = useState<CrewProfileValues>({});
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState("");
@@ -159,8 +161,19 @@ export default function CrewProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    setValues(getCrewProfileValues(user));
-    setAttachments(user.crewProfileAttachments || {});
+
+    const isDifferentUser = hydratedUserIdRef.current !== user.uid;
+    if (isDifferentUser) {
+      hydratedUserIdRef.current = user.uid;
+      hasUnsavedChangesRef.current = false;
+    }
+
+    // Firestore may emit a cached snapshot followed by a server snapshot.
+    // Do not let a late snapshot erase fields already entered on slower mobile devices.
+    if (isDifferentUser || !hasUnsavedChangesRef.current) {
+      setValues(getCrewProfileValues(user));
+      setAttachments(user.crewProfileAttachments || {});
+    }
     setReviewStatus(user.crewProfileReviewStatus || "draft");
   }, [user]);
 
@@ -226,6 +239,7 @@ export default function CrewProfilePage() {
   }, []);
 
   function updateField(field: CrewProfileField, value: string) {
+    hasUnsavedChangesRef.current = true;
     setMessage("");
     setError("");
     setValues((current) => {
@@ -299,6 +313,7 @@ export default function CrewProfilePage() {
       };
       setAttachments(nextAttachments);
       setValues(nextValues);
+      hasUnsavedChangesRef.current = true;
 
       setMessage(`${field.label} uploaded successfully.`);
     } catch (err) {
@@ -404,6 +419,7 @@ export default function CrewProfilePage() {
         alternativeIban: formatIban(current.alternativeIban || ""),
       }));
       setReviewStatus(result.status || reviewStatus);
+      hasUnsavedChangesRef.current = false;
       setShowSubmitConfirmation(false);
       setMessage(
         action === "submit"
