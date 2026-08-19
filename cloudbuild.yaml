@@ -25,17 +25,38 @@ steps:
       - --build-arg
       - NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${_FIREBASE_MEASUREMENT_ID}
       - --tag
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:${SHORT_SHA}
+      - --tag
       - me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:sandbox-latest
       - .
 
-images:
-  - me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:sandbox-latest
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:${SHORT_SHA}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - hcad-sandbox
+      - --project=${PROJECT_ID}
+      - --region=me-central2
+      - --image=me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:${SHORT_SHA}
+      - --quiet
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - me-central2-docker.pkg.dev/${PROJECT_ID}/hcad-sandbox/web:sandbox-latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
-  _APP_URL: https://hcad-sandbox-436193730908.me-central2.run.app
+  _APP_URL: https://sandbox.lazem.sa
   _FIREBASE_API_KEY: ""
   _FIREBASE_AUTH_DOMAIN: ""
   _FIREBASE_STORAGE_BUCKET: ""
