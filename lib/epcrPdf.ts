@@ -112,15 +112,30 @@ export function buildEpcrPdf(data: EpcrPdfData) {
     side: "front" | "back",
     selected: string[]
   ) => {
+    const legacyGroups: Record<string, string[]> = {
+      "Left Arm": ["Front - Left Upper Arm", "Front - Left Forearm", "Front - Left Hand"],
+      "Right Arm": ["Front - Right Upper Arm", "Front - Right Forearm", "Front - Right Hand"],
+      "Left Leg": ["Front - Left Thigh", "Front - Left Lower Leg", "Front - Left Foot"],
+      "Right Leg": ["Front - Right Thigh", "Front - Right Lower Leg", "Front - Right Foot"],
+      "Back - Left Arm": ["Back - Left Upper Arm", "Back - Left Forearm", "Back - Left Hand"],
+      "Back - Right Arm": ["Back - Right Upper Arm", "Back - Right Forearm", "Back - Right Hand"],
+      "Back - Left Leg": ["Back - Left Thigh", "Back - Left Lower Leg", "Back - Left Foot"],
+      "Back - Right Leg": ["Back - Right Thigh", "Back - Right Lower Leg", "Back - Right Foot"],
+    };
+    const isSelected = (id: string) =>
+      selected.includes(id) ||
+      Object.entries(legacyGroups).some(
+        ([legacyId, childIds]) => selected.includes(legacyId) && childIds.includes(id)
+      );
     const drawZone = (
       id: string,
       label: string,
       shape: () => void,
       labelX: number,
       labelY: number,
-      fontSize = 4.8
+      fontSize = 3
     ) => {
-      const active = selected.includes(id);
+      const active = isSelected(id);
       doc.setFillColor(...(active ? colors.navy : [222, 243, 247] as [number, number, number]));
       doc.setDrawColor(...(active ? colors.navy : [147, 190, 200] as [number, number, number]));
       doc.setLineWidth(active ? 0.8 : 0.45);
@@ -131,47 +146,31 @@ export function buildEpcrPdf(data: EpcrPdfData) {
       doc.text(label, labelX, labelY, { align: "center" });
     };
 
-    const isFront = side === "front";
-    const ids = isFront
-      ? {
-          head: "Head", neck: "Neck", upper: "Chest", lower: "Abdomen",
-          pelvis: "Pelvis", leftArm: "Left Arm", rightArm: "Right Arm",
-          leftLeg: "Left Leg", rightLeg: "Right Leg",
-        }
-      : {
-          head: "Back Head", neck: "__back_neck__", upper: "Back - Upper",
-          lower: "Back - Lower", pelvis: "__back_pelvis__",
-          leftArm: "Back - Left Arm", rightArm: "Back - Right Arm",
-          leftLeg: "Back - Left Leg", rightLeg: "Back - Right Leg",
-        };
+    const front = side === "front";
+    const prefix = front ? "Front" : "Back";
+    const torsoId = (frontId: string, backId: string) => front ? frontId : backId;
+    const rect = (id: string, label: string, x: number, yOffset: number, width: number, height: number, radius = 1.5) =>
+      drawZone(id, label, () => doc.roundedRect(x, topY + yOffset, width, height, radius, radius, "FD"), x + width / 2, topY + yOffset + height / 2 + 1);
 
-    drawZone(ids.head, isFront ? "Head" : "Head", () => {
-      doc.ellipse(centerX, topY + 6, 6.2, 6.8, "FD");
-    }, centerX, topY + 7.5, 4.6);
-    drawZone(ids.neck, "Neck", () => {
-      doc.roundedRect(centerX - 3.2, topY + 13, 6.4, 4.5, 1.5, 1.5, "FD");
-    }, centerX, topY + 16, 4);
-    drawZone(ids.upper, isFront ? "Chest" : "Upper Back", () => {
-      doc.roundedRect(centerX - 10.5, topY + 18, 21, 13.5, 4, 4, "FD");
-    }, centerX, topY + 25.5, 4.5);
-    drawZone(ids.lower, isFront ? "Abdomen" : "Lower Back", () => {
-      doc.roundedRect(centerX - 9.2, topY + 32.5, 18.4, 11, 3, 3, "FD");
-    }, centerX, topY + 38.8, 4.3);
-    drawZone(ids.pelvis, "Pelvis", () => {
-      doc.roundedRect(centerX - 8, topY + 44.5, 16, 7.5, 3, 3, "FD");
-    }, centerX, topY + 49.2, 4.2);
-    drawZone(ids.leftArm, "L Arm", () => {
-      doc.roundedRect(centerX - 17.5, topY + 19.5, 5.8, 27, 2.5, 2.5, "FD");
-    }, centerX - 14.6, topY + 34, 4);
-    drawZone(ids.rightArm, "R Arm", () => {
-      doc.roundedRect(centerX + 11.7, topY + 19.5, 5.8, 27, 2.5, 2.5, "FD");
-    }, centerX + 14.6, topY + 34, 4);
-    drawZone(ids.leftLeg, "L Leg", () => {
-      doc.roundedRect(centerX - 8, topY + 53, 7, 24, 3, 3, "FD");
-    }, centerX - 4.5, topY + 66, 4);
-    drawZone(ids.rightLeg, "R Leg", () => {
-      doc.roundedRect(centerX + 1, topY + 53, 7, 24, 3, 3, "FD");
-    }, centerX + 4.5, topY + 66, 4);
+    drawZone(front ? "Head" : "Back Head", "Head", () => doc.ellipse(centerX, topY + 6, 6, 6, "FD"), centerX, topY + 7);
+    rect(front ? "Neck" : "Back - Neck", "Neck", centerX - 3.5, 13, 7, 4, 1.2);
+    rect(`${prefix} - Right Shoulder`, "R Sh", centerX - 14, 18, 7, 5);
+    rect(`${prefix} - Left Shoulder`, "L Sh", centerX + 7, 18, 7, 5);
+    rect(torsoId("Chest", "Back - Upper"), front ? "Chest" : "Upper", centerX - 7, 18, 14, 12, 2.5);
+    rect(torsoId("Abdomen", "Back - Lower"), front ? "Abd" : "Lower", centerX - 7, 31, 14, 10, 2.2);
+    rect(torsoId("Pelvis", "Back - Pelvis"), front ? "Pelvis" : "Buttocks", centerX - 8, 42, 16, 7, 2.2);
+    rect(`${prefix} - Right Upper Arm`, "R Up", centerX - 18, 24, 6, 12, 2.5);
+    rect(`${prefix} - Left Upper Arm`, "L Up", centerX + 12, 24, 6, 12, 2.5);
+    rect(`${prefix} - Right Forearm`, "R Fore", centerX - 19, 37, 6, 13, 2.5);
+    rect(`${prefix} - Left Forearm`, "L Fore", centerX + 13, 37, 6, 13, 2.5);
+    rect(`${prefix} - Right Hand`, "R Hand", centerX - 19, 51, 6, 6, 2.5);
+    rect(`${prefix} - Left Hand`, "L Hand", centerX + 13, 51, 6, 6, 2.5);
+    rect(`${prefix} - Right Thigh`, "R Thigh", centerX - 8, 50, 7, 14, 2.5);
+    rect(`${prefix} - Left Thigh`, "L Thigh", centerX + 1, 50, 7, 14, 2.5);
+    rect(`${prefix} - Right Lower Leg`, front ? "R Low" : "R Calf", centerX - 8, 65, 7, 14, 2.5);
+    rect(`${prefix} - Left Lower Leg`, front ? "L Low" : "L Calf", centerX + 1, 65, 7, 14, 2.5);
+    rect(`${prefix} - Right Foot`, "R Foot", centerX - 9, 80, 8, 5, 2);
+    rect(`${prefix} - Left Foot`, "L Foot", centerX + 1, 80, 8, 5, 2);
   };
 
   const drawContinuationHeader = () => {
