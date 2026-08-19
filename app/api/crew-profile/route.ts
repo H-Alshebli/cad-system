@@ -5,6 +5,7 @@ import {
   CrewProfileAttachments,
   CrewProfileValues,
   getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
 } from "@/lib/crewProfile";
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 
@@ -26,9 +27,10 @@ async function authenticate(request: NextRequest) {
 
 function profileSummary(
   profile: CrewProfileValues,
-  attachments: CrewProfileAttachments
+  attachments: CrewProfileAttachments,
+  requirementMode: "temporary" | "full"
 ) {
-  const completion = getCrewProfileCompletion(profile, attachments);
+  const completion = getCrewProfileCompletion(profile, attachments, requirementMode);
   return {
     crewProfileCompletion: completion.percent,
     crewProfileMissingFields: completion.missing.map((field) => field.key),
@@ -106,7 +108,12 @@ export async function POST(request: NextRequest) {
 
   const crewProfile = (body.crewProfile || {}) as CrewProfileValues;
   const attachments = (user.crewProfileAttachments || {}) as CrewProfileAttachments;
-  const { completion, ...summary } = profileSummary(crewProfile, attachments);
+  const requirementMode = getCrewProfileRequirementMode(user);
+  const { completion, ...summary } = profileSummary(
+    crewProfile,
+    attachments,
+    requirementMode
+  );
 
   if (action === "submit" && (completion.missing.length || !completion.isMappedJobTitle)) {
     return NextResponse.json(

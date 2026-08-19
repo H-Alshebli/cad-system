@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 
-import { getCrewProfileCompletion, getCrewProfileValues } from "@/lib/crewProfile";
+import {
+  getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
+  getCrewProfileValues,
+} from "@/lib/crewProfile";
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 
 export const runtime = "nodejs";
@@ -81,7 +85,8 @@ export async function POST(request: NextRequest) {
     const targetUser = userSnapshot.data() || {};
     const completion = getCrewProfileCompletion(
       getCrewProfileValues(targetUser),
-      targetUser.crewProfileAttachments || {}
+      targetUser.crewProfileAttachments || {},
+      getCrewProfileRequirementMode(targetUser)
     );
     if (
       completion.missing.length ||

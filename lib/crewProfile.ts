@@ -341,6 +341,12 @@ export const CREW_PROFILE_FIELDS = CREW_PROFILE_SECTIONS.flatMap(
 
 export type CrewProfileValues = Record<string, string>;
 
+export type CrewProfileRequirementMode = "temporary" | "full";
+
+export function getCrewProfileRequirementMode(user: any): CrewProfileRequirementMode {
+  return user?.crewProfileRequirementMode === "full" ? "full" : "temporary";
+}
+
 export type CrewAttachmentStatus = "uploaded" | "verified" | "rejected";
 export type CrewComplianceStatus =
   | "compliant"
@@ -430,6 +436,66 @@ export const CREW_PROFILE_BASE_REQUIRED_KEYS = [
   "joiningDate",
   "workLocation",
   "primaryProjectId",
+  "bankName",
+  "accountNumber",
+  "iban",
+  "ibanAttachment",
+] as const;
+
+export const CREW_PROFILE_TEMPORARY_VISIBLE_KEYS = new Set([
+  "firstNameEn",
+  "secondNameEn",
+  "thirdNameEn",
+  "familyNameEn",
+  "firstNameAr",
+  "secondNameAr",
+  "thirdNameAr",
+  "familyNameAr",
+  "nationalId",
+  "dateOfBirth",
+  "nationality",
+  "otherNationality",
+  "identityType",
+  "iqamaExpiry",
+  "gender",
+  "bloodType",
+  "nationalIdAttachment",
+  "mobileCountryCode",
+  "mobile",
+  "mobileHasWhatsapp",
+  "roleCategory",
+  "jobTitle",
+  "department",
+  "employmentType",
+  "bankName",
+  "otherBankName",
+  "accountNumber",
+  "iban",
+  "ibanAttachment",
+]);
+
+export const CREW_PROFILE_TEMPORARY_REQUIRED_KEYS = [
+  "firstNameEn",
+  "secondNameEn",
+  "thirdNameEn",
+  "familyNameEn",
+  "firstNameAr",
+  "secondNameAr",
+  "thirdNameAr",
+  "familyNameAr",
+  "nationalId",
+  "dateOfBirth",
+  "nationality",
+  "identityType",
+  "gender",
+  "bloodType",
+  "nationalIdAttachment",
+  "mobileCountryCode",
+  "mobile",
+  "roleCategory",
+  "jobTitle",
+  "department",
+  "employmentType",
   "bankName",
   "accountNumber",
   "iban",
@@ -543,9 +609,32 @@ export function isSaudiNationality(value: string) {
   return nationality === "saudi" || nationality === "saudi arabia";
 }
 
-export function getCrewProfileRequirements(values: CrewProfileValues) {
+export function getCrewProfileRequirements(
+  values: CrewProfileValues,
+  mode: CrewProfileRequirementMode = "temporary"
+) {
   const titleGroup = normalizeCrewJobTitle(values.jobTitle);
   const availableFieldKeys = new Set(CREW_PROFILE_FIELDS.map((field) => field.key));
+  if (mode === "temporary") {
+    const temporaryRequirements = CREW_PROFILE_TEMPORARY_REQUIRED_KEYS.map((key) => {
+      const field = CREW_PROFILE_FIELDS.find((item) => item.key === key);
+      return credential(key, field?.label || key);
+    });
+    if (values.nationality === "Other") {
+      temporaryRequirements.push(credential("otherNationality", "Other Nationality"));
+    }
+    if (values.nationality && !isSaudiNationality(values.nationality)) {
+      temporaryRequirements.push(credential("iqamaExpiry", "Iqama Expiry Date"));
+    }
+    if (values.bankName === "Other") {
+      temporaryRequirements.push(credential("otherBankName", "Other Bank Name"));
+    }
+    return {
+      titleGroup,
+      requirements: temporaryRequirements,
+      plannedRequirements: [],
+    };
+  }
   const baseRequirements = CREW_PROFILE_BASE_REQUIRED_KEYS.map((key) => {
     const field = CREW_PROFILE_FIELDS.find((item) => item.key === key);
     return credential(key, field?.label || key);
@@ -632,7 +721,8 @@ const credentialFieldKeys = new Set(
 
 export function isCrewProfileFieldVisible(
   fieldKey: string,
-  values: CrewProfileValues
+  values: CrewProfileValues,
+  mode: CrewProfileRequirementMode = "temporary"
 ) {
   const titleGroup = normalizeCrewJobTitle(values.jobTitle);
   const hasJobTitle = Boolean(String(values.jobTitle || "").trim());
@@ -644,6 +734,9 @@ export function isCrewProfileFieldVisible(
     "emt",
   ].includes(titleGroup);
 
+  if (mode === "temporary" && !CREW_PROFILE_TEMPORARY_VISIBLE_KEYS.has(fieldKey)) {
+    return false;
+  }
   if (fieldKey === "iqamaExpiry") return isNonSaudi;
   if (fieldKey === "otherNationality") return values.nationality === "Other";
   if (fieldKey === "otherBankName") return values.bankName === "Other";
@@ -747,10 +840,11 @@ export function getCrewProfileValues(user: any): CrewProfileValues {
 
 export function getCrewProfileCompletion(
   values: CrewProfileValues,
-  attachments: CrewProfileAttachments = {}
+  attachments: CrewProfileAttachments = {},
+  mode: CrewProfileRequirementMode = "temporary"
 ) {
   const { titleGroup, requirements, plannedRequirements } =
-    getCrewProfileRequirements(values);
+    getCrewProfileRequirements(values, mode);
   const requiredFields = requirements.map((requirement) => {
     const field = CREW_PROFILE_FIELDS.find((item) => item.key === requirement.key);
     return field || ({ key: requirement.key, label: requirement.label, type: "text" } as CrewProfileField);
@@ -870,7 +964,11 @@ export function isCrewComplianceSubject(user: Record<string, any>) {
 export function getCrewDeploymentReadiness(user: Record<string, any>) {
   const values = getCrewProfileValues(user);
   const attachments = (user?.crewProfileAttachments || {}) as CrewProfileAttachments;
-  const completion = getCrewProfileCompletion(values, attachments);
+  const completion = getCrewProfileCompletion(
+    values,
+    attachments,
+    getCrewProfileRequirementMode(user)
+  );
   const blockers = [
     ...completion.missing.map((field) => `Missing: ${field.label}`),
     ...completion.pendingVerification.map(

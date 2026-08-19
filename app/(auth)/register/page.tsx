@@ -33,6 +33,7 @@ export default function RegisterPage() {
           email: fbUser.email,
           active: false,
           accountStatus: "pending",
+          crewProfileRequirementMode: "temporary",
           role: "none",
           createdAt: serverTimestamp(),
         },

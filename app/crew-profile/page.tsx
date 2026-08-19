@@ -34,6 +34,7 @@ import {
   formatIban,
   getCrewAttachmentStatus,
   getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
   getCrewProfileValues,
   isCrewProfileFieldVisible,
   isValidSaudiIban,
@@ -180,10 +181,11 @@ export default function CrewProfilePage() {
   const isEditable = ["draft", "changes_required", "reopened", ""].includes(
     reviewStatus
   );
+  const requirementMode = getCrewProfileRequirementMode(user);
 
   const completion = useMemo(
-    () => getCrewProfileCompletion(values, attachments),
-    [values, attachments]
+    () => getCrewProfileCompletion(values, attachments, requirementMode),
+    [values, attachments, requirementMode]
   );
   const requiredFieldKeys = useMemo(
     () => new Set(completion.requiredKeys),
@@ -520,6 +522,16 @@ export default function CrewProfilePage() {
         )}
       </div>
 
+      {requirementMode === "temporary" && (
+        <div className="notice-warning mb-4">
+          <div className="font-black">Temporary Profile Requirements</div>
+          <p className="mt-1 text-sm">
+            Complete the fields currently shown. HR may switch your profile to Full later
+            and request additional information.
+          </p>
+        </div>
+      )}
+
       {!isEditable && (
         <div className="notice-warning mb-4">
           <div className="font-black">
@@ -720,8 +732,10 @@ export default function CrewProfilePage() {
 
           {CREW_PROFILE_SECTIONS.map((section) => {
             const visibleFields = section.fields.filter((field) =>
-              isCrewProfileFieldVisible(field.key, values)
+              isCrewProfileFieldVisible(field.key, values, requirementMode)
             );
+
+            if (!visibleFields.length) return null;
 
             return (
             <section key={section.key} className="card-modern">

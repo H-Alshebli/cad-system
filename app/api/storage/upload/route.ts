@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import {
   CREW_PROFILE_SECTIONS,
   getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
   getCrewProfileValues,
 } from "@/lib/crewProfile";
 import { adminAuth, adminDb, getAdminStorageBucket } from "@/lib/server/firebaseAdmin";
@@ -158,7 +159,11 @@ export async function POST(request: NextRequest) {
         ...getCrewProfileValues(userData),
         [fieldKey]: url,
       };
-      const completion = getCrewProfileCompletion(nextValues, nextAttachments);
+      const completion = getCrewProfileCompletion(
+        nextValues,
+        nextAttachments,
+        getCrewProfileRequirementMode(userData)
+      );
 
       await userRef.update({
         crewProfileAttachments: nextAttachments,

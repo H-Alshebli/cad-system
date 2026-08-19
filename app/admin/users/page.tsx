@@ -9,6 +9,12 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import {
+  getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
+  getCrewProfileValues,
+  type CrewProfileRequirementMode,
+} from "@/lib/crewProfile";
 
 /* =========================
    TYPES
@@ -20,6 +26,10 @@ type UserType = {
   role: string;
   active: boolean;
   accountStatus?: "pending" | "active" | "suspended";
+  crewProfileRequirementMode?: CrewProfileRequirementMode;
+  crewProfile?: Record<string, string>;
+  crewProfileAttachments?: Record<string, any>;
+  crewProfileReviewStatus?: string;
 };
 
 export default function UsersPage() {
@@ -35,6 +45,7 @@ export default function UsersPage() {
     Email: u.email,
     Role: u.role,
     Status: u.active ? "Active" : "Pending",
+    "Profile Requirements": getCrewProfileRequirementMode(u),
   }));
 
   // Create worksheet
@@ -50,6 +61,7 @@ export default function UsersPage() {
     { wch: 25 },
     { wch: 30 },
     { wch: 20 },
+    { wch: 22 },
     { wch: 15 },
   ];
 
@@ -104,6 +116,35 @@ export default function UsersPage() {
     });
   };
 
+  const updateProfileRequirementMode = async (
+    user: UserType,
+    mode: CrewProfileRequirementMode
+  ) => {
+    const values = getCrewProfileValues(user);
+    const attachments = user.crewProfileAttachments || {};
+    const completion = getCrewProfileCompletion(values, attachments, mode);
+    const lockedStatuses = new Set(["submitted", "verified", "update_requested"]);
+
+    await updateDoc(doc(db, "users", user.id), {
+      crewProfileRequirementMode: mode,
+      crewProfileCompletion: completion.percent,
+      crewProfileMissingFields: completion.missing.map((field) => field.key),
+      crewProfilePendingVerificationFields: completion.pendingVerification.map(
+        (field) => field.key
+      ),
+      crewProfileRejectedFields: completion.rejected.map((field) => field.key),
+      crewProfileExpiredFields: completion.expired.map((field) => field.key),
+      crewProfileExpiringSoonFields: completion.expiringSoon.map((field) => field.key),
+      crewProfileStatus: completion.status,
+      crewProfileComplianceStatus: completion.complianceStatus,
+      crewProfileIsComplete: completion.isComplete,
+      crewProfileIsCompliant: completion.isCompliant,
+      ...(mode === "full" && lockedStatuses.has(user.crewProfileReviewStatus || "")
+        ? { crewProfileReviewStatus: "reopened" }
+        : {}),
+    });
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -145,6 +186,7 @@ return (
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Email</th>
               <th className="p-3 text-left">Role</th>
+              <th className="p-3 text-center">Profile Requirements</th>
               <th className="p-3 text-center">Active</th>
             </tr>
           </thead>
@@ -175,6 +217,22 @@ return (
                         {r}
                       </option>
                     ))}
+                  </select>
+                </td>
+
+                <td className="p-3 text-center">
+                  <select
+                    value={getCrewProfileRequirementMode(u)}
+                    onChange={(e) =>
+                      updateProfileRequirementMode(
+                        u,
+                        e.target.value as CrewProfileRequirementMode
+                      )
+                    }
+                    className="rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold capitalize text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white"
+                  >
+                    <option value="temporary">Temporary</option>
+                    <option value="full">Full</option>
                   </select>
                 </td>
 

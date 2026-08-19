@@ -27,6 +27,7 @@ import {
   CrewProfileValues,
   getCrewAttachmentStatus,
   getCrewProfileCompletion,
+  getCrewProfileRequirementMode,
   getCrewProfileValues,
 } from "@/lib/crewProfile";
 
@@ -273,7 +274,11 @@ export default function CrewProfilesDashboardPage() {
     return users.map((user) => {
       const values = getCrewProfileValues(user);
       const attachments = user.crewProfileAttachments || {};
-      const completion = getCrewProfileCompletion(values, attachments);
+      const completion = getCrewProfileCompletion(
+        values,
+        attachments,
+        getCrewProfileRequirementMode(user)
+      );
       const attachmentCount = Object.values(attachments).filter(Boolean).length;
 
       const projectIds = projects
@@ -492,7 +497,11 @@ export default function CrewProfilesDashboardPage() {
         ...targetUser,
         crewProfileAttachments: nextAttachments,
       });
-      const completion = getCrewProfileCompletion(values, nextAttachments);
+      const completion = getCrewProfileCompletion(
+        values,
+        nextAttachments,
+        getCrewProfileRequirementMode(targetUser)
+      );
 
       await updateDoc(doc(db, "users", targetUser.id), {
         crewProfileAttachments: nextAttachments,
