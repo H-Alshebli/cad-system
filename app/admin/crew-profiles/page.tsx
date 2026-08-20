@@ -224,6 +224,7 @@ export default function CrewProfilesDashboardPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [jobTitleFilter, setJobTitleFilter] = useState("all");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [supervisorFilter, setSupervisorFilter] = useState("all");
@@ -325,6 +326,9 @@ export default function CrewProfilesDashboardPage() {
       jobTitles: Array.from(
         new Set(rows.map((row) => row.values.jobTitle).filter(Boolean))
       ).sort(),
+      employmentTypes: Array.from(
+        new Set(rows.map((row) => row.values.employmentType).filter(Boolean))
+      ).sort(),
       locations: Array.from(
         new Set(rows.map((row) => row.values.workLocation).filter(Boolean))
       ).sort(),
@@ -347,6 +351,7 @@ export default function CrewProfilesDashboardPage() {
         row.values.mobile,
         row.values.city,
         row.values.jobTitle,
+        row.values.employmentType,
         row.values.workLocation,
         row.values.supervisorName,
         ...row.projectNames,
@@ -361,6 +366,9 @@ export default function CrewProfilesDashboardPage() {
         row.completion.complianceStatus === statusFilter;
       const matchesJobTitle =
         jobTitleFilter === "all" || row.values.jobTitle === jobTitleFilter;
+      const matchesEmploymentType =
+        employmentTypeFilter === "all" ||
+        row.values.employmentType === employmentTypeFilter;
       const matchesProject =
         projectFilter === "all" ||
         (projectFilter === "unassigned"
@@ -376,6 +384,7 @@ export default function CrewProfilesDashboardPage() {
         matchesSearch &&
         matchesStatus &&
         matchesJobTitle &&
+        matchesEmploymentType &&
         matchesProject &&
         matchesLocation &&
         matchesSupervisor
@@ -386,10 +395,20 @@ export default function CrewProfilesDashboardPage() {
     search,
     statusFilter,
     jobTitleFilter,
+    employmentTypeFilter,
     projectFilter,
     locationFilter,
     supervisorFilter,
   ]);
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== "all" ||
+    jobTitleFilter !== "all" ||
+    employmentTypeFilter !== "all" ||
+    projectFilter !== "all" ||
+    locationFilter !== "all" ||
+    supervisorFilter !== "all";
 
   const projectCompliance = useMemo(() => {
     const summaries = projects.map((project) => {
@@ -766,6 +785,17 @@ export default function CrewProfilesDashboardPage() {
             </select>
 
             <select
+              value={employmentTypeFilter}
+              onChange={(event) => setEmploymentTypeFilter(event.target.value)}
+              className="select"
+            >
+              <option value="all">All employment types</option>
+              {filterOptions.employmentTypes.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+
+            <select
               value={projectFilter}
               onChange={(event) => setProjectFilter(event.target.value)}
               className="select"
@@ -803,7 +833,8 @@ export default function CrewProfilesDashboardPage() {
           </div>
         </div>
 
-        <div className="table-modern overflow-x-auto">
+        <div className="flex flex-col gap-6">
+        <div className={`table-modern overflow-x-auto ${hasActiveFilters ? "order-2" : "order-1"}`}>
           <div className="border-b border-slate-200 p-4 dark:border-slate-800">
             <h2 className="section-title">Project / Site Compliance</h2>
           </div>
@@ -833,7 +864,7 @@ export default function CrewProfilesDashboardPage() {
           </table>
         </div>
 
-        <div className="table-modern overflow-x-auto">
+        <div className={`table-modern overflow-x-auto ${hasActiveFilters ? "order-1" : "order-2"}`}>
           <table className="w-full min-w-[1100px] text-left">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900/70">
               <tr>
@@ -929,6 +960,7 @@ export default function CrewProfilesDashboardPage() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
 
         {selectedRow && (

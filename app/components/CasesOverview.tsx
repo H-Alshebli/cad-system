@@ -153,13 +153,13 @@ export default function CasesOverview({
      UI
   ========================= */
   return (
-    <div className="p-6 dark:bg-gray-900 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6 dark:text-white">
+    <div className="space-y-6">
+      <h1 className="text-3xl font-black tracking-tight text-[#274C5A]">
         {title}
       </h1>
 
       {/* ===== SUMMARY CARDS ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card title="Total Cases" value={totalCases} big />
         <Card title="Active" value={activeCases} />
         <Card title="Unreceived from team" value={unreceivedCases} />
@@ -191,10 +191,10 @@ export default function CasesOverview({
       </div>
 
       {/* ===== CASE LIST HEADER ===== */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#86A7B2]/20 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
         <div>
-          <h2 className="text-xl font-bold dark:text-white">Cases Timeline</h2>
-          <p className="text-sm text-gray-400">
+          <h2 className="text-xl font-black text-[#274C5A]">Cases Timeline</h2>
+          <p className="text-sm font-medium text-[#7F7F7F]">
             Showing {visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""}
             {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
           </p>
@@ -202,32 +202,38 @@ export default function CasesOverview({
 
         <button
           onClick={() => setShowAllCases((prev) => !prev)}
-          className="px-4 py-2 rounded border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+          className="btn-secondary"
         >
           {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
         </button>
       </div>
 
       {/* ===== CASE LIST ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {visibleCases.map((c) => (
-          <div
-            key={c.id}
-            className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
-          >
-            <div className="mb-3">
-              <h2 className="text-xl font-bold">
-                {getMatchedEpcrId(c)} — {c.patientName || "—"}
-              </h2>
-
-              <p className="text-gray-400">
-                Date & Time: {formatCaseDate(c)}
-              </p>
-            </div>
-
-            <CaseTimeline timeline={c.timeline || {}} />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {visibleCases.length === 0 ? (
+          <div className="col-span-full rounded-2xl border border-dashed border-[#86A7B2]/40 bg-white p-8 text-center text-sm font-semibold text-[#7F7F7F]">
+            No cases found.
           </div>
-        ))}
+        ) : (
+          visibleCases.map((c) => (
+            <div
+              key={c.id}
+              className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5 transition hover:border-[#274C5A]/50 hover:shadow-lg hover:shadow-[#274C5A]/10"
+            >
+              <div className="mb-3">
+                <h2 className="text-xl font-black text-[#274C5A]">
+                  {getMatchedEpcrId(c)} — {c.patientName || "—"}
+                </h2>
+
+                <p className="text-sm font-medium text-[#7F7F7F]">
+                  Date & Time: {formatCaseDate(c)}
+                </p>
+              </div>
+
+              <CaseTimeline timeline={c.timeline || {}} />
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -249,25 +255,29 @@ function Card({
   big?: boolean;
   color?: "blue" | "orange" | "purple";
 }) {
-  const colorMap: any = {
-    blue: "text-blue-600",
-    orange: "text-orange-600",
-    purple: "text-purple-600",
+  const colorMap: Record<"blue" | "orange" | "purple", string> = {
+    blue: "text-[#274C5A]",
+    orange: "text-[#ef7b00]",
+    purple: "text-[#86A7B2]",
   };
 
+  if (big) {
+    return (
+      <div className="rounded-2xl border border-[#274C5A]/20 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
+        <h3 className="text-lg font-black">{title}</h3>
+        <p className="mt-2 text-4xl font-extrabold">{value}</p>
+        {sub && <p className="mt-1 text-sm font-medium text-white/75">{sub}</p>}
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
-      <h3 className={big ? "text-lg font-bold" : "text-sm text-gray-400"}>
-        {title}
-      </h3>
-      <p
-        className={`${
-          big ? "text-4xl" : "text-2xl"
-        } font-extrabold ${colorMap[color]}`}
-      >
+    <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+      <h3 className="text-sm font-bold text-[#7F7F7F]">{title}</h3>
+      <p className={`mt-2 text-2xl font-black ${colorMap[color]}`}>
         {value}
       </p>
-      {sub && <p className="text-gray-400">{sub}</p>}
+      {sub && <p className="mt-1 text-sm font-medium text-[#7F7F7F]">{sub}</p>}
     </div>
   );
 }
