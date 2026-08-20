@@ -43,11 +43,26 @@ export default function LocationSearch({
         `/api/geocoding/search?q=${encodeURIComponent(normalizedQuery)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const payload = await response.json();
+      const responseText = await response.text();
+      let payload: any = {};
+
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText);
+        } catch {
+          throw new Error(
+            `Location search service returned an invalid response (${response.status}).`
+          );
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(payload?.error || "Location search failed.");
+        throw new Error(
+          payload?.error || `Location search failed (${response.status}).`
+        );
       }
+
+      if (!responseText) throw new Error("Location search service returned an empty response.");
 
       const nextResults = Array.isArray(payload?.results) ? payload.results : [];
       setResults(nextResults);

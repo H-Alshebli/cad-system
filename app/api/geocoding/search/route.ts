@@ -28,7 +28,7 @@ async function authenticate(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function search(request: NextRequest) {
   const user = await authenticate(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -100,6 +100,7 @@ export async function GET(request: NextRequest) {
       "User-Agent": "Lazem-HCAD/1.0 (https://hcad.lazem.sa)",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -129,4 +130,16 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({ results, cached: false });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    return await search(request);
+  } catch (error) {
+    console.error("Location search request failed", error);
+    return NextResponse.json(
+      { error: "Location search is temporarily unavailable. Please try again." },
+      { status: 500 }
+    );
+  }
 }
