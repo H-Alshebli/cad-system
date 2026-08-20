@@ -235,6 +235,7 @@ export default function CaseDetailsPage({
 
   const pickupLocation = caseData.pickupLocation;
   const destinationLocation = caseData.destinationLocation;
+  const projectId = String(caseData.projectId || "").trim();
 
   const canCreateReturnCad =
     sourceType === "B2C" &&
@@ -319,11 +320,15 @@ export default function CaseDetailsPage({
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <button
-              onClick={() => router.back()}
+              onClick={() =>
+                projectId
+                  ? router.push(`/projects/${projectId}/cad`)
+                  : router.back()
+              }
               className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300"
             >
               <ArrowLeft size={16} />
-              Back
+              {projectId ? "Back to Project CAD" : "Back"}
             </button>
 
             <div className="flex flex-wrap items-center gap-2">
