@@ -7,6 +7,7 @@ import { db, functions } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
+import LocationSearch from "@/app/components/LocationSearch";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
@@ -82,6 +83,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [isFromMapLink, setIsFromMapLink] = useState(false);
+  const [isFromLocationSearch, setIsFromLocationSearch] = useState(false);
   const [selectedProjectLocation, setSelectedProjectLocation] = useState<ProjectLocation | null>(null);
 
   const [unitType, setUnitType] = useState<"ambulance" | "clinic" | "roaming" | "">("ambulance");
@@ -217,7 +219,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       chiefComplaint: chiefComplaint === "Other" ? otherComplaint : chiefComplaint,
       level: triageLevel,
       patientName,
-      location: { text: locationText, lat, lng, googleMapLink, source: selectedProjectLocation ? "project_location" : isFromMapLink ? "google_link" : "manual" },
+      location: { text: locationText, lat, lng, googleMapLink, source: selectedProjectLocation ? "project_location" : isFromLocationSearch ? "openstreetmap_search" : isFromMapLink ? "google_link" : "manual" },
       locationText,
       projectLocationId: selectedProjectLocation?.id || null,
       projectLocationNumber: selectedProjectLocation?.siteNumber || null,
@@ -324,6 +326,7 @@ if (unitType === "ambulance") {
                 setLng(location.lng);
                 setMapLink(`https://www.google.com/maps?q=${location.lat},${location.lng}`);
                 setIsFromMapLink(true);
+                setIsFromLocationSearch(false);
               }}
               onManual={() => {
                 setSelectedProjectLocation(null);
@@ -332,13 +335,28 @@ if (unitType === "ambulance") {
                 setLat(null);
                 setLng(null);
                 setIsFromMapLink(false);
+                setIsFromLocationSearch(false);
               }}
             />
+            <div>
+              <FieldLabel text="Search Location" />
+              <LocationSearch
+                onSelect={(result) => {
+                  setSelectedProjectLocation(null);
+                  setLocationText(result.displayName);
+                  setLat(result.lat);
+                  setLng(result.lng);
+                  setMapLink(`https://www.google.com/maps?q=${result.lat},${result.lng}`);
+                  setIsFromMapLink(false);
+                  setIsFromLocationSearch(true);
+                }}
+              />
+            </div>
             <div><FieldLabel text="Location Description *" /><input className={inputClass} value={locationText} onChange={(e) => setLocationText(e.target.value)} /></div>
-            <div><FieldLabel text="Google Maps Link (Auto-Pin)" /><input className={inputClass} value={mapLink} onChange={(e) => { const value = e.target.value; setMapLink(value); const coords = extractLatLngFromGoogleMaps(value); if (coords) { setLat(coords.lat); setLng(coords.lng); setIsFromMapLink(true); } }} /></div>
+            <div><FieldLabel text="Google Maps Link (Auto-Pin)" /><input className={inputClass} value={mapLink} onChange={(e) => { const value = e.target.value; setMapLink(value); const coords = extractLatLngFromGoogleMaps(value); if (coords) { setLat(coords.lat); setLng(coords.lng); setIsFromMapLink(true); setIsFromLocationSearch(false); } }} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Latitude" disabled={isFromMapLink} value={lat ?? ""} onChange={(e) => setLat(e.target.value ? Number(e.target.value) : null)} />
-              <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Longitude" disabled={isFromMapLink} value={lng ?? ""} onChange={(e) => setLng(e.target.value ? Number(e.target.value) : null)} />
+              <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Latitude" disabled={isFromMapLink} value={lat ?? ""} onChange={(e) => { setLat(e.target.value ? Number(e.target.value) : null); setIsFromLocationSearch(false); }} />
+              <input className={`${inputClass} ${isFromMapLink ? "opacity-50 cursor-not-allowed" : ""}`} placeholder="Longitude" disabled={isFromMapLink} value={lng ?? ""} onChange={(e) => { setLng(e.target.value ? Number(e.target.value) : null); setIsFromLocationSearch(false); }} />
             </div>
             {googleMapLink && <a href={googleMapLink} target="_blank" className="text-sm font-black text-[#166575] underline">Open in Google Maps</a>}
           </div>
