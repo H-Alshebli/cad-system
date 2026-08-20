@@ -263,7 +263,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         key: "accountNumber",
         label: "Account Number",
         type: "text",
-        placeholder: "18-digit account number",
+        placeholder: "Enter account number",
       },
       { key: "iban", label: "IBAN", type: "text", placeholder: "SA0000000000000000000000" },
       { key: "ibanAttachment", label: "IBAN Certificate Attachment", type: "file" },
@@ -277,7 +277,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         key: "alternativeAccountNumber",
         label: "Alternative Account Number",
         type: "text",
-        placeholder: "18-digit account number",
+        placeholder: "Enter account number",
       },
       {
         key: "alternativeIban",

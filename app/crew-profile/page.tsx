@@ -103,7 +103,7 @@ function cleanValue(field: CrewProfileField, value: string) {
     field.key === "accountNumber" ||
     field.key === "alternativeAccountNumber"
   ) {
-    return value.replace(/\D/g, "").slice(0, 18);
+    return value.replace(/\D/g, "");
   }
 
   if (field.type === "tel") {
@@ -363,10 +363,6 @@ export default function CrewProfilePage() {
       setError("IBAN must start with SA followed by exactly 22 digits (24 characters total).");
       return;
     }
-    if (values.accountNumber && !/^\d{18}$/.test(values.accountNumber || "")) {
-      setError("Account Number must contain exactly 18 digits.");
-      return;
-    }
     if (
       values.alternativeIban &&
       !isValidSaudiIban(values.alternativeIban)
@@ -374,13 +370,6 @@ export default function CrewProfilePage() {
       setError(
         "Alternative IBAN must start with SA followed by exactly 22 digits (24 characters total)."
       );
-      return;
-    }
-    if (
-      values.alternativeAccountNumber &&
-      !/^\d{18}$/.test(values.alternativeAccountNumber)
-    ) {
-      setError("Alternative Account Number must contain exactly 18 digits.");
       return;
     }
 
@@ -1003,9 +992,6 @@ export default function CrewProfilePage() {
                         maxLength={
                           field.key === "iban" || field.key === "alternativeIban"
                             ? 24
-                            : field.key === "accountNumber" ||
-                              field.key === "alternativeAccountNumber"
-                            ? 18
                             : undefined
                         }
                         inputMode={
