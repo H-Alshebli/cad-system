@@ -8,6 +8,13 @@ export const runtime = "nodejs";
 
 const CACHE_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_REQUEST_INTERVAL_MS = 1100;
+const isLocalDevelopment = process.env.NODE_ENV === "development";
+
+const localCache = new Map<
+  string,
+  { results: SearchResult[]; expiresAt: number }
+>();
+let localLastRequestAt = 0;
 
 type SearchResult = {
   id: string;
@@ -29,9 +36,11 @@ async function authenticate(request: NextRequest) {
 }
 
 async function search(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isLocalDevelopment) {
+    const user = await authenticate(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const query = String(request.nextUrl.searchParams.get("q") || "")
@@ -48,21 +57,39 @@ async function search(request: NextRequest) {
   const cacheKey = createHash("sha256")
     .update(`sa:${query.toLocaleLowerCase("en-US")}`)
     .digest("hex");
-  const cacheRef = adminDb.collection("geocodingCache").doc(cacheKey);
-  const cached = await cacheRef.get();
-  const cachedData = cached.data();
-  const cachedResults = cachedData?.results;
-  const expiresAt = cachedData?.expiresAt?.toMillis?.() || 0;
 
-  if (cached.exists && expiresAt > Date.now() && Array.isArray(cachedResults)) {
-    return NextResponse.json({ results: cachedResults, cached: true });
+  if (isLocalDevelopment) {
+    const cached = localCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json({ results: cached.results, cached: true });
+    }
+
+    const now = Date.now();
+    if (now - localLastRequestAt < MIN_REQUEST_INTERVAL_MS) {
+      return NextResponse.json(
+        { error: "Please wait a moment before searching again." },
+        { status: 429 }
+      );
+    }
+    localLastRequestAt = now;
   }
+
+  const cacheRef = adminDb.collection("geocodingCache").doc(cacheKey);
+  if (!isLocalDevelopment) {
+    const cached = await cacheRef.get();
+    const cachedData = cached.data();
+    const cachedResults = cachedData?.results;
+    const expiresAt = cachedData?.expiresAt?.toMillis?.() || 0;
+
+    if (cached.exists && expiresAt > Date.now() && Array.isArray(cachedResults)) {
+      return NextResponse.json({ results: cachedResults, cached: true });
+    }
 
   const rateLimitRef = adminDb.collection("systemRateLimits").doc("nominatim");
   const now = Date.now();
 
-  try {
-    await adminDb.runTransaction(async (transaction) => {
+    try {
+      await adminDb.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(rateLimitRef);
       const lastRequestAt = snapshot.data()?.lastRequestAt?.toMillis?.() || 0;
 
@@ -75,15 +102,16 @@ async function search(request: NextRequest) {
         { lastRequestAt: Timestamp.fromMillis(now) },
         { merge: true }
       );
-    });
-  } catch (error: any) {
-    if (error?.message === "RATE_LIMITED") {
-      return NextResponse.json(
-        { error: "Please wait a moment before searching again." },
-        { status: 429 }
-      );
+      });
+    } catch (error: any) {
+      if (error?.message === "RATE_LIMITED") {
+        return NextResponse.json(
+          { error: "Please wait a moment before searching again." },
+          { status: 429 }
+        );
+      }
+      throw error;
     }
-    throw error;
   }
 
   const url = new URL("https://nominatim.openstreetmap.org/search");
@@ -123,11 +151,18 @@ async function search(request: NextRequest) {
         item.displayName && Number.isFinite(item.lat) && Number.isFinite(item.lng)
     );
 
-  await cacheRef.set({
-    results,
-    expiresAt: Timestamp.fromMillis(Date.now() + CACHE_DURATION_MS),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  if (isLocalDevelopment) {
+    localCache.set(cacheKey, {
+      results,
+      expiresAt: Date.now() + CACHE_DURATION_MS,
+    });
+  } else {
+    await cacheRef.set({
+      results,
+      expiresAt: Timestamp.fromMillis(Date.now() + CACHE_DURATION_MS),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
 
   return NextResponse.json({ results, cached: false });
 }
