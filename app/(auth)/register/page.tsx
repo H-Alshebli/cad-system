@@ -6,6 +6,7 @@ import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Mail, Lock, User, ShieldCheck, Activity } from "lucide-react";
+import type { UserAccountType } from "@/lib/userAccounts";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accountType, setAccountType] = useState<UserAccountType>("employee");
 
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +35,7 @@ export default function RegisterPage() {
           email: fbUser.email,
           active: false,
           accountStatus: "pending",
+          accountType,
           crewProfileRequirementMode: "temporary",
           role: "none",
           createdAt: serverTimestamp(),
@@ -129,6 +132,31 @@ export default function RegisterPage() {
               )}
 
               <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-[#274C5A]">
+                    Account Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      ["employee", "Lazem Employee"],
+                      ["client", "External Client"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setAccountType(value)}
+                        className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
+                          accountType === value
+                            ? "border-[#274C5A] bg-[#274C5A] text-white"
+                            : "border-[#86A7B2]/45 bg-white text-[#274C5A] hover:bg-[#f5f8f9]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-bold text-[#274C5A]">
                     Full Name

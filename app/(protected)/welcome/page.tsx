@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { isClientAccount } from "@/lib/userAccounts";
 
 export default function WelcomePage() {
+  const router = useRouter();
   const { user, loading } = useCurrentUser();
+  const clientAccount = isClientAccount(user);
 
   const [projects, setProjects] = useState(0);
   const [ambulances, setAmbulances] = useState(0);
@@ -16,6 +20,8 @@ export default function WelcomePage() {
   const [roles, setRoles] = useState(0);
 
   useEffect(() => {
+    if (loading || !user || clientAccount) return;
+
     async function loadStats() {
       const projectsSnap = await getDocs(collection(db, "projects"));
       const ambulancesSnap = await getDocs(collection(db, "ambulances"));
@@ -29,9 +35,15 @@ export default function WelcomePage() {
     }
 
     loadStats();
-  }, []);
+  }, [clientAccount, loading, user]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && user && clientAccount) {
+      router.replace("/client");
+    }
+  }, [clientAccount, loading, router, user]);
+
+  if (loading || clientAccount) {
     return <div className="p-6 text-[#274C5A]">Loading...</div>;
   }
 

@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import { isClientAccount, type UserAccountType } from "@/lib/userAccounts";
 import {
   CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
@@ -84,6 +85,7 @@ type User = {
   email?: string;
   role?: string;
   active?: boolean;
+  accountType?: UserAccountType;
   crewProfile?: Record<string, string>;
   crewProfileAttachments?: Record<string, any>;
 };
@@ -208,6 +210,7 @@ export default function EditProjectPage({
   const [assignedUsers, setAssignedUsers] = useState<Record<string, boolean>>(
     {}
   );
+  const [clientUserIds, setClientUserIds] = useState<string[]>([]);
   const [crewComplianceOverrides, setCrewComplianceOverrides] =
     useState<CrewComplianceOverrides>({});
 
@@ -253,6 +256,9 @@ export default function EditProjectPage({
       );
       setClient(data.client || "");
       setAssignedUsers(data.assignedUsers || {});
+      setClientUserIds(
+        Array.isArray(data.clientUserIds) ? data.clientUserIds.filter(Boolean) : []
+      );
       setCrewComplianceOverrides(data.crewComplianceOverrides || {});
       setShiftPreset(
         data.shiftSchedulePreset === "two" || data.shiftSchedulePreset === "three"
@@ -428,8 +434,22 @@ export default function EditProjectPage({
   };
 
   const visibleUsers = useMemo(() => {
-    return users.filter((u) => u.role !== "admin");
+    return users.filter((u) => u.role !== "admin" && !isClientAccount(u));
   }, [users]);
+
+  const clientPortalUsers = useMemo(() => {
+    return users
+      .filter((u) => isClientAccount(u))
+      .sort((a, b) => getUserName(a).localeCompare(getUserName(b)));
+  }, [users]);
+
+  const toggleClientAccess = (userId: string) => {
+    setClientUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId]
+    );
+  };
 
   const selectedUsers = useMemo(() => {
     return visibleUsers.filter((u) => !!assignedUsers[u.id]);
@@ -747,6 +767,7 @@ export default function EditProjectPage({
     await updateDoc(doc(db, "projects", projectId), {
       projectName: selectedProjectName,
       client: client.trim(),
+      clientUserIds: Array.from(new Set(clientUserIds)),
 
       assignedUsers: cleanAssignedUsers,
       crewComplianceOverrides: Object.fromEntries(
@@ -1041,6 +1062,53 @@ return (
               </div>
             </div>
           </div>
+        </div>
+
+        <div className={cardClass}>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black text-[#123746]">Client Portal Access</h2>
+              <p className="mt-1 text-xs font-semibold text-[#607482]">
+                Select the external client accounts allowed to create and track cases for this project.
+              </p>
+            </div>
+            <span className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
+              {clientUserIds.length} selected
+            </span>
+          </div>
+
+          {clientPortalUsers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#c8dce2] bg-[#f7fbfc] p-4 text-sm font-semibold text-[#607482]">
+              No Client accounts found. Set the user Account Type to Client in User Management first.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {clientPortalUsers.map((clientUser) => (
+                <label
+                  key={clientUser.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#d8e6ea] bg-[#f7fbfc] p-3 transition hover:border-[#74cdda] hover:bg-white"
+                >
+                  <input
+                    type="checkbox"
+                    checked={clientUserIds.includes(clientUser.id)}
+                    onChange={() => toggleClientAccess(clientUser.id)}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black text-[#123746]">
+                      {getUserName(clientUser)}
+                    </span>
+                    <span className="block truncate text-xs font-semibold text-[#607482]">
+                      {clientUser.email || clientUser.id}
+                    </span>
+                    <span className="mt-1 block text-[11px] font-bold text-[#166575]">
+                      {clientUser.active === false ? "Pending activation" : "Active"}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className={cardClass}>

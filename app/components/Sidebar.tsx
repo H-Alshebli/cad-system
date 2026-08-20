@@ -24,6 +24,7 @@ import {
 import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import { isClientAccount } from "@/lib/userAccounts";
 import { can } from "@/lib/can";
 
 type NavItem = {
@@ -57,6 +58,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     can(permissions, "missions", "view");
 
   const isClientPortalUser = can(permissions, "client_portal", "view");
+  const clientAccount = isClientAccount(user);
 
   async function logout() {
     await signOut(auth);
@@ -134,8 +136,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       visible:
         isAdmin ||
         can(permissions, "call_intake", "view") ||
-        can(permissions, "cases", "create") ||
-        can(permissions, "client_cases", "create"),
+        can(permissions, "cases", "create"),
     },
     {
       href: "/b2c/requests",
@@ -167,7 +168,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       href: "/crew-profile",
       label: "Crew Profile",
       icon: <UserRound size={18} />,
-      visible: true,
+      visible: !clientAccount,
     },
     {
       href: "/dashboard/epcr",
@@ -325,6 +326,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         )}
 
+        {!clientAccount && (
         <div>
           <div className={sectionTitleClass}>Operations</div>
 
@@ -344,7 +346,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               ))}
           </div>
         </div>
+        )}
 
+        {!clientAccount && (
         <div>
           <div className={sectionTitleClass}>Management</div>
 
@@ -364,6 +368,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               ))}
           </div>
         </div>
+        )}
       </nav>
 
       <div className="border-t border-[#86A7B2]/25 p-4">

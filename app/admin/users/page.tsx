@@ -15,6 +15,7 @@ import {
   getCrewProfileValues,
   type CrewProfileRequirementMode,
 } from "@/lib/crewProfile";
+import { getUserAccountType, type UserAccountType } from "@/lib/userAccounts";
 
 /* =========================
    TYPES
@@ -26,6 +27,7 @@ type UserType = {
   role: string;
   active: boolean;
   accountStatus?: "pending" | "active" | "suspended";
+  accountType?: UserAccountType;
   crewProfileRequirementMode?: CrewProfileRequirementMode;
   crewProfile?: Record<string, string>;
   crewProfileAttachments?: Record<string, any>;
@@ -44,6 +46,7 @@ export default function UsersPage() {
     Name: u.name,
     Email: u.email,
     Role: u.role,
+    "Account Type": getUserAccountType(u),
     Status: u.active ? "Active" : "Pending",
     "Profile Requirements": getCrewProfileRequirementMode(u),
   }));
@@ -61,6 +64,7 @@ export default function UsersPage() {
     { wch: 25 },
     { wch: 30 },
     { wch: 20 },
+    { wch: 18 },
     { wch: 22 },
     { wch: 15 },
   ];
@@ -114,6 +118,10 @@ export default function UsersPage() {
       active,
       accountStatus: active ? "active" : "pending",
     });
+  };
+
+  const updateAccountType = async (userId: string, accountType: UserAccountType) => {
+    await updateDoc(doc(db, "users", userId), { accountType });
   };
 
   const updateProfileRequirementMode = async (
@@ -186,6 +194,7 @@ return (
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Email</th>
               <th className="p-3 text-left">Role</th>
+              <th className="p-3 text-center">Account Type</th>
               <th className="p-3 text-center">Profile Requirements</th>
               <th className="p-3 text-center">Active</th>
             </tr>
@@ -217,6 +226,19 @@ return (
                         {r}
                       </option>
                     ))}
+                  </select>
+                </td>
+
+                <td className="p-3 text-center">
+                  <select
+                    value={getUserAccountType(u)}
+                    onChange={(e) =>
+                      updateAccountType(u.id, e.target.value as UserAccountType)
+                    }
+                    className="rounded-xl border border-[#c8dce2] bg-[#f7fbfc] px-3 py-2 text-sm font-semibold capitalize text-[#123746] outline-none transition focus:border-[#74cdda] focus:bg-white"
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="client">Client</option>
                   </select>
                 </td>
 

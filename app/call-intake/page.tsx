@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
+import PermissionGuard from "@/app/components/PermissionGuard";
 
-export default function CallIntakePage() {
+function CallIntakeContent() {
   const router = useRouter();
 
   const [caseType, setCaseType] = useState<"project" | "b2c" | "">("");
@@ -284,6 +285,14 @@ export default function CallIntakePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function CallIntakePage() {
+  return (
+    <PermissionGuard module="call_intake" action="view" showMessage={true}>
+      <CallIntakeContent />
+    </PermissionGuard>
   );
 }
 

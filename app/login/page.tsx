@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Mail, Lock, ShieldCheck, Activity } from "lucide-react";
+import { isClientAccount } from "@/lib/userAccounts";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,8 +25,9 @@ export default function LoginPage() {
     if (loading) return;
 
     if (user) {
-      if (user.active === false) router.replace("/crew-profile");
-      else if (user.role && user.role !== "none") router.replace("/welcome");
+      if (user.active === false && !isClientAccount(user)) router.replace("/crew-profile");
+      else if (user.active !== false && isClientAccount(user)) router.replace("/client");
+      else if (user.active !== false && user.role && user.role !== "none") router.replace("/welcome");
     }
   }, [user, loading, router]);
 
@@ -63,6 +65,7 @@ export default function LoginPage() {
             name: fbUser.displayName || email.split("@")[0],
             active: false,
             accountStatus: "pending",
+            accountType: "employee",
             role: "none",
             createdAt: serverTimestamp(),
           },
@@ -76,7 +79,12 @@ export default function LoginPage() {
       const data = snap.data();
 
       if (data.active === false) {
-        router.replace("/crew-profile");
+        if (isClientAccount(data)) {
+          setError("Your client account is waiting for administrator activation.");
+          setSubmitting(false);
+        } else {
+          router.replace("/crew-profile");
+        }
         return;
       }
 
@@ -86,7 +94,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace("/welcome");
+      router.replace(isClientAccount(data) ? "/client" : "/welcome");
     } catch (err: any) {
       setError(err.message || "Login failed");
       setSubmitting(false);

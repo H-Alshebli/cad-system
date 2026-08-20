@@ -8,6 +8,7 @@ import CaseAlertListener from "./CaseAlertListener";
 import EnvironmentBanner from "./EnvironmentBanner";
 import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { isClientAccount } from "@/lib/userAccounts";
 
 const PUBLIC_ROUTES = ["/login", "/register"];
 
@@ -32,6 +33,8 @@ export default function AppShell({
 
   const isCrewProfileRoute =
     pathname === "/crew-profile" || pathname.startsWith("/crew-profile/");
+  const isClientPortalRoute =
+    pathname === "/client" || pathname.startsWith("/client/");
 
   useEffect(() => {
     if (isPublicRoute || loading) return;
@@ -39,14 +42,18 @@ export default function AppShell({
       router.replace("/login");
       return;
     }
-    if (user.active === false && !isCrewProfileRoute) {
+    if (user.active === false && !isClientAccount(user) && !isCrewProfileRoute) {
       router.replace("/crew-profile");
+      return;
+    }
+    if (user.active !== false && isClientAccount(user) && !isClientPortalRoute) {
+      router.replace("/client");
       return;
     }
     if (user.active !== false && (!user.role || user.role === "none") && !isCrewProfileRoute) {
       router.replace("/login");
     }
-  }, [isCrewProfileRoute, isPublicRoute, loading, router, user]);
+  }, [isClientPortalRoute, isCrewProfileRoute, isPublicRoute, loading, router, user]);
 
   if (isPublicRoute) {
     return <>{children}</>;
@@ -61,6 +68,31 @@ export default function AppShell({
   }
 
   if (user.active === false) {
+    if (isClientAccount(user)) {
+      return (
+        <div className="min-h-screen bg-[#eef4f6] text-[#274C5A]">
+          <EnvironmentBanner />
+          <main className="mx-auto flex min-h-[80vh] w-full max-w-2xl items-center px-4 py-8">
+            <div className="card-modern w-full text-center">
+              <h1 className="text-2xl font-black">Client account pending activation</h1>
+              <p className="mt-2 text-sm font-semibold text-[#607482]">
+                An administrator must activate and link this account to a project before portal access is available.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOut(auth);
+                  router.replace("/login");
+                }}
+                className="btn-secondary mt-5"
+              >
+                Logout
+              </button>
+            </div>
+          </main>
+        </div>
+      );
+    }
     if (!isCrewProfileRoute) return null;
 
     return (
@@ -88,6 +120,8 @@ export default function AppShell({
       </div>
     );
   }
+
+  if (isClientAccount(user) && !isClientPortalRoute) return null;
 
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-[#eef4f6] text-[#274C5A]">
