@@ -989,11 +989,6 @@ export default function CrewProfilePage() {
                         readOnly={field.key === "department"}
                         disabled={!isEditable}
                         placeholder={field.placeholder || ""}
-                        maxLength={
-                          field.key === "iban" || field.key === "alternativeIban"
-                            ? 24
-                            : undefined
-                        }
                         inputMode={
                           field.key === "accountNumber" ||
                           field.key === "alternativeAccountNumber"
