@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { db } from "@/lib/firebase";
 import {
   addDoc,
@@ -144,6 +145,7 @@ export default function AmbulancesPage() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [assignedProjectId, setAssignedProjectId] = useState("");
+  const [importingExcel, setImportingExcel] = useState(false);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingAmbulance, setEditingAmbulance] = useState<Ambulance | null>(
@@ -160,6 +162,7 @@ export default function AmbulancesPage() {
   const [editAssignedProjectId, setEditAssignedProjectId] = useState("");
 
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "ambulances"), (snap) => {
@@ -317,6 +320,223 @@ export default function AmbulancesPage() {
     const project = projects.find((p) => p.id === projectId);
 
     return project ? getProjectDisplayName(project) : "Unknown Project";
+  };
+
+  const exportAmbulancesExcel = () => {
+    const rows = ambulances.map((amb) => ({
+      "Ambulance Code": amb.code || "",
+      "Zone / Location": amb.location || "",
+      Status: amb.status || "available",
+      Latitude: amb.lat ?? "",
+      Longitude: amb.lng ?? "",
+      "Project ID": amb.assignedProjectId || amb.projectId || "",
+      "Project Name": getAmbulanceProjectName(amb),
+      "Crew Member 1 Email": amb.crewMembers?.[0]?.email || "",
+      "Crew Member 2 Email": amb.crewMembers?.[1]?.email || "",
+      "Current Case": amb.currentCase || "",
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ambulances");
+    XLSX.writeFile(workbook, `Ambulances_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadAmbulancesSample = () => {
+    const sample = XLSX.utils.aoa_to_sheet([
+      [
+        "Ambulance Code",
+        "Zone / Location",
+        "Status",
+        "Latitude",
+        "Longitude",
+        "Project ID",
+        "Project Name",
+        "Crew Member 1 Email",
+        "Crew Member 2 Email",
+      ],
+      ["BLS 143", "Riyadh", "available", 24.7136, 46.6753, "", "", "", ""],
+    ]);
+    const instructions = XLSX.utils.aoa_to_sheet([
+      ["Ambulances Import Instructions"],
+      ["Ambulance Code", "Required and used to safely match an existing ambulance."],
+      ["Zone / Location", "Required for new ambulances. Blank values never erase existing data."],
+      ["Status", "Optional: available, busy, or offline."],
+      ["Project", "Use Project ID or the exact Project Name."],
+      ["Crew", "Use an email that already exists in Users Management."],
+      ["Import limit", "Maximum 200 rows per file."],
+    ]);
+    sample["!cols"] = [
+      { wch: 20 }, { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 24 }, { wch: 30 }, { wch: 30 }, { wch: 30 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sample, "Ambulances");
+    XLSX.utils.book_append_sheet(workbook, instructions, "Instructions");
+    XLSX.writeFile(workbook, "Ambulances-Import-Sample.xlsx");
+  };
+
+  const importAmbulancesExcel = async (file: File) => {
+    setImportingExcel(true);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
+        defval: "",
+        raw: false,
+      });
+
+      if (!rows.length) throw new Error("The spreadsheet does not contain any ambulance rows.");
+      if (rows.length > 200) throw new Error("Import is limited to 200 rows per file.");
+
+      const clean = (value: unknown) => String(value ?? "").trim();
+      const normalizedUsers = new Map(
+        users.flatMap((item) => {
+          const keys = [item.id, item.email].filter(Boolean).map((value) => clean(value).toLowerCase());
+          return keys.map((key) => [key, item] as const);
+        })
+      );
+      const normalizedProjects = new Map<string, any>();
+      projects.forEach((project) => {
+        normalizedProjects.set(clean(project.id).toLowerCase(), project);
+        normalizedProjects.set(getProjectDisplayName(project).toLowerCase(), project);
+      });
+
+      let created = 0;
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const rowNumber = index + 2;
+        const ambulanceCode = clean(row["Ambulance Code"]);
+        const rowLocation = clean(row["Zone / Location"]);
+        if (!ambulanceCode) {
+          errors.push(`Row ${rowNumber}: Ambulance Code is required.`);
+          continue;
+        }
+
+        const existing = ambulances.find(
+          (item) => clean(item.code).toLowerCase() === ambulanceCode.toLowerCase()
+        );
+        if (!existing && !rowLocation) {
+          errors.push(`Row ${rowNumber}: Zone / Location is required for a new ambulance.`);
+          continue;
+        }
+
+        const rowStatus = clean(row.Status).toLowerCase();
+        if (rowStatus && !["available", "busy", "offline"].includes(rowStatus)) {
+          errors.push(`Row ${rowNumber}: Status must be available, busy, or offline.`);
+          continue;
+        }
+
+        const projectLookup = clean(row["Project ID"] || row["Project Name"]);
+        const selectedProject = projectLookup
+          ? normalizedProjects.get(projectLookup.toLowerCase())
+          : undefined;
+        if (projectLookup && !selectedProject) {
+          errors.push(`Row ${rowNumber}: Project was not found.`);
+          continue;
+        }
+
+        const crewKeys = [
+          clean(row["Crew Member 1 Email"]),
+          clean(row["Crew Member 2 Email"]),
+        ].filter(Boolean);
+        const crewUsers = crewKeys.map((key) => normalizedUsers.get(key.toLowerCase()));
+        if (crewUsers.some((item) => !item)) {
+          errors.push(`Row ${rowNumber}: One or more crew emails were not found.`);
+          continue;
+        }
+
+        const payload: Record<string, any> = {
+          code: ambulanceCode,
+          updatedAt: serverTimestamp(),
+        };
+        if (rowLocation) payload.location = rowLocation;
+        if (rowStatus) payload.status = rowStatus;
+
+        const latitude = clean(row.Latitude);
+        const longitude = clean(row.Longitude);
+        if (latitude) {
+          const value = Number(latitude);
+          if (!Number.isFinite(value) || value < -90 || value > 90) {
+            errors.push(`Row ${rowNumber}: Latitude is invalid.`);
+            continue;
+          }
+          payload.lat = value;
+        }
+        if (longitude) {
+          const value = Number(longitude);
+          if (!Number.isFinite(value) || value < -180 || value > 180) {
+            errors.push(`Row ${rowNumber}: Longitude is invalid.`);
+            continue;
+          }
+          payload.lng = value;
+        }
+
+        if (selectedProject) {
+          payload.assignedProjectId = selectedProject.id;
+          payload.assignedProjectName = getProjectDisplayName(selectedProject);
+          payload.projectId = selectedProject.id;
+          payload.projectName = getProjectDisplayName(selectedProject);
+        }
+
+        if (crewUsers.length) {
+          const crewMembers = crewUsers.map((crewUser) => ({
+            userId: crewUser!.id,
+            name: getUserDisplayName(crewUser!),
+            email: crewUser!.email || "",
+            role: crewUser!.role || "team",
+          }));
+          const crewUserIds = crewMembers.map((member) => member.userId);
+          const overrides = authorizeCrewAssignment(
+            crewUserIds,
+            existing?.crewComplianceOverrides || {}
+          );
+          if (!overrides) {
+            errors.push(`Row ${rowNumber}: Crew assignment was not authorized.`);
+            continue;
+          }
+          payload.crewMembers = crewMembers;
+          payload.crew = crewMembers.map((member) => member.name);
+          payload.crewUserIds = crewUserIds;
+          payload.assignedUserIds = crewUserIds;
+          payload.assignedTeamGroup = `${ambulanceCode} Team`;
+          payload.crewComplianceOverrides = overrides;
+        }
+
+        if (existing) {
+          await updateDoc(doc(db, "ambulances", existing.id), payload);
+          updated += 1;
+        } else {
+          const ambulanceRef = await addDoc(collection(db, "ambulances"), {
+            ...payload,
+            status: payload.status || "available",
+            currentCase: null,
+            archived: false,
+            createdAt: serverTimestamp(),
+          });
+          for (const crewUser of crewUsers) {
+            await updateDoc(doc(db, "users", crewUser!.id), {
+              ambulanceIds: arrayUnion(ambulanceRef.id),
+              updatedAt: serverTimestamp(),
+            });
+          }
+          created += 1;
+        }
+      }
+
+      const summary = `Import complete. Created: ${created}. Updated: ${updated}.`;
+      alert(errors.length ? `${summary}\n\nSkipped rows:\n${errors.slice(0, 20).join("\n")}` : summary);
+    } catch (error: any) {
+      console.error("Ambulance Excel import failed", error);
+      alert(error?.message || "The spreadsheet could not be imported. Use the sample file.");
+    } finally {
+      setImportingExcel(false);
+      if (excelInputRef.current) excelInputRef.current.value = "";
+    }
   };
 
   const addAmbulance = async () => {
@@ -551,6 +771,27 @@ export default function AmbulancesPage() {
               Manage ambulances, assigned projects, GPS information, and linked
               ambulance teams.
             </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary" onClick={downloadAmbulancesSample}>
+              Download Sample
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => excelInputRef.current?.click()} disabled={importingExcel}>
+              {importingExcel ? "Importing..." : "Import Excel"}
+            </button>
+            <button type="button" className="btn-primary" onClick={exportAmbulancesExcel}>
+              Export Excel
+            </button>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void importAmbulancesExcel(file);
+              }}
+            />
           </div>
         </div>
 
