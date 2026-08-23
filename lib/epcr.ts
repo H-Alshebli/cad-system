@@ -20,6 +20,14 @@ function cleanUndefinedDeep(value: any): any {
   }
 
   if (value && typeof value === "object") {
+    // Preserve Firestore special values such as serverTimestamp, Timestamp,
+    // GeoPoint, and DocumentReference. Recursing into them turns them into
+    // plain objects and prevents Firestore from resolving their real value.
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return value;
+    }
+
     const cleaned: Record<string, any> = {};
 
     Object.entries(value).forEach(([key, val]) => {
