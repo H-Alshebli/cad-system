@@ -6,6 +6,7 @@ import {
   getDoc,
   setDoc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -358,12 +359,80 @@ export const createManualEpcr = async ({
     throw new Error("Project is required for a manual ePCR.");
   }
 
-  const ref = doc(collection(db, "epcr"));
-  const payload = cleanUndefinedDeep({
-    epcrId: ref.id,
-    caseId: null,
+  // A manual ePCR is still an operational event. Create its CAD case and
+  // clinical record atomically with the same ID so neither can be orphaned.
+  const caseRef = doc(collection(db, "cases"));
+  const epcrRef = doc(db, "epcr", caseRef.id);
+  const assignedUserIds = createdBy ? [createdBy] : [];
+  const assignedUnit = unitId
+    ? {
+        type: "ambulance",
+        id: unitId,
+        code: unitCode || unitId,
+        unitCode: unitCode || unitId,
+      }
+    : null;
+
+  const casePayload = cleanUndefinedDeep({
+    sourceType: "MANUAL_EPCR",
+    caseType: "Manual ePCR",
+    sourceId: null,
+    manualEpcr: true,
+    projectId,
+    projectName,
+    callerName: createdByName || "Responder",
+    contactNumber: "",
+    patientName: "",
+    chiefComplaint: "Manual ePCR",
+    level: "",
+    patient: {
+      name: "",
+      phone: "",
+      age: null,
+      gender: "unknown",
+    },
+    caseInfo: {
+      complaint: "Manual ePCR",
+      level: "",
+      paramedicNote: "Created by responder from Manual ePCR.",
+    },
+    location: {
+      text: "",
+      googleMapLink: "",
+      source: "manual_epcr",
+    },
+    locationText: "",
+    paymentStatus: "NotRequired",
+    dispatchStatus: "OnScene",
+    status: "OnScene",
+    assignedUnit,
+    assignedUserIds,
+    acknowledged: true,
+    acknowledgedBy: createdBy || null,
+    acknowledgedByName: createdByName || "Responder",
+    acknowledgedAt: serverTimestamp(),
+    timeline: {
+      receivedAt: serverTimestamp(),
+      assignedAt: serverTimestamp(),
+      acknowledgedAt: serverTimestamp(),
+      enRouteAt: serverTimestamp(),
+      onSceneAt: serverTimestamp(),
+      transportingAt: null,
+      hospitalAt: null,
+      returningAt: null,
+      closedAt: null,
+    },
+    createdBy: createdBy || "manual",
+    createdByName: createdByName || "",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  const epcrPayload = cleanUndefinedDeep({
+    epcrId: epcrRef.id,
+    caseId: caseRef.id,
     isManual: true,
-    sourceType: "MANUAL",
+    sourceType: "MANUAL_EPCR",
     projectId,
     projectName,
     projectInfo: {
@@ -386,13 +455,11 @@ export const createManualEpcr = async ({
       signsAndSymptoms: [],
     },
     caseSnapshot: {
-      sourceType: "MANUAL",
-      assignedUnit: unitId
-        ? { id: unitId, code: unitCode || unitId, unitCode: unitCode || unitId }
-        : null,
+      sourceType: "MANUAL_EPCR",
+      assignedUnit,
       assignedAmbulanceId: unitId || null,
       assignedAmbulanceCode: unitCode || "",
-      assignedUserIds: createdBy ? [createdBy] : [],
+      assignedUserIds,
     },
     status: "draft",
     locked: false,
@@ -403,6 +470,10 @@ export const createManualEpcr = async ({
     updatedAt: serverTimestamp(),
   });
 
-  await setDoc(ref, payload);
-  return ref.id;
+  const batch = writeBatch(db);
+  batch.set(caseRef, casePayload);
+  batch.set(epcrRef, epcrPayload);
+  await batch.commit();
+
+  return caseRef.id;
 };

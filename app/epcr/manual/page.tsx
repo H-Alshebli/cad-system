@@ -92,7 +92,8 @@ export default function ManualEpcrPage() {
             <span className="badge">Manual clinical record</span>
             <h1 className="page-title mt-3">Manual ePCR</h1>
             <p className="page-subtitle">
-              Start a patient care report that is not linked to an existing CAD mission.
+              Start an on-scene patient care report. A linked CAD case will be
+              created automatically for Dispatch monitoring and status updates.
             </p>
           </div>
           <Link className="btn-secondary" href="/missions-plus">Back to My Missions+</Link>
