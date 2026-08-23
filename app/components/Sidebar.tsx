@@ -165,6 +165,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
     },
     {
+      href: "/missions-plus",
+      label: "My Missions+",
+      icon: <Activity size={18} />,
+      visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
+    },
+    {
       href: "/crew-profile",
       label: "Crew Profile",
       icon: <UserRound size={18} />,
