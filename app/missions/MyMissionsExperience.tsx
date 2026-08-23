@@ -552,12 +552,12 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
 
   return (
     <div className={`page-shell ${enhanced ? "max-w-[1500px]" : ""}`}>
-      <div className={enhanced ? "rounded-[28px] border border-[#274C5A]/15 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/10 sm:p-7" : "page-header"}>
+      <div className={enhanced ? "rounded-[20px] border border-[#274C5A]/15 bg-[#274C5A] p-4 text-white shadow-lg shadow-[#274C5A]/10 sm:rounded-[28px] sm:p-7" : "page-header"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            {enhanced && <span className="mb-3 inline-flex rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em]">Responder workspace</span>}
-            <h1 className={enhanced ? "text-3xl font-black sm:text-4xl" : "page-title"}>{enhanced ? "My Missions+" : "My Missions"}</h1>
-            <p className={enhanced ? "mt-2 max-w-2xl text-sm font-semibold text-white/80 sm:text-base" : "page-subtitle"}>
+            {enhanced && <span className="mb-2 inline-flex rounded-full border border-white/25 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] sm:mb-3 sm:px-3 sm:text-xs sm:tracking-[0.16em]">Responder workspace</span>}
+            <h1 className={enhanced ? "text-[22px] font-black leading-tight sm:text-4xl" : "page-title"}>{enhanced ? "My Missions+" : "My Missions"}</h1>
+            <p className={enhanced ? "mt-1.5 max-w-2xl text-xs font-semibold leading-relaxed text-white/80 sm:mt-2 sm:text-base" : "page-subtitle"}>
               Complete unit readiness once per shift, then open assigned CAD missions.
             </p>
           </div>
@@ -570,12 +570,12 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
         </div>
       </div>
 
-      <div className={enhanced ? "flex flex-col gap-7" : "contents"}>
+      <div className={enhanced ? "flex flex-col gap-5 sm:gap-7" : "contents"}>
       <section className={`space-y-3 ${enhanced ? "order-3" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-[#123746]">Upcoming B2C Requests</h2>
-            <p className="text-sm font-semibold text-[#607482]">
+            <h2 className={enhanced ? "text-base font-black text-[#123746] sm:text-lg" : "text-lg font-black text-[#123746]"}>Upcoming B2C Requests</h2>
+            <p className={enhanced ? "text-xs font-semibold text-[#607482] sm:text-sm" : "text-sm font-semibold text-[#607482]"}>
               These requests are for preparation only. Click View Request to review and acknowledge.
             </p>
           </div>
@@ -659,8 +659,8 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
       <section className={`space-y-3 ${enhanced ? "order-1" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-[#123746]">{enhanced ? "Shift Readiness" : "Unit Readiness"}</h2>
-            <p className="text-sm font-semibold text-[#607482]">
+            <h2 className={enhanced ? "text-base font-black text-[#123746] sm:text-lg" : "text-lg font-black text-[#123746]"}>{enhanced ? "Shift Readiness" : "Unit Readiness"}</h2>
+            <p className={enhanced ? "text-xs font-semibold text-[#607482] sm:text-sm" : "text-sm font-semibold text-[#607482]"}>
               {enhanced
                 ? "One readiness checklist per project, unit, date and shift — not per mission."
                 : "Opening appears first. Closing appears after opening is submitted or approved."}
@@ -677,7 +677,7 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {checklistCards.map(({ context, current, phase, title, description, status, sourceChecklistId }) => (
-              <article key={`${context.key}-${phase}`} className={`card-modern min-h-[220px] ${enhanced ? "border-l-4 border-l-[#86A7B2] shadow-md shadow-[#274C5A]/5" : ""}`}>
+              <article key={`${context.key}-${phase}`} className={`card-modern ${enhanced ? "min-h-0 rounded-2xl border-l-4 border-l-[#86A7B2] p-4 shadow-md shadow-[#274C5A]/5 sm:min-h-[220px] sm:p-6" : "min-h-[220px]"}`}>
                 <div className="flex h-full flex-col justify-between gap-5">
                   <div>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -685,10 +685,10 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
                       <span className="badge">{status}</span>
                     </div>
 
-                    <h3 className="mt-5 text-2xl font-black text-[#123746]">{title}</h3>
-                    <p className="mt-2 text-sm font-semibold text-[#607482]">{description}</p>
+                    <h3 className={enhanced ? "mt-3 text-lg font-black text-[#123746] sm:mt-5 sm:text-2xl" : "mt-5 text-2xl font-black text-[#123746]"}>{title}</h3>
+                    <p className={enhanced ? "mt-1 text-xs font-semibold text-[#607482] sm:mt-2 sm:text-sm" : "mt-2 text-sm font-semibold text-[#607482]"}>{description}</p>
 
-                    <div className="mt-5 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <div className={enhanced ? "mt-3 grid grid-cols-2 gap-2 text-xs sm:mt-5 sm:text-sm" : "mt-5 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2"}>
                       <div>
                         <span className="font-bold text-[#607482]">Unit: </span>
                         <span className="font-black text-[#123746]">{context.unitCode}</span>
@@ -710,7 +710,7 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
 
                   {can("readiness_checklists", "create") ? (
                     <Link
-                      className={enhanced ? "btn-primary min-h-[54px] w-full justify-center text-base sm:w-auto" : "btn-primary w-fit"}
+                      className={enhanced ? "btn-primary min-h-[46px] w-full justify-center text-sm sm:min-h-[54px] sm:w-auto sm:text-base" : "btn-primary w-fit"}
                       href={
                         current
                           ? `/projects/${current.projectId || context.projectId}/checklists/${current.id}`
@@ -740,8 +740,8 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
       <section className={`${enhanced ? "order-2" : "mt-8"} space-y-3`}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-black text-[#123746]">Active CAD Missions</h2>
-            <p className="text-sm font-semibold text-[#607482]">
+            <h2 className={enhanced ? "text-base font-black text-[#123746] sm:text-lg" : "text-lg font-black text-[#123746]"}>Active CAD Missions</h2>
+            <p className={enhanced ? "text-xs font-semibold text-[#607482] sm:text-sm" : "text-sm font-semibold text-[#607482]"}>
               Open a mission to acknowledge and view the full CAD case details.
             </p>
           </div>
@@ -772,7 +772,7 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
               const sourceLabel = item.sourceType || item.caseType || "PROJECT";
 
               return (
-                <article key={item.id} className={`card-modern min-h-[220px] ${enhanced ? "group border-[#86A7B2]/35 shadow-md shadow-[#274C5A]/5 transition hover:-translate-y-0.5 hover:shadow-lg" : ""}`}>
+                <article key={item.id} className={`card-modern ${enhanced ? "group min-h-0 rounded-2xl border-[#86A7B2]/35 p-4 shadow-md shadow-[#274C5A]/5 transition hover:-translate-y-0.5 hover:shadow-lg sm:min-h-[220px] sm:p-6" : "min-h-[220px]"}`}>
                   <div className="flex h-full flex-col justify-between gap-5">
                     <div>
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -780,14 +780,14 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
                         <span className="badge">{getMissionStatus(item)}</span>
                       </div>
 
-                      <h3 className="mt-5 text-2xl font-black leading-tight text-[#123746]">
+                      <h3 className={enhanced ? "mt-3 text-lg font-black leading-tight text-[#123746] sm:mt-5 sm:text-2xl" : "mt-5 text-2xl font-black leading-tight text-[#123746]"}>
                         {getCaseDisplayCode(item)}
                       </h3>
-                      <p className="mt-1 text-sm font-semibold text-[#607482]">
+                      <p className={enhanced ? "mt-1 text-xs font-semibold text-[#607482] sm:text-sm" : "mt-1 text-sm font-semibold text-[#607482]"}>
                         {getCaseDisplayTitle(item)}
                       </p>
 
-                      <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-3 text-sm md:grid-cols-2">
+                      <div className={enhanced ? "mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:mt-5 sm:gap-x-8 sm:gap-y-3 sm:text-sm" : "mt-5 grid grid-cols-1 gap-x-8 gap-y-3 text-sm md:grid-cols-2"}>
                         <div>
                           <span className="font-bold text-[#607482]">Source: </span>
                           <span className="font-black text-[#123746]">{sourceLabel}</span>
@@ -837,7 +837,7 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
                         </Link>
                       )}
 
-                      <Link className={enhanced ? "btn-primary min-h-[54px] flex-1 justify-center text-base" : "btn-primary"} href={`${missionBasePath}/${item.id}`}>
+                      <Link className={enhanced ? "btn-primary min-h-[46px] flex-1 justify-center text-sm sm:min-h-[54px] sm:text-base" : "btn-primary"} href={`${missionBasePath}/${item.id}`}>
                         Open Mission
                       </Link>
                     </div>

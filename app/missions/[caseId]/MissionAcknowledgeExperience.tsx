@@ -306,11 +306,11 @@ export function MissionAcknowledgeExperience({
 
   return (
     <div className={`page-shell ${enhanced ? "max-w-[1500px]" : ""}`}>
-      <div className={enhanced ? "rounded-[28px] border border-[#274C5A]/15 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/10 sm:p-7" : "page-header"}>
+      <div className={enhanced ? "rounded-[20px] border border-[#274C5A]/15 bg-[#274C5A] p-4 text-white shadow-lg shadow-[#274C5A]/10 sm:rounded-[28px] sm:p-7" : "page-header"}>
         <div>
-          <h1 className={enhanced ? "text-3xl font-black" : "page-title"}>Mission Acknowledgement</h1>
+          <h1 className={enhanced ? "text-[22px] font-black leading-tight sm:text-3xl" : "page-title"}>Mission Acknowledgement</h1>
 
-          <p className={enhanced ? "mt-2 max-w-2xl text-sm font-semibold text-white/80" : "page-subtitle"}>
+          <p className={enhanced ? "mt-1.5 max-w-2xl text-xs font-semibold leading-relaxed text-white/80 sm:mt-2 sm:text-sm" : "page-subtitle"}>
             This page confirms that the team received the active CAD mission
             before opening the full CAD details.
           </p>
@@ -330,10 +330,10 @@ export function MissionAcknowledgeExperience({
       </div>
 
       {!detailsVisible ? (
-        <div className="card-modern max-w-3xl">
+        <div className={enhanced ? "card-modern max-w-3xl rounded-2xl p-4 sm:p-6" : "card-modern max-w-3xl"}>
           <span className="badge">Active CAD Mission</span>
 
-          <h2 className="mt-4 text-2xl font-black text-[#123746]">
+          <h2 className={enhanced ? "mt-3 text-lg font-black text-[#123746] sm:mt-4 sm:text-2xl" : "mt-4 text-2xl font-black text-[#123746]"}>
             Case {getCaseDisplayCode(caseData)}
           </h2>
 
@@ -448,7 +448,7 @@ export function MissionAcknowledgeExperience({
             )}
 
             <button
-              className={enhanced ? "btn-primary min-h-[54px] w-full justify-center text-base sm:w-auto" : "btn-primary"}
+              className={enhanced ? "btn-primary min-h-[46px] w-full justify-center text-sm sm:min-h-[54px] sm:w-auto sm:text-base" : "btn-primary"}
               disabled={ackLoading}
               onClick={acknowledgeAndView}
             >
@@ -460,10 +460,10 @@ export function MissionAcknowledgeExperience({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="card-modern space-y-4">
+          <div className={enhanced ? "card-modern space-y-3 rounded-2xl p-4 sm:space-y-4 sm:p-6" : "card-modern space-y-4"}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black text-[#123746]">
+                <h2 className={enhanced ? "text-lg font-black text-[#123746] sm:text-2xl" : "text-2xl font-black text-[#123746]"}>
                   Case {getCaseDisplayCode(caseData)}
                 </h2>
 
@@ -528,7 +528,7 @@ export function MissionAcknowledgeExperience({
             </div>
           </div>
 
-          <div className="card-modern">
+          <div className={enhanced ? "card-modern rounded-2xl p-4 sm:p-6" : "card-modern"}>
             <h3 className="text-lg font-black text-[#123746]">
               Mission Acknowledgement
             </h3>
