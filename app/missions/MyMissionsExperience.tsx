@@ -562,11 +562,16 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
             </p>
           </div>
 
-          {can("readiness_checklists", "create") && (
-            <Link className="btn-secondary" href="/projects/_manual/checklists/new?manual=1">
-              Manual Checklist
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn-secondary" href="/epcr/manual">
+              Manual ePCR
             </Link>
-          )}
+            {can("readiness_checklists", "create") && (
+              <Link className="btn-secondary" href="/projects/_manual/checklists/new?manual=1">
+                Manual Checklist
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

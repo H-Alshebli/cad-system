@@ -1,6 +1,7 @@
 // lib/epcr.ts
 
 import {
+  collection,
   doc,
   getDoc,
   setDoc,
@@ -336,4 +337,72 @@ export const createEpcrFromCase = async (
   await setDoc(ref, payload);
 
   return caseData.id;
+};
+
+export const createManualEpcr = async ({
+  projectId,
+  projectName,
+  unitId,
+  unitCode,
+  createdBy,
+  createdByName,
+}: {
+  projectId: string;
+  projectName: string;
+  unitId?: string;
+  unitCode?: string;
+  createdBy: string;
+  createdByName?: string;
+}) => {
+  if (!projectId || !projectName) {
+    throw new Error("Project is required for a manual ePCR.");
+  }
+
+  const ref = doc(collection(db, "epcr"));
+  const payload = cleanUndefinedDeep({
+    epcrId: ref.id,
+    caseId: null,
+    isManual: true,
+    sourceType: "MANUAL",
+    projectId,
+    projectName,
+    projectInfo: {
+      projectId,
+      projectName,
+      tripLeg: "",
+    },
+    patientInfo: {
+      firstName: "",
+      lastName: "",
+      age: null,
+      gender: "unknown",
+      phone: "",
+      factoryName: projectName,
+      nationality: "",
+      triageColor: "",
+      healthClassification: "",
+      chiefComplaints: [],
+      chiefComplaintDetails: {},
+      signsAndSymptoms: [],
+    },
+    caseSnapshot: {
+      sourceType: "MANUAL",
+      assignedUnit: unitId
+        ? { id: unitId, code: unitCode || unitId, unitCode: unitCode || unitId }
+        : null,
+      assignedAmbulanceId: unitId || null,
+      assignedAmbulanceCode: unitCode || "",
+      assignedUserIds: createdBy ? [createdBy] : [],
+    },
+    status: "draft",
+    locked: false,
+    finalizedAt: null,
+    createdBy: createdBy || "manual",
+    createdByName: createdByName || "",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await setDoc(ref, payload);
+  return ref.id;
 };
