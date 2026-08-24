@@ -322,14 +322,68 @@ export default function AmbulancesPage() {
     return project ? getProjectDisplayName(project) : "Unknown Project";
   };
 
+  const normalizeProjectLookup = (value: unknown) =>
+    String(value ?? "").trim().toLowerCase();
+
+  const getProjectLookupValues = (project: any) =>
+    [
+      project?.id,
+      project?.masterProjectId,
+      project?.projectCode,
+      getProjectDisplayName(project),
+    ]
+      .map(normalizeProjectLookup)
+      .filter(Boolean);
+
+  const getProjectMatches = () => {
+    const matches = new Map<string, any[]>();
+
+    projects.forEach((project) => {
+      new Set(getProjectLookupValues(project)).forEach((key) => {
+        const current = matches.get(key) || [];
+        if (!current.some((item) => item.id === project.id)) {
+          current.push(project);
+        }
+        matches.set(key, current);
+      });
+    });
+
+    return matches;
+  };
+
+  const getAmbulanceProjectReference = (
+    amb: Ambulance,
+    projectMatches: Map<string, any[]>
+  ) => {
+    const internalProjectId = amb.assignedProjectId || amb.projectId || "";
+    if (!internalProjectId) return "";
+
+    const project = projects.find((item) => item.id === internalProjectId);
+    const masterProjectId = String(project?.masterProjectId || "").trim();
+
+    if (
+      masterProjectId &&
+      projectMatches.get(normalizeProjectLookup(masterProjectId))?.length === 1
+    ) {
+      return masterProjectId;
+    }
+
+    // Internal IDs always round-trip safely when a master reference is shared by sites.
+    return internalProjectId;
+  };
+
   const exportAmbulancesExcel = () => {
+    const projectMatches = getProjectMatches();
     const rows = ambulances.map((amb) => ({
       "Ambulance Code": amb.code || "",
       "Zone / Location": amb.location || "",
       Status: amb.status || "available",
       Latitude: amb.lat ?? "",
       Longitude: amb.lng ?? "",
-      "Project ID": amb.assignedProjectId || amb.projectId || "",
+      "Project Reference / ID": getAmbulanceProjectReference(
+        amb,
+        projectMatches
+      ),
       "Project Name": getAmbulanceProjectName(amb),
       "Crew Member 1 Email": amb.crewMembers?.[0]?.email || "",
       "Crew Member 2 Email": amb.crewMembers?.[1]?.email || "",
@@ -350,7 +404,7 @@ export default function AmbulancesPage() {
         "Status",
         "Latitude",
         "Longitude",
-        "Project ID",
+        "Project Reference / ID",
         "Project Name",
         "Crew Member 1 Email",
         "Crew Member 2 Email",
@@ -362,7 +416,10 @@ export default function AmbulancesPage() {
       ["Ambulance Code", "Required and used to safely match an existing ambulance."],
       ["Zone / Location", "Required for new ambulances. Blank values never erase existing data."],
       ["Status", "Optional: available, busy, or offline."],
-      ["Project", "Use Project ID or the exact Project Name."],
+      [
+        "Project",
+        "Use the Master Project ID (PRJ-xxxx), project code, internal system ID, or exact Project Name. If a reference is shared by multiple sites, use the exact Project Name or internal system ID.",
+      ],
       ["Crew", "Use an email that already exists in Users Management."],
       ["Import limit", "Maximum 200 rows per file."],
     ]);
@@ -397,11 +454,7 @@ export default function AmbulancesPage() {
           return keys.map((key) => [key, item] as const);
         })
       );
-      const normalizedProjects = new Map<string, any>();
-      projects.forEach((project) => {
-        normalizedProjects.set(clean(project.id).toLowerCase(), project);
-        normalizedProjects.set(getProjectDisplayName(project).toLowerCase(), project);
-      });
+      const normalizedProjects = getProjectMatches();
 
       let created = 0;
       let updated = 0;
@@ -431,14 +484,25 @@ export default function AmbulancesPage() {
           continue;
         }
 
-        const projectLookup = clean(row["Project ID"] || row["Project Name"]);
-        const selectedProject = projectLookup
-          ? normalizedProjects.get(projectLookup.toLowerCase())
-          : undefined;
-        if (projectLookup && !selectedProject) {
+        const projectLookup = clean(
+          row["Project Reference / ID"] ||
+            row["Project ID"] ||
+            row["Project Name"]
+        );
+        const matchingProjects = projectLookup
+          ? normalizedProjects.get(projectLookup.toLowerCase()) || []
+          : [];
+        if (projectLookup && matchingProjects.length === 0) {
           errors.push(`Row ${rowNumber}: Project was not found.`);
           continue;
         }
+        if (matchingProjects.length > 1) {
+          errors.push(
+            `Row ${rowNumber}: Project reference matches multiple sites. Use the exact Project Name or internal system ID.`
+          );
+          continue;
+        }
+        const selectedProject = matchingProjects[0];
 
         const crewKeys = [
           clean(row["Crew Member 1 Email"]),
