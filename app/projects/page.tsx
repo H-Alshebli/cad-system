@@ -2,6 +2,7 @@
 
 import { usePermissions } from "@/lib/usePermissions";
 import {
+  addDoc,
   collection,
   doc,
   getDocs,
@@ -15,7 +16,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { Download, FileDown, FileUp, MoreHorizontal, Plus } from "lucide-react";
 import Can from "../components/Can";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
@@ -190,11 +191,18 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [importingExcel, setImportingExcel] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
 
   const canViewAll = useMemo(() => {
     if (!user) return false;
     return user.role === "admin" || permissions?.projects?.view_all === true;
   }, [user?.role, permissions?.projects?.view_all]);
+  const canImportProjects =
+    canViewAll &&
+    (user?.role === "admin" ||
+      (permissions?.projects?.create === true &&
+        permissions?.projects?.edit === true));
 
   useEffect(() => {
     if (!user || permsLoading) return;
@@ -283,6 +291,230 @@ export default function ProjectsPage() {
     }
   };
 
+  const exportProjectsExcel = async () => {
+    const XLSX = await import("xlsx");
+    const rows = projects.map((project) => {
+      return {
+        "Internal Project ID": project.id,
+        "Master Project ID": project.masterProjectId || "",
+        "Project Code": project.projectCode || "",
+        "Project Name": project.projectName || "",
+        Client: project.client || "",
+        "Site Details": project.projectDetails?.siteDetails || "",
+        Status: project.isArchived === true ? "Archived" : project.status || "Active",
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = [
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 28 },
+      { wch: 38 },
+      { wch: 28 },
+      { wch: 38 },
+      { wch: 14 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Projects");
+    XLSX.writeFile(
+      workbook,
+      `HCAD-Projects-${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
+
+  const downloadProjectsSample = async () => {
+    const XLSX = await import("xlsx");
+    const sample = XLSX.utils.aoa_to_sheet([
+      [
+        "Internal Project ID",
+        "Master Project ID",
+        "Project Code",
+        "Project Name",
+        "Client",
+        "Site Details",
+      ],
+      ["", "PRJ-0001", "LZM-EXAMPLE-01", "Example Project", "Example Client", "Riyadh"],
+    ]);
+    sample["!cols"] = [
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 28 },
+      { wch: 38 },
+      { wch: 28 },
+      { wch: 38 },
+    ];
+
+    const instructions = XLSX.utils.aoa_to_sheet([
+      ["Projects Import Instructions"],
+      ["Project Name", "Required when creating a new project."],
+      ["Internal Project ID", "Best and safest value for updating an existing project. Leave blank for a new project."],
+      ["Master Project ID", "Optional master reference such as PRJ-0001. This is accepted by the ambulance importer."],
+      ["Project Code", "Optional operational project code. This is also accepted by the ambulance importer."],
+      ["Blank cells", "Blank cells never erase existing project values."],
+      ["Archived projects", "Archiving and restoring are not performed through Excel. Use the project action menu."],
+      ["Import limit", "Maximum 200 rows per file."],
+    ]);
+    instructions["!cols"] = [{ wch: 24 }, { wch: 100 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sample, "Projects");
+    XLSX.utils.book_append_sheet(workbook, instructions, "Instructions");
+    XLSX.writeFile(workbook, "HCAD-Projects-Import-Sample.xlsx");
+  };
+
+  const importProjectsExcel = async (file: File) => {
+    setImportingExcel(true);
+
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+        defval: "",
+        raw: false,
+      });
+
+      if (!rows.length) throw new Error("The spreadsheet does not contain project rows.");
+      if (rows.length > 200) throw new Error("Import is limited to 200 rows per file.");
+
+      const clean = (value: unknown) => String(value ?? "").trim();
+      const normalize = (value: unknown) => clean(value).toLowerCase();
+      const snapshot = await getDocs(collection(db, "projects"));
+      const allProjects = snapshot.docs.map((projectDoc) => ({
+        id: projectDoc.id,
+        ...(projectDoc.data() as any),
+      }));
+      const errors: string[] = [];
+      let created = 0;
+      let updated = 0;
+
+      const findMatches = (field: string, value: string) =>
+        value
+          ? allProjects.filter((project) => normalize(project[field]) === normalize(value))
+          : [];
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const rowNumber = index + 2;
+        const internalId = clean(row["Internal Project ID"] || row["Project ID"]);
+        const masterProjectId = clean(row["Master Project ID"] || row["Project Reference / ID"]);
+        const projectCode = clean(row["Project Code"]);
+        const projectName = clean(row["Project Name"]);
+        const client = clean(row.Client);
+        const siteDetails = clean(row["Site Details"]);
+
+        let selectedProject: any | undefined;
+
+        if (internalId) {
+          selectedProject = allProjects.find((project) => project.id === internalId);
+          if (!selectedProject) {
+            errors.push(`Row ${rowNumber}: Internal Project ID was not found.`);
+            continue;
+          }
+        } else {
+          const referenceMatches = findMatches("masterProjectId", masterProjectId);
+          const codeMatches = findMatches("projectCode", projectCode);
+          let identityMatches = referenceMatches.length ? referenceMatches : codeMatches;
+
+          if (referenceMatches.length && codeMatches.length) {
+            identityMatches = referenceMatches.filter((project) =>
+              codeMatches.some((match) => match.id === project.id)
+            );
+          }
+
+          const hadAmbiguousIdentity = identityMatches.length > 1;
+          if (hadAmbiguousIdentity && projectName) {
+            identityMatches = identityMatches.filter(
+              (project) => normalize(project.projectName) === normalize(projectName)
+            );
+          }
+
+          if (identityMatches.length === 1) {
+            selectedProject = identityMatches[0];
+          } else if (identityMatches.length > 1) {
+            errors.push(
+              `Row ${rowNumber}: The project reference matches multiple sites. Add the exact Project Name or Internal Project ID.`
+            );
+            continue;
+          } else if (hadAmbiguousIdentity) {
+            errors.push(
+              `Row ${rowNumber}: The project reference is shared by multiple sites and does not match the supplied Project Name. Use the exact existing Project Name or Internal Project ID.`
+            );
+            continue;
+          } else if (projectName) {
+            const nameMatches = findMatches("projectName", projectName);
+            if (nameMatches.length === 1) selectedProject = nameMatches[0];
+            if (nameMatches.length > 1) {
+              errors.push(`Row ${rowNumber}: Project Name is duplicated. Add a project reference or Internal Project ID.`);
+              continue;
+            }
+          }
+        }
+
+        if (!selectedProject && !projectName) {
+          errors.push(`Row ${rowNumber}: Project Name is required for a new project.`);
+          continue;
+        }
+
+        const payload: Record<string, any> = { updatedAt: serverTimestamp() };
+        if (projectName) payload.projectName = projectName;
+        if (masterProjectId) payload.masterProjectId = masterProjectId;
+        if (projectCode) payload.projectCode = projectCode;
+        if (client) payload.client = client;
+        if (siteDetails) {
+          payload.projectDetails = {
+            ...(selectedProject?.projectDetails || {}),
+            siteDetails,
+          };
+        }
+
+        if (selectedProject) {
+          await updateDoc(doc(db, "projects", selectedProject.id), payload);
+          Object.assign(selectedProject, payload);
+          updated += 1;
+        } else {
+          const projectRef = await addDoc(collection(db, "projects"), {
+            ...payload,
+            projectName,
+            masterProjectId: masterProjectId || null,
+            projectCode: projectCode || null,
+            client: client || "",
+            status: "Active",
+            isArchived: false,
+            assignedUsers: {},
+            assignedAmbulanceIds: [],
+            assignedAmbulances: [],
+            projectHospitalIds: [],
+            projectHospitals: [],
+            createdAt: serverTimestamp(),
+          });
+          allProjects.push({
+            id: projectRef.id,
+            ...payload,
+            projectName,
+            masterProjectId: masterProjectId || null,
+            projectCode: projectCode || null,
+          });
+          created += 1;
+        }
+      }
+
+      const summary = `Import complete. Created: ${created}. Updated: ${updated}.`;
+      alert(
+        errors.length
+          ? `${summary}\n\nSkipped rows:\n${errors.slice(0, 20).join("\n")}`
+          : summary
+      );
+    } catch (error: any) {
+      console.error("Project Excel import failed", error);
+      alert(error?.message || "The spreadsheet could not be imported. Use the sample file.");
+    } finally {
+      setImportingExcel(false);
+      if (excelInputRef.current) excelInputRef.current.value = "";
+    }
+  };
+
   if (loading || permsLoading) {
     return (
       <div className="p-6 text-sm font-semibold text-[#7F7F7F]">
@@ -307,6 +539,45 @@ export default function ProjectsPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={exportProjectsExcel}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16"
+          >
+            <FileDown size={16} /> Export Excel
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadProjectsSample}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16"
+          >
+            <Download size={16} /> Download Sample
+          </button>
+
+          {canImportProjects && (
+            <>
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importProjectsExcel(file);
+                }}
+              />
+              <button
+                type="button"
+                disabled={importingExcel}
+                onClick={() => excelInputRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <FileUp size={16} /> {importingExcel ? "Importing..." : "Import Excel"}
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => setShowArchived((v) => !v)}
             className="rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/16"
