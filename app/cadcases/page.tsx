@@ -10,7 +10,6 @@ import {
   Search,
 } from "lucide-react";
 
-import CaseTimeline from "@/app/components/CaseTimeline";
 import { db } from "@/lib/firebase";
 import {
   getCaseDisplayCode,
@@ -46,6 +45,17 @@ function formatCaseDate(item: any) {
   });
 }
 
+function getCaseLocation(item: any) {
+  return (
+    item.location?.text ||
+    item.locationText ||
+    item.pickup?.text ||
+    item.pickupText ||
+    item.pickupLocation?.text ||
+    "—"
+  );
+}
+
 function statusClasses(status: string) {
   switch (status) {
     case "Closed":
@@ -70,7 +80,7 @@ export default function ModernCadCasesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("current");
 
   useEffect(() => {
     const unsubscribeCases = onSnapshot(
@@ -138,7 +148,15 @@ export default function ModernCadCasesPage() {
           return false;
         }
 
-        if (statusFilter !== "all" && String(item.status || "Unknown") !== statusFilter) {
+        if (statusFilter === "current" && item.status === "Closed") {
+          return false;
+        }
+
+        if (
+          statusFilter !== "all" &&
+          statusFilter !== "current" &&
+          String(item.status || "Unknown") !== statusFilter
+        ) {
           return false;
         }
 
@@ -239,6 +257,7 @@ export default function ModernCadCasesPage() {
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
+            <option value="current">Current Cases</option>
             <option value="all">All Statuses</option>
             {statusOptions.map((status) => (
               <option key={status} value={status}>
@@ -275,6 +294,13 @@ export default function ModernCadCasesPage() {
               (project ? getProjectDisplayName(project) : "Unassigned / B2C");
             const unitName = getUnitDisplayName(item.assignedUnit) || "Unassigned";
             const status = String(item.status || "Unknown");
+            const chiefComplaint =
+              item.chiefComplaint ||
+              item.caseInfo?.complaint ||
+              item.complaint ||
+              item.serviceType ||
+              "—";
+            const location = getCaseLocation(item);
 
             return (
               <Link
@@ -282,13 +308,16 @@ export default function ModernCadCasesPage() {
                 href={`/cadcases/${item.id}`}
                 className="group rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5 transition hover:-translate-y-0.5 hover:border-[#74cdda] hover:shadow-lg hover:shadow-[#274C5A]/10"
               >
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-lg font-black text-[#123746]">
+                    <div className="text-xl font-black text-[#123746]">
                       {getCaseDisplayCode(item)}
                     </div>
-                    <div className="mt-1 line-clamp-2 text-sm font-semibold text-[#607482]">
+                    <div className="mt-1 line-clamp-2 text-sm font-bold text-[#274C5A]">
                       {getCaseDisplayTitle(item)}
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-[#607482]">
+                      Date &amp; Time: {formatCaseDate(item)}
                     </div>
                   </div>
                   <span
@@ -300,27 +329,43 @@ export default function ModernCadCasesPage() {
                   </span>
                 </div>
 
-                <div className="mb-4 grid grid-cols-1 gap-2 rounded-xl border border-[#e1ebef] bg-[#f7fbfc] p-3 text-xs sm:grid-cols-3">
+                <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-5 text-sm sm:grid-cols-2">
                   <div>
-                    <div className="font-bold text-[#7F7F7F]">Project</div>
-                    <div className="mt-1 font-black text-[#274C5A]">{projectName}</div>
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7F7F7F]">
+                      Chief Complaint
+                    </div>
+                    <div className="mt-1 font-black text-[#123746]">
+                      {chiefComplaint}
+                    </div>
                   </div>
                   <div>
-                    <div className="font-bold text-[#7F7F7F]">Unit</div>
-                    <div className="mt-1 font-black text-[#274C5A]">{unitName}</div>
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7F7F7F]">
+                      Project Name
+                    </div>
+                    <div className="mt-1 font-black text-[#123746]">
+                      {projectName}
+                    </div>
                   </div>
                   <div>
-                    <div className="font-bold text-[#7F7F7F]">Created</div>
-                    <div className="mt-1 font-black text-[#274C5A]">
-                      {formatCaseDate(item)}
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7F7F7F]">
+                      Location
+                    </div>
+                    <div className="mt-1 line-clamp-2 font-black text-[#123746]">
+                      {location}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7F7F7F]">
+                      Assigned Unit
+                    </div>
+                    <div className="mt-1 font-black text-[#123746]">
+                      {unitName}
                     </div>
                   </div>
                 </div>
 
-                <CaseTimeline timeline={item.timeline || {}} />
-
-                <div className="mt-4 flex items-center gap-2 text-sm font-black text-[#166575]">
-                  <Activity size={16} /> Open modern case details →
+                <div className="mt-6 flex items-center gap-2 border-t border-[#e1ebef] pt-4 text-sm font-black text-[#166575]">
+                  <Activity size={16} /> Open case details →
                 </div>
               </Link>
             );
