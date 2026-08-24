@@ -43,20 +43,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { permissions, loading: permLoading } = usePermissions(role);
 
   const isAdmin = role === "admin";
-  const isDispatcher =
-    isAdmin ||
-    role === "dispatcher" ||
-    role === "dispatch" ||
-    can(permissions, "call_intake", "view") ||
-    can(permissions, "cases", "create") ||
-    can(permissions, "cases", "view");
-
-  const isParamedic =
-    role === "paramedic" ||
-    role === "emt" ||
-    role === "medical" ||
-    can(permissions, "missions", "view");
-
   const isClientPortalUser = can(permissions, "client_portal", "view");
   const clientAccount = isClientAccount(user);
 
@@ -124,12 +110,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   const operationsItems: NavItem[] = [
     {
-      href: "/dashboard",
-      label: "Dispatch Dashboard",
-      icon: <LayoutDashboard size={18} />,
-      visible: isAdmin || can(permissions, "dashboards", "timeline"),
-    },
-    {
       href: "/call-intake",
       label: "New Case / Call Intake",
       icon: <ClipboardPlus size={18} />,
@@ -139,48 +119,56 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         can(permissions, "cases", "create"),
     },
     {
+      href: "/dashboard",
+      label: "Timeline Dashboard",
+      icon: <LayoutDashboard size={18} />,
+      visible: isAdmin || can(permissions, "dashboards", "timeline"),
+    },
+    {
+      href: "/dashboard/epcr",
+      label: "Cases Dashboard",
+      icon: <BarChart3 size={18} />,
+      visible: isAdmin || can(permissions, "dashboards", "epcr"),
+    },
+    {
+      href: "/cadcases",
+      label: "CAD Cases",
+      icon: <BriefcaseMedical size={18} />,
+      visible: isAdmin || can(permissions, "cad_cases_new", "view"),
+    },
+    {
+      href: "/cases",
+      label: "CAD Cases (Old)",
+      icon: <BriefcaseMedical size={18} />,
+      visible: isAdmin || can(permissions, "cad_cases_old", "view"),
+    },
+    {
       href: "/b2c/requests",
       label: "B2C Requests",
       icon: <ClipboardList size={18} />,
       visible:
-        isDispatcher ||
         isAdmin ||
         can(permissions, "b2c_requests", "view") ||
         can(permissions, "call_intake", "view") ||
         can(permissions, "cases", "view"),
     },
     {
-      href: "/cases",
-      label: "CAD Cases",
-      icon: <BriefcaseMedical size={18} />,
-      visible:
-        isAdmin ||
-        can(permissions, "cases", "view") ||
-        can(permissions, "dashboards", "timeline"),
-    },
-    {
       href: "/missions",
       label: "My Missions",
       icon: <Stethoscope size={18} />,
-      visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
+      visible: isAdmin || can(permissions, "missions", "view"),
     },
     {
       href: "/missions-plus",
       label: "My Missions+",
       icon: <Activity size={18} />,
-      visible: isAdmin || isParamedic || can(permissions, "missions", "view"),
+      visible: isAdmin || can(permissions, "missions_plus", "view"),
     },
     {
       href: "/crew-profile",
       label: "Crew Profile",
       icon: <UserRound size={18} />,
       visible: !clientAccount,
-    },
-    {
-      href: "/dashboard/epcr",
-      label: "ePCR Dashboard",
-      icon: <BarChart3 size={18} />,
-      visible: isAdmin || can(permissions, "dashboards", "epcr"),
     },
     {
       href: "/submissions",

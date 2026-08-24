@@ -93,7 +93,7 @@ function CallIntakeContent() {
 
             <button
               type="button"
-              onClick={() => router.push("/cases")}
+              onClick={() => router.push("/cadcases")}
               className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#c8dce2] bg-white px-5 text-sm font-bold text-[#274C5A] transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
             >
               <Ambulance size={18} />

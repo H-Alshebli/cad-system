@@ -522,7 +522,7 @@ export function MissionAcknowledgeExperience({
                 </Link>
               )}
 
-              <Link className="btn-primary" href={`/cases/${caseData.id}`}>
+              <Link className="btn-primary" href={`/cadcases/${caseData.id}`}>
                 Open Full CAD Details
               </Link>
             </div>

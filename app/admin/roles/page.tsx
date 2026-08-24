@@ -176,6 +176,8 @@ export default function RolesPage() {
     setPermissionSafe(next, "cad", "manage_status", true);
     setPermissionSafe(next, "cad", "view_timeline", true);
     setPermissionSafe(next, "cad", "internal_chat", true);
+    setPermissionSafe(next, "cad_cases_new", "view", true);
+    setPermissionSafe(next, "cad_cases_old", "view", true);
 
     // Missions
     setPermissionSafe(next, "missions", "view", true);
@@ -204,6 +206,7 @@ export default function RolesPage() {
     setPermissionSafe(next, "missions", "acknowledge", true);
     setPermissionSafe(next, "missions", "update_status", true);
     setPermissionSafe(next, "missions", "report", true);
+    setPermissionSafe(next, "missions_plus", "view", true);
 
     // Project readiness checklists. Paramedics can create, save, and submit
     // their own drafts, but cannot review, approve, or return checklists.

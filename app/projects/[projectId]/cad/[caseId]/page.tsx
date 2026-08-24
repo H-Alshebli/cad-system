@@ -5,5 +5,5 @@ export default function ProjectCaseRedirect({
 }: {
   params: { projectId: string; caseId: string };
 }) {
-  redirect(`/cases/${params.caseId}`);
+  redirect(`/cadcases/${params.caseId}`);
 }

@@ -96,18 +96,8 @@ function shouldTriggerCaseAlert(
   return true;
 }
 
-function getCaseProjectId(c: AlertCase) {
-  return c.projectId || c.assignedProjectId || "";
-}
-
 function getCaseDetailsHref(c: AlertCase) {
-  const projectId = getCaseProjectId(c);
-
-  if (projectId) {
-    return `/projects/${projectId}/cad/${c.id}`;
-  }
-
-  return `/cases/${c.id}`;
+  return `/cadcases/${c.id}`;
 }
 
 function caseMatchesAmbulance(

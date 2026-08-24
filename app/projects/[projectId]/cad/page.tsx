@@ -115,7 +115,7 @@ export default function ProjectCadPage({
         {cases.map((c) => (
           <Link
             key={c.id}
-            href={`/projects/${params.projectId}/cad/${c.id}`}
+            href={`/cadcases/${c.id}`}
             className="group block rounded-2xl border border-[#d8e6ea] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[#74cdda] hover:shadow-xl hover:shadow-[#274C5A]/10"
           >
             <div className="rounded-xl border border-[#e1ebef] bg-[#f7fbfc] p-5 transition group-hover:border-[#74cdda]">

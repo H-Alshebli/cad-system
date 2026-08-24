@@ -161,7 +161,7 @@ export default function EpcrDashboardPage() {
       <div className="w-full space-y-6">
         {/* HEADER */}
         <div className="rounded-2xl bg-[#274C5A] p-6 text-white shadow-sm shadow-[#274C5A]/20">
-          <h1 className="text-3xl font-black tracking-tight">ePCR Analytics Dashboard</h1>
+          <h1 className="text-3xl font-black tracking-tight">Cases Dashboard</h1>
           <p className="mt-2 max-w-3xl text-sm font-medium text-white/78">
             Executive analytical view of ePCR activity, project distribution,
             triage trends, health classifications, complaints, and operational indicators.

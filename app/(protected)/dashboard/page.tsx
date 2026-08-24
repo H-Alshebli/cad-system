@@ -275,7 +275,7 @@ return (
             <div className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black text-white">
               HCAD Command Center
             </div>
-            <h1 className="text-3xl font-black tracking-tight text-white">Dispatch Dashboard</h1>
+            <h1 className="text-3xl font-black tracking-tight text-white">Timeline Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#d7e4e8]">Live operational dashboard. Click any case card to open the unified case page directly.</p>
           </div>
           <Link className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-black text-[#274C5A] shadow-lg shadow-black/10 transition hover:bg-[#eef5f7]" href="/call-intake">New Case / Call Intake</Link>
@@ -425,7 +425,7 @@ return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {visibleCases.map((c) => (
           <Link
-            href={`/cases/${c.id}`}
+            href={`/cadcases/${c.id}`}
             key={c.id}
             className="block rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5 transition hover:border-[#274C5A]/50 hover:shadow-lg hover:shadow-[#274C5A]/10"
           >

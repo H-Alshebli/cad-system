@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -161,6 +161,8 @@ export default function CaseDetailsPage({
 }) {
   const caseId = params.id;
   const router = useRouter();
+  const pathname = usePathname();
+  const caseBasePath = pathname.startsWith("/cadcases") ? "/cadcases" : "/cases";
 
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -279,7 +281,7 @@ export default function CaseDetailsPage({
         "dispatch"
       );
 
-      router.push(`/cases/${returnCaseId}`);
+      router.push(`${caseBasePath}/${returnCaseId}`);
     } catch (error: any) {
       console.error(error);
       alert(error?.message || "Failed to create return CAD case.");
@@ -321,14 +323,20 @@ export default function CaseDetailsPage({
           <div>
             <button
               onClick={() =>
-                projectId
+                pathname.startsWith("/cadcases")
+                  ? router.push("/cadcases")
+                  : projectId
                   ? router.push(`/projects/${projectId}/cad`)
                   : router.back()
               }
               className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300"
             >
               <ArrowLeft size={16} />
-              {projectId ? "Back to Project CAD" : "Back"}
+              {pathname.startsWith("/cadcases")
+                ? "Back to CAD Cases"
+                : projectId
+                ? "Back to Project CAD"
+                : "Back"}
             </button>
 
             <div className="flex flex-wrap items-center gap-2">

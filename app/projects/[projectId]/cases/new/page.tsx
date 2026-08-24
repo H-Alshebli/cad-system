@@ -281,7 +281,7 @@ if (unitType === "ambulance") {
   });
 }
 
-    router.push(`/cases/${caseRef.id}`);
+    router.push(`/cadcases/${caseRef.id}`);
   };
 
   return (

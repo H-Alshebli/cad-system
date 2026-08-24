@@ -35,6 +35,10 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "internal_chat",
   ],
 
+  // Sidebar/page visibility controls for the parallel CAD experiences.
+  cad_cases_new: ["view"],
+  cad_cases_old: ["view"],
+
   call_intake: ["view", "create", "project_case", "b2c_case"],
 
   // Old compatibility module.
@@ -63,6 +67,10 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "update_status",
     "report",
   ],
+
+  // Enhanced missions experience. Operational actions continue to use the
+  // shared missions permissions; this permission independently controls access.
+  missions_plus: ["view"],
 
   crew_profile: ["view", "edit_own", "view_all", "edit_all"],
 
@@ -123,14 +131,17 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
 export const MODULE_LABELS: Record<string, string> = {
   dashboards: "Dashboards",
   projects: "Projects",
-  cases: "CAD Cases",
+  cases: "CAD Case Operations",
   cad: "CAD / Dispatch",
+  cad_cases_new: "CAD Cases – New",
+  cad_cases_old: "CAD Cases – Old",
   call_intake: "Call Intake",
 
   b2c_cases: "B2C Cases",
   b2c_requests: "B2C Requests",
 
   missions: "My Missions",
+  missions_plus: "My Missions+",
   crew_profile: "Crew Profile",
   readiness_checklists: "Readiness Checklists",
   epcr: "ePCR",
@@ -163,6 +174,12 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   cad:
     "Internal dispatch workspace, status control, timeline, and internal case chat.",
 
+  cad_cases_new:
+    "Show the modern CAD Cases module and its modern case-details URLs.",
+
+  cad_cases_old:
+    "Show the legacy CAD Cases module for compatibility and comparison.",
+
   call_intake:
     "Dispatcher intake screen for project calls and B2C customer calls.",
 
@@ -174,6 +191,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   missions:
     "Assigned missions for paramedics and field teams, including acknowledgement and status updates.",
+
+  missions_plus:
+    "Show the enhanced My Missions+ experience. Mission actions still follow My Missions permissions.",
 
   crew_profile:
     "Crew member personal, employment, license, contact, and bank profile data.",
@@ -289,8 +309,11 @@ export const PERMISSION_GROUPS = [
       "projects",
       "cases",
       "cad",
+      "cad_cases_new",
+      "cad_cases_old",
       "b2c_cases",
       "missions",
+      "missions_plus",
       "crew_profile",
       "readiness_checklists",
       "epcr",

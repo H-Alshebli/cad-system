@@ -792,7 +792,7 @@ export default function B2CRequestDetailsPage({
         user?.uid || user?.id || "dispatch"
       );
 
-      router.push(`/cases/${caseId}`);
+      router.push(`/cadcases/${caseId}`);
     } catch (error: any) {
       console.error(error);
       alert(error?.message || "Failed to create CAD case.");
@@ -872,7 +872,7 @@ export default function B2CRequestDetailsPage({
                 router.push(
                   isParamedic
                     ? `/missions/${request.cadCaseId}`
-                    : `/cases/${request.cadCaseId}`
+                    : `/cadcases/${request.cadCaseId}`
                 )
               }
             >
@@ -888,7 +888,7 @@ export default function B2CRequestDetailsPage({
                 router.push(
                   isParamedic
                     ? `/missions/${request.returnCadCaseId}`
-                    : `/cases/${request.returnCadCaseId}`
+                    : `/cadcases/${request.returnCadCaseId}`
                 )
               }
             >
@@ -1624,7 +1624,7 @@ export default function B2CRequestDetailsPage({
                     router.push(
                       isParamedic
                         ? `/missions/${request.cadCaseId}`
-                        : `/cases/${request.cadCaseId}`
+                        : `/cadcases/${request.cadCaseId}`
                     )
                   }
                 >
@@ -1639,7 +1639,7 @@ export default function B2CRequestDetailsPage({
                       router.push(
                         isParamedic
                           ? `/missions/${request.returnCadCaseId}`
-                          : `/cases/${request.returnCadCaseId}`
+                          : `/cadcases/${request.returnCadCaseId}`
                       )
                     }
                   >

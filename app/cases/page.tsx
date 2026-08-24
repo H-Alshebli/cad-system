@@ -362,7 +362,7 @@ if (role === "dispatch") {
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold dark:text-white">
-          Dispatch Dashboard
+          Timeline Dashboard
         </h1>
 
         {!showLoginPopup && (
