@@ -389,6 +389,12 @@ export default function ProjectsPage() {
                 </div>
 
                 <div className="space-y-2 text-xs font-semibold text-[#274C5A]/75">
+                  {(p.masterProjectId || p.projectCode) && (
+                    <p className="truncate">
+                      <span className="text-[#7F7F7F]">Project reference:</span>{" "}
+                      {[p.masterProjectId, p.projectCode].filter(Boolean).join(" • ")}
+                    </p>
+                  )}
                   <p className="truncate">
                     <span className="text-[#7F7F7F]">Client:</span> {p.client || "-"}
                   </p>

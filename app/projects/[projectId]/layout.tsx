@@ -58,6 +58,11 @@ export default function ProjectLayout({
         <div className="text-sm text-muted-foreground">
           {project.client} • {project.status}
         </div>
+        {(project.masterProjectId || project.projectCode) && (
+          <div className="mt-1 text-xs font-semibold text-muted-foreground">
+            {[project.masterProjectId, project.projectCode].filter(Boolean).join(" • ")}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 border-b">

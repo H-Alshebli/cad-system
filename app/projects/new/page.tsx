@@ -150,6 +150,8 @@ export default function NewProjectPage() {
   const { isAdmin } = usePermissions(currentUser?.role);
 
   const [projectName, setProjectName] = useState("");
+  const [masterProjectId, setMasterProjectId] = useState("");
+  const [projectCode, setProjectCode] = useState("");
   const [client, setClient] = useState("");
   const [siteDetails, setSiteDetails] = useState("");
   const [requestType, setRequestType] = useState("");
@@ -670,6 +672,8 @@ export default function NewProjectPage() {
 
     const docRef = await addDoc(collection(db, "projects"), {
       projectName: projectName.trim(),
+      masterProjectId: masterProjectId.trim() || null,
+      projectCode: projectCode.trim() || null,
       client: client.trim(),
       status: "Active",
       isArchived: false,
@@ -815,6 +819,26 @@ export default function NewProjectPage() {
                     className={inputClass}
                     value={client}
                     onChange={(e) => setClient(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Master Project ID</label>
+                  <input
+                    className={inputClass}
+                    value={masterProjectId}
+                    onChange={(e) => setMasterProjectId(e.target.value)}
+                    placeholder="PRJ-0001"
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Project Code</label>
+                  <input
+                    className={inputClass}
+                    value={projectCode}
+                    onChange={(e) => setProjectCode(e.target.value)}
+                    placeholder="LZM-CWA-B+-MOC-25"
                   />
                 </div>
               </div>

@@ -184,6 +184,8 @@ export default function EditProjectPage({
   const [loading, setLoading] = useState(true);
 
   const [projectName, setProjectName] = useState("");
+  const [masterProjectId, setMasterProjectId] = useState("");
+  const [projectCode, setProjectCode] = useState("");
   const [projectLocationsCount, setProjectLocationsCount] = useState(0);
   const [client, setClient] = useState("");
   const [siteDetails, setSiteDetails] = useState("");
@@ -249,6 +251,8 @@ export default function EditProjectPage({
       const details = data.projectDetails || {};
 
       setProjectName(data.projectName || "");
+      setMasterProjectId(data.masterProjectId || "");
+      setProjectCode(data.projectCode || "");
       setProjectLocationsCount(
         Array.isArray(data.projectLocations)
           ? data.projectLocations.filter((item: any) => item?.status !== "archived").length
@@ -766,6 +770,8 @@ export default function EditProjectPage({
 
     await updateDoc(doc(db, "projects", projectId), {
       projectName: selectedProjectName,
+      masterProjectId: masterProjectId.trim() || null,
+      projectCode: projectCode.trim() || null,
       client: client.trim(),
       clientUserIds: Array.from(new Set(clientUserIds)),
 
@@ -981,6 +987,26 @@ return (
                   className={inputClass}
                   value={client}
                   onChange={(e) => setClient(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Master Project ID</label>
+                <input
+                  className={inputClass}
+                  value={masterProjectId}
+                  onChange={(e) => setMasterProjectId(e.target.value)}
+                  placeholder="PRJ-0001"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Project Code</label>
+                <input
+                  className={inputClass}
+                  value={projectCode}
+                  onChange={(e) => setProjectCode(e.target.value)}
+                  placeholder="LZM-CWA-B+-MOC-25"
                 />
               </div>
             </div>
