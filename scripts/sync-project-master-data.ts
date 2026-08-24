@@ -157,6 +157,16 @@ const mappings: MasterProjectMapping[] = [
   },
 ];
 
+function normalizeProjectName(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/[‐‑‒–—―]/g, "-")
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 async function main() {
   const app =
     getApps()[0] ||
@@ -177,7 +187,8 @@ async function main() {
   }
 
   const currentName = String(snapshot.data()?.projectName || "").trim();
-  if (!mapping.currentNames.includes(currentName)) {
+  const currentNameKey = normalizeProjectName(currentName);
+  if (!mapping.currentNames.some((name) => normalizeProjectName(name) === currentNameKey)) {
     skipped.push(
       `${mapping.documentId}: expected ${mapping.currentNames.join(" | ")}, found ${currentName || "<blank>"}`
     );
