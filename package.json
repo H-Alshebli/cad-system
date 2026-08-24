@@ -12,7 +12,8 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "seed:demo:apply": "tsx scripts/seed-demo.ts --apply",
     "migrate:crew-locum": "tsx scripts/migrate-crew-part-time-to-locum.ts",
-    "sync:project-master": "tsx scripts/sync-project-master-data.ts"
+    "sync:project-master": "tsx scripts/sync-project-master-data.ts",
+    "audit:project-names": "tsx scripts/repair-project-name-consistency.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
