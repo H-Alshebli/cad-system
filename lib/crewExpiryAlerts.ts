@@ -2,6 +2,7 @@ import {
   CREW_PROFILE_FIELDS,
   CrewProfileValues,
   getCrewProfileValues,
+  parseCrewExpiryValue,
 } from "@/lib/crewProfile";
 
 export const CREW_EXPIRY_THRESHOLDS = [90, 60, 30] as const;
@@ -19,7 +20,7 @@ export type CrewExpiryCandidate = {
 const expiryFieldKeys = new Set(
   CREW_PROFILE_FIELDS.filter(
     (field) =>
-      field.type === "date" &&
+      (field.type === "date" || field.type === "month") &&
       (field.key.toLowerCase().includes("expiry") ||
         field.key === "contractEndDate")
   ).map((field) => field.key)
@@ -29,8 +30,15 @@ function startOfUtcDay(value: Date) {
   return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
 }
 
-export function getDaysRemaining(expiryDate: string, today = new Date()) {
-  const expiry = new Date(`${expiryDate}T00:00:00Z`);
+export function getDaysRemaining(
+  expiryDate: string,
+  today = new Date(),
+  fieldType: "date" | "month" = "date"
+) {
+  const parsed = parseCrewExpiryValue(expiryDate, fieldType);
+  const expiry = new Date(
+    Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+  );
   if (Number.isNaN(expiry.getTime())) return null;
   return Math.ceil(
     (startOfUtcDay(expiry) - startOfUtcDay(today)) / (24 * 60 * 60 * 1000)
@@ -55,7 +63,11 @@ export function getCrewExpiryCandidates(
     .map((field) => {
       const expiryDate = String(values[field.key] || "").trim();
       if (!expiryDate) return null;
-      const daysRemaining = getDaysRemaining(expiryDate, today);
+      const daysRemaining = getDaysRemaining(
+        expiryDate,
+        today,
+        field.type === "month" ? "month" : "date"
+      );
       if (daysRemaining === null) return null;
       const dueThresholds = getDueExpiryThresholds(daysRemaining);
       if (!dueThresholds.length) return null;

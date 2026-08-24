@@ -9,6 +9,7 @@ export type CrewProfileFieldType =
   | "email"
   | "tel"
   | "date"
+  | "month"
   | "select"
   | "textarea"
   | "file";
@@ -165,7 +166,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         key: "employmentType",
         label: "Employment Type",
         type: "select",
-        options: ["Full Time", "Part Time", "Volunteer", "Trainee", "Locum"],
+        options: ["Full Time", "Volunteer", "Trainee", "Locum"],
       },
       { key: "joiningDate", label: "Joining Date", type: "date" },
       { key: "contractEndDate", label: "End of Contract Date", type: "date" },
@@ -242,8 +243,8 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
 },
 {
   key: "malpracticeInsuranceExpiry",
-  label: "Malpractice Insurance Expiry Date",
-  type: "date",
+  label: "Malpractice Insurance Expiry Month",
+  type: "month",
 },
 {
   key: "malpracticeInsuranceAttachment",
@@ -411,11 +412,9 @@ export type CrewCredentialRequirement = {
 export const CREW_PROFILE_BASE_REQUIRED_KEYS = [
   "firstNameEn",
   "secondNameEn",
-  "thirdNameEn",
   "familyNameEn",
   "firstNameAr",
   "secondNameAr",
-  "thirdNameAr",
   "familyNameAr",
   "nationalId",
   "identityType",
@@ -477,11 +476,9 @@ export const CREW_PROFILE_TEMPORARY_VISIBLE_KEYS = new Set([
 export const CREW_PROFILE_TEMPORARY_REQUIRED_KEYS = [
   "firstNameEn",
   "secondNameEn",
-  "thirdNameEn",
   "familyNameEn",
   "firstNameAr",
   "secondNameAr",
-  "thirdNameAr",
   "familyNameAr",
   "nationalId",
   "dateOfBirth",
@@ -541,6 +538,12 @@ const evoc = [
   credential("evocEvosExpiry", "EVOC / EVOS Expiry Date", true),
   credential("evocEvosAttachment", "EVOC / EVOS Attachment", true),
 ];
+const malpracticeInsurance = [
+  credential(
+    "malpracticeInsuranceAttachment",
+    "Malpractice Insurance Attachment"
+  ),
+];
 
 export const CREW_CREDENTIAL_REQUIREMENTS: Record<
   CrewJobTitleGroup,
@@ -550,10 +553,17 @@ export const CREW_CREDENTIAL_REQUIREMENTS: Record<
     ...scfhs,
     ...bls,
     ...acls,
+    ...malpracticeInsurance,
   ],
-  registered_nurse: [...scfhs, ...bls, ...acls],
-  paramedic: [...scfhs, ...bls, ...acls, ...trauma],
-  emt: [...scfhs, ...bls, ...trauma],
+  registered_nurse: [...scfhs, ...bls, ...acls, ...malpracticeInsurance],
+  paramedic: [
+    ...scfhs,
+    ...bls,
+    ...acls,
+    ...trauma,
+    ...malpracticeInsurance,
+  ],
+  emt: [...scfhs, ...bls, ...trauma, ...malpracticeInsurance],
   ambulance_driver: [...driverLicense, ...evoc, ...bls],
   ccc_admin: [],
   other: [],
@@ -829,6 +839,19 @@ export function getCrewProfileValues(user: any): CrewProfileValues {
     values.alternativeIban = formatIban(values.alternativeIban);
   }
 
+  if (
+    String(values.employmentType || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_-]+/g, "") === "parttime"
+  ) {
+    values.employmentType = "Locum";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(values.malpracticeInsuranceExpiry || "")) {
+    values.malpracticeInsuranceExpiry = values.malpracticeInsuranceExpiry.slice(0, 7);
+  }
+
   if (!values.identityType && values.nationality) {
     values.identityType = isSaudiNationality(values.nationality)
       ? "National ID"
@@ -836,6 +859,18 @@ export function getCrewProfileValues(user: any): CrewProfileValues {
   }
 
   return values;
+}
+
+export function parseCrewExpiryValue(
+  rawValue: string,
+  fieldType: CrewProfileFieldType = "date"
+) {
+  const value = String(rawValue || "").trim();
+  if (fieldType === "month" && /^\d{4}-\d{2}$/.test(value)) {
+    const [year, month] = value.split("-").map(Number);
+    return new Date(year, month, 0, 23, 59, 59, 999);
+  }
+  return new Date(`${value}T00:00:00`);
 }
 
 export function getCrewProfileCompletion(
@@ -880,21 +915,21 @@ export function getCrewProfileCompletion(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const isExpiryField = (field: CrewProfileField) =>
-    field.type === "date" &&
+    (field.type === "date" || field.type === "month") &&
     (field.key.toLowerCase().includes("expiry") ||
       field.key === "contractEndDate");
   const expired = requiredFields.filter((field) => {
     if (!isExpiryField(field)) return false;
     const rawValue = String(values[field.key] || "").trim();
     if (!rawValue) return false;
-    const date = new Date(`${rawValue}T00:00:00`);
+    const date = parseCrewExpiryValue(rawValue, field.type);
     return !Number.isNaN(date.getTime()) && date < today;
   });
   const expiringSoon = requiredFields.filter((field) => {
     if (!isExpiryField(field)) return false;
     const rawValue = String(values[field.key] || "").trim();
     if (!rawValue) return false;
-    const date = new Date(`${rawValue}T00:00:00`);
+    const date = parseCrewExpiryValue(rawValue, field.type);
     if (Number.isNaN(date.getTime()) || date < today) return false;
     const daysRemaining = Math.ceil(
       (date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)

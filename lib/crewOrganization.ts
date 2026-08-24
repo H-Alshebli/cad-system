@@ -113,6 +113,14 @@ export const CREW_ORGANIZATION_ROLES: CrewOrganizationRole[] = [
     managerName: "Abdullah Alqarawi (Service Prep & Supply Chain Manager)",
   },
   {
+    title: "Driver",
+    category: "non_medical",
+    department: SUPPLY_CHAIN,
+    team: "Fleet Team",
+    supervisorName: "Zubair Almubarak (Senior Officer)",
+    managerName: "Abdullah Alqarawi (Service Prep & Supply Chain Manager)",
+  },
+  {
     title: "Dispatch Supervisor",
     category: "non_medical",
     department: COMMAND_CENTRE,

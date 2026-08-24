@@ -10,7 +10,8 @@
     "seed:system": "tsx scripts/seed-system.ts",
     "seed:system:apply": "tsx scripts/seed-system.ts --apply",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "seed:demo:apply": "tsx scripts/seed-demo.ts --apply"
+    "seed:demo:apply": "tsx scripts/seed-demo.ts --apply",
+    "migrate:crew-locum": "tsx scripts/migrate-crew-part-time-to-locum.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
