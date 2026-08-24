@@ -10,21 +10,21 @@ const projectId = getArg("--project").trim();
 const apply = process.argv.includes("--apply");
 if (!projectId) throw new Error("Missing --project=<firebase-project-id>.");
 
-type ProjectRepair = { documentId: string; projectName: string; removeMasterReference?: boolean };
+type ProjectRepair = { documentId: string; projectName: string; legacyNames?: string[]; removeMasterReference?: boolean };
 const repairs: ProjectRepair[] = [
   { documentId: "7YTNfV0Fry97HUPOEXps", projectName: "KAPSARC" },
-  { documentId: "7iuta9OYFLATgesHcpE1", projectName: "Ministry of Culture – National Museum" },
-  { documentId: "7tC67Gps2smBPRRe4B0D", projectName: "Saudi Chemical – Remah" },
-  { documentId: "AIeZRvUaMe7rc81qY5Sn", projectName: "Academy of Defense Industries" },
+  { documentId: "7iuta9OYFLATgesHcpE1", projectName: "Ministry of Culture – National Museum", legacyNames: ["National Museum"] },
+  { documentId: "7tC67Gps2smBPRRe4B0D", projectName: "Saudi Chemical – Remah", legacyNames: ["SCCF-Rumah"] },
+  { documentId: "AIeZRvUaMe7rc81qY5Sn", projectName: "Academy of Defense Industries", legacyNames: ["Military Academy"] },
   { documentId: "HxPnQ2Mj4pErqhQ2V2qY", projectName: "ICAD" },
-  { documentId: "NfSHWIrP44jfiTLVwhol", projectName: "Ma'aden Ivanhoe – Mahd Al Dhahab" },
-  { documentId: "y2QfHgrv50V4MYWqXVsC", projectName: "Senyar – Qiddiya" },
-  { documentId: "U5sXrmUMsN8PDIPZWlgg", projectName: "MODON – Dammam" },
-  { documentId: "bkNwWwO9GAyPqWtYXtMP", projectName: "MODON – Jeddah" },
-  { documentId: "eAdizvdsQvLlfUcaFNjk", projectName: "MODON – Al-Kharj" },
+  { documentId: "NfSHWIrP44jfiTLVwhol", projectName: "Ma'aden Ivanhoe – Mahd Al Dhahab", legacyNames: ["Ma’aden"] },
+  { documentId: "y2QfHgrv50V4MYWqXVsC", projectName: "Senyar – Qiddiya", legacyNames: ["Qiddiya"] },
+  { documentId: "U5sXrmUMsN8PDIPZWlgg", projectName: "MODON – Dammam", legacyNames: ["Modon Dmm"] },
+  { documentId: "bkNwWwO9GAyPqWtYXtMP", projectName: "MODON – Jeddah", legacyNames: ["MODON – Jeddah (2nd & 3rd)"] },
+  { documentId: "eAdizvdsQvLlfUcaFNjk", projectName: "MODON – Al-Kharj", legacyNames: ["MODON – Al Kharj"] },
   { documentId: "l5cI1AvdSHDKzzPSHZVV", projectName: "MODON – Sudair" },
-  { documentId: "xC3DCOoR5qFvPhXEeqG5", projectName: "MODON – Wa'ad Al-Shamal" },
-  { documentId: "eqCFgTnxkESSdNukfoli", projectName: "Pilot Project 01", removeMasterReference: true },
+  { documentId: "xC3DCOoR5qFvPhXEeqG5", projectName: "MODON – Wa'ad Al-Shamal", legacyNames: ["MODON – Wa’ad Al-Shamal"] },
+  { documentId: "eqCFgTnxkESSdNukfoli", projectName: "Pilot Project 01", legacyNames: ["Lazem Ambulance Centre"], removeMasterReference: true },
 ];
 
 function differs(value: unknown, expected: string) {
@@ -34,7 +34,7 @@ function differs(value: unknown, expected: string) {
 async function findRelatedDocuments(
   db: FirebaseFirestore.Firestore,
   collectionName: "cases" | "epcr" | "projectChecklists",
-  documentId: string
+  repair: ProjectRepair
 ) {
   const fieldsByCollection = {
     cases: ["projectId", "assignedProjectId", "sourceId"],
@@ -43,8 +43,17 @@ async function findRelatedDocuments(
   } as const;
   const documents = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
   for (const field of fieldsByCollection[collectionName]) {
-    const snapshot = await db.collection(collectionName).where(field, "==", documentId).get();
+    const snapshot = await db.collection(collectionName).where(field, "==", repair.documentId).get();
     for (const document of snapshot.docs) documents.set(document.ref.path, document);
+  }
+  const nameFields = collectionName === "epcr"
+    ? ["projectName", "projectInfo.projectName"]
+    : ["projectName", "assignedProjectName"];
+  for (const legacyName of repair.legacyNames || []) {
+    for (const field of nameFields) {
+      const snapshot = await db.collection(collectionName).where(field, "==", legacyName).get();
+      for (const document of snapshot.docs) documents.set(document.ref.path, document);
+    }
   }
   return [...documents.values()];
 }
@@ -71,7 +80,7 @@ async function main() {
     }
 
     for (const collectionName of ["cases", "epcr", "projectChecklists"] as const) {
-      const documents = await findRelatedDocuments(db, collectionName, repair.documentId);
+      const documents = await findRelatedDocuments(db, collectionName, repair);
       for (const document of documents) {
         const current = document.data();
         const patch: Record<string, unknown> = {};
@@ -91,8 +100,18 @@ async function main() {
       }
     }
 
-    const ambulances = await db.collection("ambulances").where("assignedProjectId", "==", repair.documentId).get();
-    for (const document of ambulances.docs) {
+    const ambulanceDocuments = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    for (const field of ["assignedProjectId", "projectId"] as const) {
+      const snapshot = await db.collection("ambulances").where(field, "==", repair.documentId).get();
+      for (const document of snapshot.docs) ambulanceDocuments.set(document.ref.path, document);
+    }
+    for (const legacyName of repair.legacyNames || []) {
+      for (const field of ["assignedProjectName", "projectName"] as const) {
+        const snapshot = await db.collection("ambulances").where(field, "==", legacyName).get();
+        for (const document of snapshot.docs) ambulanceDocuments.set(document.ref.path, document);
+      }
+    }
+    for (const document of ambulanceDocuments.values()) {
       const current = document.data();
       const patch: Record<string, unknown> = {};
       const oldNames: string[] = [];
