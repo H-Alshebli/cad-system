@@ -31,6 +31,24 @@ function differs(value: unknown, expected: string) {
   return typeof value === "string" && value.trim() !== expected;
 }
 
+async function findRelatedDocuments(
+  db: FirebaseFirestore.Firestore,
+  collectionName: "cases" | "epcr" | "projectChecklists",
+  documentId: string
+) {
+  const fieldsByCollection = {
+    cases: ["projectId", "assignedProjectId", "sourceId"],
+    epcr: ["projectId", "projectInfo.projectId", "projectInfo.id"],
+    projectChecklists: ["projectId"],
+  } as const;
+  const documents = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+  for (const field of fieldsByCollection[collectionName]) {
+    const snapshot = await db.collection(collectionName).where(field, "==", documentId).get();
+    for (const document of snapshot.docs) documents.set(document.ref.path, document);
+  }
+  return [...documents.values()];
+}
+
 async function main() {
   const app = getApps()[0] || initializeApp({ credential: applicationDefault(), projectId });
   const db = getFirestore(app);
@@ -53,8 +71,8 @@ async function main() {
     }
 
     for (const collectionName of ["cases", "epcr", "projectChecklists"] as const) {
-      const snapshot = await db.collection(collectionName).where("projectId", "==", repair.documentId).get();
-      for (const document of snapshot.docs) {
+      const documents = await findRelatedDocuments(db, collectionName, repair.documentId);
+      for (const document of documents) {
         const current = document.data();
         const patch: Record<string, unknown> = {};
         const oldNames: string[] = [];
