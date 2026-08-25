@@ -7,6 +7,10 @@ import { generateEpcrPdf } from "@/lib/epcrPdf";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import BodyPainSelector from "@/app/components/epcr/BodyPainSelector";
+import {
+  getEpcrConsumableOptions,
+  getEpcrMedicationOptions,
+} from "@/lib/readinessChecklist";
 
 /* =========================
    TYPES
@@ -487,25 +491,11 @@ function getNoTransportOutcomeFromCase(caseData: any): Partial<Outcome> | null {
   };
 }
 
-const MEDICATIONS_LIST = [
-  "Oxygen",
-  "IV Fluids",
-  "Aspirin",
-  "Nitroglycerin",
-  "Epinephrine",
-  "Other",
-] as const;
+const MEDICATIONS_LIST = [...getEpcrMedicationOptions(), "Other"];
 
 const QTY_LIST = ["1", "2", "3", "4", "5", "Other"] as const;
 
-const CONSUMABLES_LIST = [
-  "Gauze",
-  "Bandage",
-  "Cannula",
-  "Syringe",
-  "Gloves",
-  "Other",
-] as const;
+const CONSUMABLES_LIST = [...getEpcrConsumableOptions(), "Other"];
 
 /* =========================
    PAGE
@@ -1793,6 +1783,11 @@ patientInfo.chiefComplaints.forEach((complaint) => {
                 })
               }
             >
+              <option value="">Select medication</option>
+              {item.medication &&
+                !MEDICATIONS_LIST.includes(item.medication) && (
+                  <option value={item.medication}>{item.medication}</option>
+                )}
               {MEDICATIONS_LIST.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -1912,6 +1907,11 @@ patientInfo.chiefComplaints.forEach((complaint) => {
                 })
               }
             >
+              <option value="">Select consumable</option>
+              {item.consumable &&
+                !CONSUMABLES_LIST.includes(item.consumable) && (
+                  <option value={item.consumable}>{item.consumable}</option>
+                )}
               {CONSUMABLES_LIST.map((c) => (
                 <option key={c} value={c}>
                   {c}

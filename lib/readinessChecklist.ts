@@ -1680,6 +1680,92 @@ export const STANDARD_READINESS_ITEMS: ReadinessChecklistItem[] = [
   ...OXYGEN_BAG_ITEMS,
 ];
 
+function uniqueSortedChecklistLabels(items: ReadinessChecklistItem[]) {
+  const labels = new Map<string, string>();
+  items.forEach((item) => {
+    const label = String(item.label || "").trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (!labels.has(key)) labels.set(key, label);
+  });
+  return Array.from(labels.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function isEpcrMedicationItem(item: ReadinessChecklistItem) {
+  if (item.step === "medications") return true;
+
+  const label = normalizeChecklistText(item.label);
+  const group = normalizeChecklistText(item.group);
+
+  const isTreatmentSupply = [
+    "normal saline",
+    "ringer lactate",
+    "ringer's lactate",
+    "dextrose 5%",
+    "deep heat",
+    "ice spray",
+  ].some((name) => label.includes(name));
+
+  // Some official clinic and vest medications live in supply sections rather
+  // than the dedicated medication step. Keep them in the same ePCR catalog.
+  return isTreatmentSupply || (
+    group === "general supplies" &&
+    (label.includes("hyoscine 10 mg") ||
+      label.includes("ibuprofen 400 mg") ||
+      label.includes("burn cream") ||
+      label.includes("pantoprazole 40 mg") ||
+      label.includes("fexofenadine 180 mg") ||
+      label.includes("paracetamol 500 mg"))
+  ) || label.includes("paracetamol tablet strips");
+}
+
+const EPCR_CONSUMABLE_SECTIONS = new Set([
+  "ppe",
+  "airway",
+  "breathing",
+  "circulation",
+  "iv",
+  "clinic supplies",
+  "vest checklist",
+  "oxygen bag checklist",
+  "red bag",
+  "main area",
+]);
+
+const EPCR_REUSABLE_EQUIPMENT_PATTERN =
+  /\b(aed|emt bag|oxygen bag|medication bag|examination bed|trolly|white screen|foot step|surgical scissor|scissors|ring cutter|sam splint|stethoscope|glucometer|pulse oximeter|blood pressure|thermometer$|iv stand|magill forceps|bvm|bag valve mask|laryngoscope|oxygen cylinder regulator|reusable pressure infuser|monitor device|stair chair|stretcher|spinal board|head blocks|head-blocks|scoop board|medium bin|broselow tape|humidifier bottle|kidney tray|penlight|pelvic immobilization|traction splint|frac pack|intraosseous kit|io kit|et stylet|bougie)\b/i;
+
+function isEpcrConsumableItem(item: ReadinessChecklistItem) {
+  if (isEpcrMedicationItem(item) || item.inputType !== "quantity") return false;
+
+  const section = normalizeChecklistText(item.section);
+  const group = normalizeChecklistText(item.group);
+  const isSupplySection =
+    EPCR_CONSUMABLE_SECTIONS.has(section) ||
+    group.includes("supplies") ||
+    group.includes("wound care") ||
+    group.includes("iv fluids") ||
+    item.step === "red_bag" ||
+    item.step === "vest" ||
+    item.step === "oxygen";
+
+  return isSupplySection && !EPCR_REUSABLE_EQUIPMENT_PATTERN.test(item.label);
+}
+
+/** Full official ePCR medication catalog; intentionally not filtered by service level. */
+export function getEpcrMedicationOptions() {
+  return uniqueSortedChecklistLabels(
+    STANDARD_READINESS_ITEMS.filter(isEpcrMedicationItem)
+  );
+}
+
+/** Full official disposable-supply catalog; intentionally not filtered by deployment. */
+export function getEpcrConsumableOptions() {
+  return uniqueSortedChecklistLabels(
+    STANDARD_READINESS_ITEMS.filter(isEpcrConsumableItem)
+  );
+}
+
 export function getWizardSteps(deploymentType: DeploymentType | string = "Ambulance") {
   const deployment = normalizeDeploymentType(deploymentType);
   if (deployment === "Ambulance + Clinic") {
