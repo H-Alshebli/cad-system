@@ -148,6 +148,19 @@ export async function POST(request: NextRequest) {
     createdAt: FieldValue.serverTimestamp(),
   });
 
+  batch.update(caseSnapshot.ref, {
+    lastChatMessage: {
+      id: messageRef.id,
+      senderId: authUser.uid,
+      senderName,
+      senderRole: senderRole || "unknown",
+      recipientUserIds: recipients,
+      messagePreview: message.slice(0, 120),
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
   if (recipients.length > 0) {
     batch.create(notificationRef, {
       type: "chat_message",

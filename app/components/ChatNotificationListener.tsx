@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -21,33 +21,53 @@ export default function ChatNotificationListener() {
   const { user, loading } = useCurrentUser();
   const [notification, setNotification] = useState<ChatNotification | null>(null);
   const initializedRef = useRef(false);
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     initializedRef.current = false;
+    seenMessageIdsRef.current = new Set();
     if (timerRef.current) clearTimeout(timerRef.current);
     setNotification(null);
     if (loading || !user?.uid) return;
 
-    const notificationsQuery = query(
-      collection(db, "notifications"),
-      where("recipientUserIds", "array-contains", user.uid)
-    );
-
     return onSnapshot(
-      notificationsQuery,
+      collection(db, "cases"),
       (snapshot) => {
-        const added = snapshot.docChanges().filter(
-          (change) => change.type === "added" && change.doc.get("type") === "chat_message"
-        );
-
         if (!initializedRef.current) {
+          snapshot.docs.forEach((document) => {
+            const messageId = String(document.get("lastChatMessage.id") || "").trim();
+            if (messageId) seenMessageIdsRef.current.add(messageId);
+          });
           initializedRef.current = true;
           return;
         }
 
-        const newest = added
-          .map((change) => ({ id: change.doc.id, ...(change.doc.data() as any) }))
+        const newest = snapshot
+          .docChanges()
+          .filter((change) => change.type === "modified")
+          .map((change) => {
+            const caseData = change.doc.data() as any;
+            const chatMessage = caseData.lastChatMessage || {};
+            return {
+              id: String(chatMessage.id || ""),
+              caseId: change.doc.id,
+              caseNumber: caseData.caseNumber,
+              senderName: chatMessage.senderName,
+              senderId: chatMessage.senderId,
+              recipientUserIds: Array.isArray(chatMessage.recipientUserIds)
+                ? chatMessage.recipientUserIds
+                : [],
+              messagePreview: chatMessage.messagePreview,
+              link: `/cadcases/${change.doc.id}`,
+              createdAt: chatMessage.createdAt,
+            };
+          })
+          .filter((item) => {
+            if (!item.id || seenMessageIdsRef.current.has(item.id)) return false;
+            seenMessageIdsRef.current.add(item.id);
+            return item.senderId !== user.uid && item.recipientUserIds.includes(user.uid);
+          })
           .sort((a, b) => {
             const aTime = a.createdAt?.toMillis?.() || 0;
             const bTime = b.createdAt?.toMillis?.() || 0;
@@ -62,7 +82,7 @@ export default function ChatNotificationListener() {
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => setNotification(null), 10000);
       },
-      (error) => console.warn("Chat notification listener failed", error)
+      (error) => console.warn("Chat case listener failed", error)
     );
   }, [loading, user?.uid]);
 
