@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { StatsTable } from "@/app/components/StatsTable";
 import { useEpcrDashboard } from "@/app/hooks/useEpcrDashboard";
 import {
   ResponsiveContainer,
@@ -23,30 +22,6 @@ type ProjectsMap = Record<string, number>;
 type GenericMap = Record<string, number>;
 
 /* ================= COLORS ================= */
-
-const HEALTH_COLORS: Record<string, string> = {
-  Occupational: "bg-[#8fd8e6]/35 text-[#274C5A]",
-  "Non-Occupational": "bg-[#005f53]/10 text-[#005f53]",
-  "General Health Illnesses": "bg-emerald-500/10 text-emerald-700",
-  "Unspecified Medical Conditions": "bg-[#86A7B2]/20 text-[#274C5A]",
-};
-
-const TRIAGE_COLORS: Record<string, string> = {
-  "Level 1 (Resuscitation)": "bg-red-600/10 text-red-700",
-  "Level 2 (Emergent)": "bg-red-600/10 text-red-700",
-  "Level 3 (Urgent)": "bg-amber-500/15 text-amber-700",
-  "Level 4 (Less Urgent)": "bg-emerald-500/10 text-emerald-700",
-  "Level 5 (non-urgent)": "bg-[#8fd8e6]/35 text-[#274C5A]",
-  death: "bg-red-600/10 text-red-700",
-};
-
-const COMPLAINT_COLORS: Record<string, string> = {
-  "Cardiac complaints": "bg-red-500/10 text-red-700",
-  "Musculoskeletal complaints": "bg-[#8fd8e6]/35 text-[#274C5A]",
-  "Respiratory complaints": "bg-[#005f53]/10 text-[#005f53]",
-  "Digestive complaints": "bg-emerald-500/10 text-emerald-700",
-  "General medical complaints": "bg-[#86A7B2]/20 text-[#274C5A]",
-};
 
 const PIE_COLORS = [
   "#8fd8e6",
@@ -371,72 +346,7 @@ export default function EpcrDashboardPage() {
     </div>
   </DarkCard> */}
 
-  <DarkCard title="Recommended Next Metrics">
-    <ul className="space-y-2 text-sm text-[#7F7F7F]">
-      <li>• Daily / weekly case trend</li>
-      <li>• Cases by location</li>
-      <li>• Cases by shift</li>
-      <li>• Response time per project</li>
-      <li>• Most frequent diagnosis</li>
-      <li>• Referral / transport outcomes</li>
-      <li>• Team performance comparison</li>
-    </ul>
-  </DarkCard>
 </div>
-
-        {/* TABLES */}
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <StatsTable
-            title="Health Classification"
-            data={stats.healthClassification}
-            colorMap={HEALTH_COLORS}
-          />
-
-          <StatsTable
-            title="Triage Levels"
-            data={stats.triage}
-            colorMap={TRIAGE_COLORS}
-          />
-
-          <StatsTable
-            title="Chief Complaints"
-            data={stats.complaints}
-            colorMap={COMPLAINT_COLORS}
-          />
-        </div>
-
-        {/* PROJECTS TABLE */}
-        <DarkCard title="Projects Summary">
-          {Object.keys(dashboardProjects).length === 0 ? (
-            <div className="text-sm text-[#7F7F7F]">No projects linked yet.</div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-[#86A7B2]/25">
-              <table className="w-full text-sm">
-                <thead className="bg-[#f8fbfc] text-[#7F7F7F]">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">Project Name</th>
-                    <th className="px-4 py-3 text-right font-medium">ePCR Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(dashboardProjects)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([project, count]) => (
-                      <tr
-                        key={project}
-                        className="border-t border-[#86A7B2]/25 hover:bg-[#f8fbfc]"
-                      >
-                        <td className="px-4 py-3">{project}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-[#274C5A]">
-                          {count}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </DarkCard>
       </div>
     </div>
   </PermissionGuard>
