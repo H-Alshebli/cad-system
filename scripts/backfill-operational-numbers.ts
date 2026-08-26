@@ -66,23 +66,24 @@ async function prepareCollection(
   };
 }
 
-const plans = await Promise.all([
-  prepareCollection("cases", "caseSequence", "caseNumber", "HCAD"),
-  prepareCollection("epcr", "epcrSequence", "epcrNumber", "ePCR"),
-]);
+async function main() {
+  const plans = await Promise.all([
+    prepareCollection("cases", "caseSequence", "caseNumber", "HCAD"),
+    prepareCollection("epcr", "epcrSequence", "epcrNumber", "ePCR"),
+  ]);
 
-const casePlan = plans[0];
-const epcrPlan = plans[1];
-const plannedCaseNumbers = new Map<string, string>();
-for (const document of casePlan.documents) {
-  const existingNumber = String(document.get("caseNumber") || "").trim();
-  if (existingNumber) plannedCaseNumbers.set(document.id, existingNumber);
-}
-for (const update of casePlan.updates) {
-  plannedCaseNumbers.set(update.ref.id, update.number);
-}
+  const casePlan = plans[0];
+  const epcrPlan = plans[1];
+  const plannedCaseNumbers = new Map<string, string>();
+  for (const document of casePlan.documents) {
+    const existingNumber = String(document.get("caseNumber") || "").trim();
+    if (existingNumber) plannedCaseNumbers.set(document.id, existingNumber);
+  }
+  for (const update of casePlan.updates) {
+    plannedCaseNumbers.set(update.ref.id, update.number);
+  }
 
-const epcrCaseNumberUpdates = epcrPlan.documents
+  const epcrCaseNumberUpdates = epcrPlan.documents
   .map((document) => {
     const caseId = String(document.get("caseId") || document.id).trim();
     const caseNumber = plannedCaseNumbers.get(caseId) || "";
@@ -91,22 +92,22 @@ const epcrCaseNumberUpdates = epcrPlan.documents
   })
   .filter((value): value is { ref: FirebaseFirestore.DocumentReference; caseNumber: string } => Boolean(value));
 
-for (const plan of plans) {
+  for (const plan of plans) {
+    console.log(
+      `${apply ? "APPLY" : "DRY RUN"}: ${plan.updates.length} of ${plan.total} ${plan.collectionName} record(s) need operational numbers; highest sequence will be ${plan.highestSequence}.`
+    );
+  }
+
   console.log(
-    `${apply ? "APPLY" : "DRY RUN"}: ${plan.updates.length} of ${plan.total} ${plan.collectionName} record(s) need operational numbers; highest sequence will be ${plan.highestSequence}.`
+    `${apply ? "APPLY" : "DRY RUN"}: ${epcrCaseNumberUpdates.length} ePCR record(s) need their linked HCAD case number.`
   );
-}
 
-console.log(
-  `${apply ? "APPLY" : "DRY RUN"}: ${epcrCaseNumberUpdates.length} ePCR record(s) need their linked HCAD case number.`
-);
+  if (!apply) {
+    console.log("No database changes were made. Re-run with --apply after reviewing the counts.");
+    return;
+  }
 
-if (!apply) {
-  console.log("No database changes were made. Re-run with --apply after reviewing the counts.");
-  process.exit(0);
-}
-
-for (const plan of plans) {
+  for (const plan of plans) {
   for (let offset = 0; offset < plan.updates.length; offset += 400) {
     const batch = db.batch();
     for (const update of plan.updates.slice(offset, offset + 400)) {
@@ -128,18 +129,24 @@ for (const plan of plans) {
     },
     { merge: true }
   );
-}
-
-
-for (let offset = 0; offset < epcrCaseNumberUpdates.length; offset += 400) {
-  const batch = db.batch();
-  for (const update of epcrCaseNumberUpdates.slice(offset, offset + 400)) {
-    batch.update(update.ref, {
-      caseNumber: update.caseNumber,
-      operationalNumberBackfilledAt: FieldValue.serverTimestamp(),
-    });
   }
-  await batch.commit();
+
+
+  for (let offset = 0; offset < epcrCaseNumberUpdates.length; offset += 400) {
+    const batch = db.batch();
+    for (const update of epcrCaseNumberUpdates.slice(offset, offset + 400)) {
+      batch.update(update.ref, {
+        caseNumber: update.caseNumber,
+        operationalNumberBackfilledAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  console.log("Operational numbers were backfilled successfully.");
 }
 
-console.log("Operational numbers were backfilled successfully.");
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
