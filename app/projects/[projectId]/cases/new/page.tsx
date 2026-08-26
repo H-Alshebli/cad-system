@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
 import LocationSearch from "@/app/components/LocationSearch";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -207,7 +208,10 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       return;
     }
 
+    const operationalNumber = await reserveOperationalNumber("case");
     const caseRef = await addDoc(collection(db, "cases"), {
+      caseNumber: operationalNumber.number,
+      caseSequence: operationalNumber.sequence,
       sourceType: "PROJECT",
       sourceId: params.projectId,
       projectId: params.projectId,

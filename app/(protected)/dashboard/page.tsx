@@ -7,6 +7,11 @@ import CaseTimeline from "@/app/components/CaseTimeline";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import Link from "next/link";
+import {
+  getCaseDisplayCode,
+  getEpcrDisplayCode,
+  getUnitDisplayName,
+} from "@/lib/displayLabels";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
@@ -64,7 +69,7 @@ export default function Dashboard() {
 
   function getMatchedEpcrId(caseItem: any): string {
     const matched = getMatchedEpcr(caseItem);
-    return matched?.id || "—";
+    return matched ? getEpcrDisplayCode(matched) : "";
   }
 
   function getMatchedProjectName(caseItem: any): string {
@@ -431,8 +436,15 @@ return (
           >
             <div className="mb-3">
               <h2 className="text-xl font-black text-[#274C5A]">
-                {getMatchedEpcrId(c)} — {getMatchedProjectName(c)}
+                {getCaseDisplayCode(c)} — {getMatchedProjectName(c)}
               </h2>
+
+              <p className="mt-1 text-sm font-bold text-[#274C5A]">
+                {c.chiefComplaint || c.caseInfo?.complaint || "No complaint recorded"}
+                {" • "}
+                {getUnitDisplayName(c.assignedUnit) || "Unit not assigned"}
+                {getMatchedEpcrId(c) ? ` • ${getMatchedEpcrId(c)}` : ""}
+              </p>
 
               <p className="text-sm font-medium text-[#7F7F7F]">
                 Date & Time: {formatCaseDate(c)}

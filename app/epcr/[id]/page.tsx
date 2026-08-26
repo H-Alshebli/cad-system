@@ -157,6 +157,9 @@ type TimeSection = {
 };
 
 type EpcrDoc = {
+  epcrNumber?: string;
+  epcrSequence?: number;
+  caseNumber?: string;
   locked?: boolean;
   projectInfo?: ProjectInfo;
   patientInfo?: PatientInfo;
@@ -1004,6 +1007,10 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
     generateEpcrPdf({
       brandLogoDataUrl,
+      reportInfo: {
+        epcrNumber: data.epcrNumber,
+        caseNumber: data.caseNumber,
+      },
       projectInfo,
       patientInfo,
       medicalHistory,
@@ -1063,7 +1070,14 @@ patientInfo.chiefComplaints.forEach((complaint) => {
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
               Patient Care Report
             </p>
-            <h1 className="mt-1 text-3xl font-black text-[#123746]">ePCR</h1>
+            <h1 className="mt-1 text-3xl font-black text-[#123746]">
+              {data.epcrNumber || "ePCR"}
+            </h1>
+            {data.caseNumber && (
+              <p className="mt-1 text-sm font-black text-[#166575]">
+                Linked case: {data.caseNumber}
+              </p>
+            )}
             <p className="mt-1 text-sm font-semibold text-[#607482]">
               Clinical documentation, outcome, signatures, and transfer timeline.
             </p>

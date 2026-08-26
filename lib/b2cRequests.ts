@@ -8,6 +8,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 export type B2CRequestStatus =
   | "PendingPayment"
@@ -724,8 +725,11 @@ export async function createCadCaseFromB2CRequest(
 
   const timestamp = new Date().toISOString();
   const plannedAssignment = normalizePlannedAssignment(request);
+  const operationalNumber = await reserveOperationalNumber("case");
 
   const casePayload = cleanUndefinedDeep({
+    caseNumber: operationalNumber.number,
+    caseSequence: operationalNumber.sequence,
     sourceType: "B2C",
     sourceRequestId: requestId,
     b2cRequestId: requestId,
@@ -919,11 +923,14 @@ export async function createReturnCadCaseFromB2CRequest(
 
   const timestamp = new Date().toISOString();
   const plannedAssignment = normalizePlannedAssignment(request);
+  const operationalNumber = await reserveOperationalNumber("case");
 
   const returnPickupText = getB2CDestinationText(request);
   const returnDestinationText = getB2CReturnDestinationText(request);
 
   const casePayload = cleanUndefinedDeep({
+    caseNumber: operationalNumber.number,
+    caseSequence: operationalNumber.sequence,
     sourceType: "B2C",
     sourceRequestId: requestId,
     b2cRequestId: requestId,

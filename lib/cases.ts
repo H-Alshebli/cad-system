@@ -7,6 +7,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 export type CaseSourceType = "PROJECT" | "B2C";
 
@@ -27,7 +28,10 @@ export async function createB2CCase(input: any) {
   const dispatchStatus: DispatchStatus =
     paymentStatus === "Paid" ? "ReadyForDispatch" : "PendingPayment";
 
+  const operationalNumber = await reserveOperationalNumber("case");
   const caseRef = await addDoc(collection(db, "cases"), {
+    caseNumber: operationalNumber.number,
+    caseSequence: operationalNumber.sequence,
     sourceType: "B2C",
     sourceId: null,
     customerName: input.customerName || "",

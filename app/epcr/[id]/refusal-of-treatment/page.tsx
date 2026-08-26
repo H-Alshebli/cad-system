@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { generateRefusalOfTreatmentPdf } from "@/lib/epcrSupportingFormsPdf";
 
 type EpcrFormData = {
+  epcrNumber?: string;
+  caseNumber?: string;
   projectInfo?: {
     projectId?: string;
     projectName?: string;
@@ -144,6 +146,8 @@ export default function RefusalOfTreatmentPage({
   const exportPdf = () => {
     generateRefusalOfTreatmentPdf({
       epcrId,
+      epcrNumber: epcrData?.epcrNumber,
+      caseNumber: epcrData?.caseNumber,
       projectInfo: epcrData?.projectInfo,
       patientInfo: epcrData?.patientInfo,
       refusalReasons,

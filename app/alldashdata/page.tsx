@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
+import { getCaseDisplayCode } from "@/lib/displayLabels";
 
 /* =====================================================
    🔒 ADMIN FIXED FILTER (غير التاريخ والوقت هنا فقط)
@@ -175,7 +176,7 @@ const closedclinicCases = filteredCases.filter(
             className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
           >
             <h2 className="text-xl font-bold">
-              Lazem Code: {c.lazemCode || "—"} — {c.level}
+              {getCaseDisplayCode(c)} — {c.level}
             </h2>
 
             <p className="text-gray-400">

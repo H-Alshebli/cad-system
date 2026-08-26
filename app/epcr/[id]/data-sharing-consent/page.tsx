@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { generateDataSharingConsentPdf } from "@/lib/epcrSupportingFormsPdf";
 
 type EpcrFormData = {
+  epcrNumber?: string;
+  caseNumber?: string;
   projectInfo?: {
     projectId?: string;
     projectName?: string;
@@ -147,6 +149,8 @@ export default function DataSharingConsentPage({
   const exportPdf = () => {
     generateDataSharingConsentPdf({
       epcrId,
+      epcrNumber: epcrData?.epcrNumber,
+      caseNumber: epcrData?.caseNumber,
       projectInfo: epcrData?.projectInfo,
       patientInfo: epcrData?.patientInfo,
       consentStatus,

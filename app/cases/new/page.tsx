@@ -14,6 +14,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import dynamic from "next/dynamic";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 // Load Map ONLY in client (fixes Vercel SSR window issue)
 const Map = dynamic(() => import("@/app/components/Map"), {
@@ -223,6 +224,7 @@ const [lng, setLng] = useState<number | null>(null);
     }
 
     const lazemCode = generateLazemCode();
+    const operationalNumber = await reserveOperationalNumber("case");
     const now = new Date().toISOString();
 
     let assignedUnit: any = null;
@@ -249,6 +251,8 @@ const [lng, setLng] = useState<number | null>(null);
     }
 
     await addDoc(collection(db, "cases"), {
+      caseNumber: operationalNumber.number,
+      caseSequence: operationalNumber.sequence,
       lazemCode,
       ijrny: ijrnyCode,
       chiefComplaint,

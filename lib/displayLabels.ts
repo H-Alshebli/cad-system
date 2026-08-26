@@ -39,16 +39,24 @@ export function getCaseDisplayCode(item: any) {
   const source = clean(item?.sourceType || item?.caseType).toLowerCase();
   if (source.includes("b2c")) {
     return (
+      clean(item?.caseNumber) ||
       clean(item?.bookingConfirmationNumber && `B2C-${item.bookingConfirmationNumber}`) ||
       clean(item?.lazemCode) ||
-      clean(item?.caseNumber) ||
       buildCaseDescriptor(item, "B2C")
     );
   }
   return (
-    clean(item?.lazemCode) ||
     clean(item?.caseNumber) ||
+    clean(item?.lazemCode) ||
     buildCaseDescriptor(item, "HCAD")
+  );
+}
+
+export function getEpcrDisplayCode(item: any) {
+  return (
+    clean(item?.epcrNumber) ||
+    shortTechnicalId(item?.epcrId || item?.id, "EPCR") ||
+    "ePCR"
   );
 }
 

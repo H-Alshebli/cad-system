@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
-import { getCaseDisplayCode, shortTechnicalId } from "@/lib/displayLabels";
+import { getCaseDisplayCode, getEpcrDisplayCode } from "@/lib/displayLabels";
 
 type FirestoreDate = Timestamp | Date | string | null | undefined;
 
@@ -307,7 +307,7 @@ function exportToCsv(rows: Row[]) {
 
     return {
       "Case Ref": getCaseDisplayCode(caseItem),
-      "ePCR Ref": epcr ? shortTechnicalId(epcr.epcrId || epcr.id, "EPCR") : "Not Created",
+      "ePCR Ref": epcr ? getEpcrDisplayCode(epcr) : "Not Created",
       Project: getProjectName(caseItem, epcr),
       Patient: getPatientName(caseItem, epcr),
       Age: cleanExportValue(epcr?.patientInfo?.age),
@@ -470,8 +470,14 @@ export default function CaseEpcrSubmissionsTable({
     return rows.filter(({ caseItem, epcr }) => {
       const searchableText = [
         caseItem.id,
+        caseItem.caseNumber,
+        caseItem.caseSequence,
         epcr?.epcrId,
         epcr?.id,
+        epcr?.epcrNumber,
+        epcr?.epcrSequence,
+        caseItem.externalReference,
+        epcr?.externalReference,
         getProjectName(caseItem, epcr),
         getPatientName(caseItem, epcr),
         getChiefComplaint(caseItem, epcr),
@@ -638,7 +644,7 @@ export default function CaseEpcrSubmissionsTable({
                     <td className="whitespace-nowrap px-4 py-4">
                       {epcr ? (
                         <div className="font-black text-[#166575]">
-                          {shortTechnicalId(epcr.epcrId || epcr.id, "EPCR")}
+                          {getEpcrDisplayCode(epcr)}
                         </div>
                       ) : (
                         <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-xs font-black text-rose-700">

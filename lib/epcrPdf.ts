@@ -6,6 +6,10 @@ import autoTable from "jspdf-autotable";
  */
 export type EpcrPdfData = {
   brandLogoDataUrl?: string;
+  reportInfo?: {
+    epcrNumber?: string;
+    caseNumber?: string;
+  };
   projectInfo?: {
     projectId?: string;
     projectName?: string;
@@ -97,7 +101,15 @@ export function buildEpcrPdf(data: EpcrPdfData) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...colors.slate);
-    doc.text(`Generated ${new Date().toLocaleString()}`, pageWidth - marginX, 25, { align: "right" });
+    const reference = [data.reportInfo?.epcrNumber, data.reportInfo?.caseNumber]
+      .filter(Boolean)
+      .join(" / ");
+    doc.text(
+      reference || `Generated ${new Date().toLocaleString()}`,
+      pageWidth - marginX,
+      25,
+      { align: "right" }
+    );
 
     doc.setDrawColor(...colors.navy);
     doc.setLineWidth(0.8);

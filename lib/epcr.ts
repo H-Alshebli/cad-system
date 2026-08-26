@@ -9,6 +9,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 /* =========================
    HELPERS
@@ -106,6 +107,8 @@ export const createEpcrFromCase = async (
     return snap.id;
   }
 
+  const operationalNumber = await reserveOperationalNumber("epcr");
+
   const fullName = getFullName(caseData);
   const sourceType = getSourceType(caseData);
 
@@ -115,7 +118,10 @@ export const createEpcrFromCase = async (
     ===================== */
 
     epcrId: caseData.id,
+    epcrNumber: operationalNumber.number,
+    epcrSequence: operationalNumber.sequence,
     caseId: caseData.id,
+    caseNumber: caseData.caseNumber || null,
 
     // Project cases have projectId.
     // B2C cases do not, so save null instead of undefined.
@@ -367,6 +373,11 @@ export const createManualEpcr = async ({
     throw new Error("Project is required for a manual ePCR.");
   }
 
+  const [caseOperationalNumber, epcrOperationalNumber] = await Promise.all([
+    reserveOperationalNumber("case"),
+    reserveOperationalNumber("epcr"),
+  ]);
+
   // A manual ePCR is still an operational event. Create its CAD case and
   // clinical record atomically with the same ID so neither can be orphaned.
   const caseRef = doc(collection(db, "cases"));
@@ -382,6 +393,8 @@ export const createManualEpcr = async ({
     : null;
 
   const casePayload = cleanUndefinedDeep({
+    caseNumber: caseOperationalNumber.number,
+    caseSequence: caseOperationalNumber.sequence,
     sourceType: "MANUAL_EPCR",
     caseType: "Manual ePCR",
     sourceId: null,
@@ -438,7 +451,10 @@ export const createManualEpcr = async ({
 
   const epcrPayload = cleanUndefinedDeep({
     epcrId: epcrRef.id,
+    epcrNumber: epcrOperationalNumber.number,
+    epcrSequence: epcrOperationalNumber.sequence,
     caseId: caseRef.id,
+    caseNumber: caseOperationalNumber.number,
     isManual: true,
     sourceType: "MANUAL_EPCR",
     projectId,

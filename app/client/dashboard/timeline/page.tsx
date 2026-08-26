@@ -11,6 +11,7 @@ import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import CaseTimeline from "@/app/components/CaseTimeline";
+import { getCaseDisplayCode } from "@/lib/displayLabels";
 
 type Project = {
   id: string;
@@ -448,7 +449,7 @@ export default function ClientTimelineDashboardPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-xl font-bold">
-                        {c.projectName || "Project"}
+                        {getCaseDisplayCode(c)} — {c.projectName || "Project"}
                       </h2>
 
                       <p className="text-gray-400">

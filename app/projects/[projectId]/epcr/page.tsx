@@ -9,6 +9,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getEpcrDisplayCode } from "@/lib/displayLabels";
 
 export default function ProjectEpcrPage({
   params,
@@ -60,7 +61,10 @@ export default function ProjectEpcrPage({
             className="group block rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#74cdda] hover:shadow-md"
           >
             <div className="font-black text-[#274C5A] group-hover:text-[#166575]">
-              Case: {e.caseId}
+              {getEpcrDisplayCode(e)}
+            </div>
+            <div className="mt-1 text-xs font-bold text-[#607482]">
+              Case: {e.caseNumber || e.caseId}
             </div>
             <div className="mt-2 text-sm font-semibold text-[#607482]">
               Created:{" "}

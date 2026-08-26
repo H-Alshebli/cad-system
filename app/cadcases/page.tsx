@@ -164,6 +164,9 @@ export default function ModernCadCasesPage() {
 
         return [
           item.id,
+          item.caseNumber,
+          item.caseSequence,
+          item.externalReference,
           getCaseDisplayCode(item),
           getCaseDisplayTitle(item),
           projectName,

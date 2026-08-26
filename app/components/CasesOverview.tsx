@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import CaseTimeline from "@/app/components/CaseTimeline";
+import {
+  getCaseDisplayCode,
+  getEpcrDisplayCode,
+  getProjectDisplayName,
+  getUnitDisplayName,
+} from "@/lib/displayLabels";
 
 export default function CasesOverview({
   title,
@@ -54,9 +60,9 @@ export default function CasesOverview({
     });
   }
 
-  function getMatchedEpcrId(caseItem: any): string {
+  function getMatchedEpcr(caseItem: any) {
     const matched = epcrs.find((e) => e.caseId === caseItem.id);
-    return matched?.id || "—";
+    return matched || null;
   }
 
   useEffect(() => {
@@ -222,8 +228,17 @@ export default function CasesOverview({
             >
               <div className="mb-3">
                 <h2 className="text-xl font-black text-[#274C5A]">
-                  {getMatchedEpcrId(c)} — {c.patientName || "—"}
+                  {getCaseDisplayCode(c)} — {getProjectDisplayName(c)}
                 </h2>
+
+                <p className="mt-1 text-sm font-bold text-[#274C5A]">
+                  {c.chiefComplaint || c.caseInfo?.complaint || "No complaint recorded"}
+                  {" • "}
+                  {getUnitDisplayName(c.assignedUnit) || "Unit not assigned"}
+                  {getMatchedEpcr(c)
+                    ? ` • ${getEpcrDisplayCode(getMatchedEpcr(c))}`
+                    : ""}
+                </p>
 
                 <p className="text-sm font-medium text-[#7F7F7F]">
                   Date & Time: {formatCaseDate(c)}

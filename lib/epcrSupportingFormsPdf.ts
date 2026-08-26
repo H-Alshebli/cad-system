@@ -22,6 +22,8 @@ type Signature = {
 
 type CommonFormData = {
   epcrId: string;
+  epcrNumber?: string;
+  caseNumber?: string;
   projectInfo?: ProjectInfo;
   patientInfo?: PatientInfo;
 };
@@ -90,7 +92,7 @@ function createFormPdf(title: string, data: CommonFormData) {
   doc.text(title, 14, 25);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`ePCR ID: ${safeText(data.epcrId)}`, pageWidth - 14, 14, {
+  doc.text(`ePCR: ${safeText(data.epcrNumber || data.epcrId)}`, pageWidth - 14, 14, {
     align: "right",
   });
   doc.text(
@@ -106,6 +108,7 @@ function createFormPdf(title: string, data: CommonFormData) {
     body: [
       ["Project", safeText(data.projectInfo?.projectName)],
       ["Project ID", safeText(data.projectInfo?.projectId)],
+      ["Case number", safeText(data.caseNumber)],
       ["Patient name", safeText(patientName)],
       ["Patient ID", safeText(data.patientInfo?.patientId)],
       ["Age / Gender", `${safeText(data.patientInfo?.age)} / ${safeText(data.patientInfo?.gender)}`],

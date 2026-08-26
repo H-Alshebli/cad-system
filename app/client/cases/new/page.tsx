@@ -20,6 +20,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
+import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -331,7 +332,10 @@ export default function ClientNewCasePage() {
     setSaving(true);
 
     try {
+      const operationalNumber = await reserveOperationalNumber("case");
       const caseRef = await addDoc(collection(db, "cases"), {
+        caseNumber: operationalNumber.number,
+        caseSequence: operationalNumber.sequence,
         projectId: projectData.id,
         projectName,
 
