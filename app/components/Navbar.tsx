@@ -38,7 +38,7 @@ export default function Navbar() {
       <div className="max-w-6xl mx-auto flex justify-between items-center">
 
         <div className="flex gap-6">
-          <Link className={linkClass("/dashboard")} href="/dashboard">Dashboard</Link>
+          <Link className={linkClass("/dashboards")} href="/dashboards">Dashboards</Link>
           <Link className={linkClass("/cases")} href="/cases">Cases</Link>
           <Link className={linkClass("/cases/new")} href="/cases/new">New Case</Link>
           <Link className={linkClass("/clinic")} href="/clinic">Clinic</Link>

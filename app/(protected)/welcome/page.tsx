@@ -55,11 +55,11 @@ export default function WelcomePage() {
   ];
 
   const quickActions = [
-    { href: "/dashboard", label: "Timeline Dashboard" },
+    { href: "/dashboards/timeline", label: "Timeline Dashboard" },
     { href: "/projects", label: "Projects" },
     { href: "/ambulances", label: "Ambulances" },
     { href: "/transport", label: "Transport Coverage" },
-    { href: "/dashboard/epcr", label: "Cases Dashboard" },
+    { href: "/dashboards/cases", label: "Cases Dashboard" },
     { href: "/admin/users", label: "Users Management" },
   ];
 

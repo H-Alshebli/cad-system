@@ -10,7 +10,6 @@ import {
   BriefcaseMedical,
   ClipboardPlus,
   ClipboardList,
-  ClipboardCheck,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -54,7 +53,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   }
 
   function isActive(path: string) {
-    if (path === "/dashboard") return pathname === "/dashboard";
     if (path === "/client") return pathname === "/client";
     if (path === "/b2c/requests") {
       return pathname === "/b2c/requests" || pathname.startsWith("/b2c/requests/");
@@ -120,16 +118,14 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         can(permissions, "cases", "create"),
     },
     {
-      href: "/dashboard",
-      label: "Timeline Dashboard",
+      href: "/dashboards",
+      label: "Dashboards",
       icon: <LayoutDashboard size={18} />,
-      visible: isAdmin || can(permissions, "dashboards", "timeline"),
-    },
-    {
-      href: "/dashboard/epcr",
-      label: "Cases Dashboard",
-      icon: <BarChart3 size={18} />,
-      visible: isAdmin || can(permissions, "dashboards", "epcr"),
+      visible:
+        isAdmin ||
+        can(permissions, "dashboards", "timeline") ||
+        can(permissions, "dashboards", "epcr") ||
+        can(permissions, "checklist_review_global", "view"),
     },
     {
       href: "/cadcases",
@@ -180,12 +176,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   ];
 
   const managementItems: NavItem[] = [
-    {
-      href: "/checklists",
-      label: "Checklist Review",
-      icon: <ClipboardCheck size={18} />,
-      visible: isAdmin || can(permissions, "checklist_review_global", "view"),
-    },
     {
       href: "/projects",
       label: "Projects",

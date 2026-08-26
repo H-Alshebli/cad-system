@@ -16,7 +16,7 @@ export function middleware(request: NextRequest) {
   const isProduction = process.env.NODE_ENV === "production";
 
   if (isProduction && pathname.startsWith("/dev")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/dashboards", request.url));
   }
 
   return NextResponse.next();
