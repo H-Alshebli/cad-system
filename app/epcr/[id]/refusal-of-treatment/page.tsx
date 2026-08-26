@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { generateRefusalOfTreatmentPdf } from "@/lib/epcrSupportingFormsPdf";
 
 type EpcrFormData = {
   projectInfo?: {
@@ -138,6 +139,27 @@ export default function RefusalOfTreatmentPage({
     );
 
     alert("Refusal of treatment form saved.");
+  };
+
+  const exportPdf = () => {
+    generateRefusalOfTreatmentPdf({
+      epcrId,
+      projectInfo: epcrData?.projectInfo,
+      patientInfo: epcrData?.patientInfo,
+      refusalReasons,
+      otherReason,
+      explainedRisks,
+      patientDecision,
+      refusedBy,
+      guardianName,
+      guardianIdNumber,
+      witnessName,
+      clinicianName,
+      notes,
+      patientSignatureDataUrl,
+      guardianSignatureDataUrl,
+      clinicianSignatureDataUrl,
+    });
   };
 
   if (loading) {
@@ -321,6 +343,14 @@ export default function RefusalOfTreatmentPage({
 
       <div className="flex justify-end gap-3">
         <button
+          type="button"
+          onClick={exportPdf}
+          className="rounded-xl border border-[#274C5A] bg-white px-6 py-2.5 text-sm font-black text-[#274C5A] transition hover:bg-[#edf8fa]"
+        >
+          Export PDF
+        </button>
+        <button
+          type="button"
           onClick={saveForm}
           className="rounded-xl bg-[#274C5A] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
         >
