@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
+import ChatNotificationListener from "./ChatNotificationListener";
 import EnvironmentBanner from "./EnvironmentBanner";
 import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -178,6 +179,7 @@ export default function AppShell({
           </div>
 
           <CaseAlertListener />
+          <ChatNotificationListener />
         </div>
       </main>
     </div>

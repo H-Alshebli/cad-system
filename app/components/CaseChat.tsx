@@ -6,8 +6,6 @@ import {
   query,
   orderBy,
   onSnapshot,
-  addDoc,
-  serverTimestamp,
   doc,
   getDoc,
 } from "firebase/firestore";
@@ -65,6 +63,7 @@ export default function CaseChat({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
+  const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent">("idle");
 
   const [uid, setUid] = useState<string | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
@@ -159,18 +158,26 @@ const effectiveDisabled =
   if (!text.trim() || effectiveDisabled) return;
 
   try {
-    await addDoc(collection(db, "cases", caseId, "chat"), {
-      message: text.trim(),
-      senderId: uid!,
-      senderName: user?.name || "Unknown User",
-      senderRole: user?.role || "unknown",
-      createdAt: serverTimestamp(),
+    setSendStatus("sending");
+    const token = await auth.currentUser?.getIdToken();
+    const response = await fetch("/api/chat/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ caseId, message: text.trim() }),
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Failed to send message");
 
     setText("");
+    setSendStatus("sent");
+    window.setTimeout(() => setSendStatus("idle"), 2500);
   } catch (err) {
     console.error("Chat send failed:", err);
-    alert("Failed to send message");
+    setSendStatus("idle");
+    alert(err instanceof Error ? err.message : "Failed to send message");
   }
 }
 
@@ -267,9 +274,12 @@ const effectiveDisabled =
           disabled={effectiveDisabled}
           className="rounded-xl bg-[#274C5A] px-4 font-bold text-white hover:bg-[#1f3f4c] disabled:bg-[#7F7F7F]"
         >
-          Send
+          {sendStatus === "sending" ? "Sending..." : "Send"}
         </button>
       </div>
+      {sendStatus === "sent" && (
+        <div className="mt-1 text-right text-xs font-bold text-emerald-700">Sent</div>
+      )}
     </div>
   );
 }
