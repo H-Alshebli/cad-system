@@ -10,6 +10,7 @@ import {
   BriefcaseMedical,
   ClipboardPlus,
   ClipboardList,
+  ClipboardCheck,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -179,6 +180,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   ];
 
   const managementItems: NavItem[] = [
+    {
+      href: "/checklists",
+      label: "Checklist Review",
+      icon: <ClipboardCheck size={18} />,
+      visible: isAdmin || can(permissions, "checklist_review_global", "view"),
+    },
     {
       href: "/projects",
       label: "Projects",

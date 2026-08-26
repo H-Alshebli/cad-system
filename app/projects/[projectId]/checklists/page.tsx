@@ -9,6 +9,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import { calculateReadiness, canViewChecklist } from "@/lib/readinessChecklist";
 import { hasPermission } from "@/lib/usePermissions";
 import { getChecklistMissionDisplay, getUnitDisplayName } from "@/lib/displayLabels";
+import { useChecklistReviewScope } from "@/app/components/ChecklistReviewScope";
 
 function formatDateTime(value: any) {
   const date = value?.toDate?.() || (value ? new Date(value) : null);
@@ -36,16 +37,24 @@ export default function ProjectChecklistsPage({
 }: {
   params: { projectId: string };
 }) {
+  const { allProjects } = useChecklistReviewScope();
   const { user, loading: userLoading } = useCurrentUser();
   const { permissions, loading: permLoading, can } = usePermissions(user?.role);
   const [checklists, setChecklists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [projectFilter, setProjectFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
-    const q = query(
-      collection(db, "projectChecklists"),
-      where("projectId", "==", params.projectId)
-    );
+    const q = allProjects
+      ? query(collection(db, "projectChecklists"))
+      : query(
+          collection(db, "projectChecklists"),
+          where("projectId", "==", params.projectId)
+        );
 
     const unsub = onSnapshot(q, (snap) => {
       const rows: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -59,19 +68,45 @@ export default function ProjectChecklistsPage({
     });
 
     return () => unsub();
-  }, [params.projectId]);
+  }, [allProjects, params.projectId]);
 
   const visibleChecklists = useMemo(() => {
     return checklists.filter((item) => canViewChecklist(item, permissions, user));
   }, [checklists, permissions, user]);
 
+  const projectOptions = useMemo(() => {
+    const values = new Map<string, string>();
+    visibleChecklists.forEach((item) => {
+      const id = String(item.projectId || "").trim();
+      if (!id) return;
+      values.set(id, String(item.projectName || id));
+    });
+    return Array.from(values.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [visibleChecklists]);
+
+  const filteredChecklists = useMemo(() => {
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
+
+    return visibleChecklists.filter((item) => {
+      if (projectFilter && item.projectId !== projectFilter) return false;
+      if (statusFilter && String(item.status || "draft") !== statusFilter) return false;
+      if (phaseFilter && String(item.checklistPhase || "opening") !== phaseFilter) return false;
+
+      const itemDate = item.createdAt?.toDate?.() || (item.createdAt ? new Date(item.createdAt) : null);
+      if (start && (!itemDate || itemDate < start)) return false;
+      if (end && (!itemDate || itemDate > end)) return false;
+      return true;
+    });
+  }, [visibleChecklists, projectFilter, statusFilter, phaseFilter, startDate, endDate]);
+
   const readinessRows = useMemo(
     () =>
-      visibleChecklists.map((item) => ({
+      filteredChecklists.map((item) => ({
         item,
         readiness: calculateReadiness(item.items || []),
       })),
-    [visibleChecklists]
+    [filteredChecklists]
   );
   const normalizedRole = String(user?.role || "").toLowerCase();
   const isFieldUser =
@@ -103,20 +138,47 @@ export default function ProjectChecklistsPage({
           <div className="mb-2 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide">
             HCAD Readiness
           </div>
-          <h2 className="text-xl font-black text-white">Readiness Review Dashboard</h2>
+          <h2 className="text-xl font-black text-white">
+            {allProjects ? "Checklist Review" : "Readiness Review Dashboard"}
+          </h2>
           <p className="mt-1 text-sm font-medium text-white/78">
-            EMS readiness checks for this project by unit, shift, mission, and inspector.
+            {allProjects
+              ? "EMS readiness checks across all projects by project, unit, shift, mission, and inspector."
+              : "EMS readiness checks for this project by unit, shift, mission, and inspector."}
           </p>
         </div>
 
       </div>
       </div>
 
+      {allProjects && (
+        <div className={`${cardClass} grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5`}>
+          <select className="input" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+            <option value="">All projects</option>
+            {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+          <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Submitted</option>
+            <option value="approved">Approved</option>
+            <option value="returned_for_correction">Returned for correction</option>
+          </select>
+          <select className="input" value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
+            <option value="">All phases</option>
+            <option value="opening">Opening</option>
+            <option value="closing">Closing</option>
+          </select>
+          <input className="input" type="date" aria-label="Start date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          <input className="input" type="date" aria-label="End date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className={cardClass}>
           <div className={metricLabelClass}>Total</div>
           <div className="mt-1 text-2xl font-black text-[#274C5A]">
-            {visibleChecklists.length}
+            {readinessRows.length}
           </div>
         </div>
         <div className={cardClass}>
@@ -147,6 +209,7 @@ export default function ProjectChecklistsPage({
           <thead className="border-b border-[#86A7B2]/25 bg-[#f8fbfc] text-xs uppercase tracking-wide text-[#7F7F7F]">
             <tr>
               <th className="px-4 py-3">Date / Shift</th>
+              {allProjects && <th className="px-4 py-3">Project</th>}
               <th className="px-4 py-3">Mission</th>
               <th className="px-4 py-3">Phase</th>
               <th className="px-4 py-3">Unit</th>
@@ -167,6 +230,11 @@ export default function ProjectChecklistsPage({
                     <div className="font-bold text-[#274C5A]">{item.dateKey}</div>
                     <div className="text-xs text-[#7F7F7F]">{item.shiftKey}</div>
                   </td>
+                  {allProjects && (
+                    <td className="px-4 py-3 text-[#274C5A]">
+                      <div className="font-bold">{item.projectName || item.projectId || "-"}</div>
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-[#274C5A]">
                     {getChecklistMissionDisplay(item)}
                   </td>
@@ -206,7 +274,7 @@ export default function ProjectChecklistsPage({
                   <td className="px-4 py-3">
                     <Link
                       className={actionButtonClass}
-                      href={`/projects/${params.projectId}/checklists/${item.id}`}
+                      href={`/projects/${item.projectId || params.projectId}/checklists/${item.id}`}
                     >
                       Open
                     </Link>
@@ -217,8 +285,10 @@ export default function ProjectChecklistsPage({
 
             {readinessRows.length === 0 && (
               <tr>
-                <td colSpan={canViewTiming ? 10 : 9} className="px-4 py-10 text-center text-sm font-semibold text-[#7F7F7F]">
-                  No readiness checklists found for this project.
+                <td colSpan={(canViewTiming ? 10 : 9) + (allProjects ? 1 : 0)} className="px-4 py-10 text-center text-sm font-semibold text-[#7F7F7F]">
+                  {allProjects
+                    ? "No readiness checklists match the selected filters."
+                    : "No readiness checklists found for this project."}
                 </td>
               </tr>
             )}

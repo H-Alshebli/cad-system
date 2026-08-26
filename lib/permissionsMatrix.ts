@@ -89,6 +89,10 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "manage_templates",
   ],
 
+  // Controls visibility of the organization-wide checklist review page.
+  // Checklist data and actions remain protected by readiness_checklists.
+  checklist_review_global: ["view"],
+
   epcr: [
     "view",
     "view_dashboard",
@@ -144,6 +148,7 @@ export const MODULE_LABELS: Record<string, string> = {
   missions_plus: "My Missions+",
   crew_profile: "Crew Profile",
   readiness_checklists: "Readiness Checklists",
+  checklist_review_global: "Checklist Review – All Projects",
   epcr: "ePCR",
   submissions: "Submissions",
   ambulances: "Ambulances",
@@ -200,6 +205,8 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   readiness_checklists:
     "Project EMS readiness checks linked to missions, units, shifts, inspectors, and supervisor review.",
+  checklist_review_global:
+    "Organization-wide checklist review page covering all projects. Checklist actions still follow the Readiness Checklists permissions.",
 
   epcr:
     "ePCR access, editing, finalization, PDF export, and sensitive medical details.",
@@ -316,6 +323,7 @@ export const PERMISSION_GROUPS = [
       "missions_plus",
       "crew_profile",
       "readiness_checklists",
+      "checklist_review_global",
       "epcr",
       "submissions",
     ],
