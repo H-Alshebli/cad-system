@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import { useCasesDashboardScope } from "@/app/components/CasesDashboardScope";
 
 type ProjectsMap = Record<string, number>;
 type GenericMap = Record<string, number>;
@@ -85,15 +86,18 @@ function truncateLabel(text: string, max = 18) {
 /* ================= PAGE ================= */
 
 export default function EpcrDashboardPage() {
+  const { projectId, embedded = false } = useCasesDashboardScope();
   const [selectedProject, setSelectedProject] = useState<string | undefined>();
 
   const { loading, stats } = useEpcrDashboard(
     undefined,
     undefined,
-    selectedProject
+    projectId ? undefined : selectedProject,
+    projectId
   );
 
   const projects = (stats?.projects || {}) as ProjectsMap;
+  const dashboardProjects = (stats?.scopedProjects || {}) as ProjectsMap;
 
   const genderData = useMemo(() => {
     if (!stats) return [];
@@ -120,11 +124,11 @@ export default function EpcrDashboardPage() {
 
   const projectChartData = useMemo(
     () =>
-      Object.entries(projects)
+      Object.entries(dashboardProjects)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 8),
-    [projects]
+    [dashboardProjects]
   );
 
   const totalPatients = stats?.totalCases || 0;
@@ -157,11 +161,13 @@ export default function EpcrDashboardPage() {
 
  return (
   <PermissionGuard module="dashboards" action="epcr" showMessage={true}>
-    <div className="min-h-screen bg-[#f5f7f8] p-6 text-[#274C5A]">
+    <div className={`${embedded ? "" : "min-h-screen p-6"} bg-[#f5f7f8] text-[#274C5A]`}>
       <div className="w-full space-y-6">
         {/* HEADER */}
         <div className="rounded-2xl bg-[#274C5A] p-6 text-white shadow-sm shadow-[#274C5A]/20">
-          <h1 className="text-3xl font-black tracking-tight">Cases Dashboard</h1>
+          <h1 className="text-3xl font-black tracking-tight">
+            {projectId ? "Project Cases Dashboard" : "Cases Dashboard"}
+          </h1>
           <p className="mt-2 max-w-3xl text-sm font-medium text-white/78">
             Executive analytical view of ePCR activity, project distribution,
             triage trends, health classifications, complaints, and operational indicators.
@@ -169,7 +175,7 @@ export default function EpcrDashboardPage() {
         </div>
 
         {/* PROJECT FILTER */}
-        {Object.keys(projects).length > 0 && (
+        {!projectId && Object.keys(projects).length > 0 && (
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => setSelectedProject(undefined)}
@@ -214,8 +220,8 @@ export default function EpcrDashboardPage() {
           <KpiCard title="Top Triage" value={topTriage} subtitle="Most frequent triage level" />
           <KpiCard
             title="Projects Count"
-            value={Object.keys(projects).length}
-            subtitle="Active projects in dashboard"
+            value={Object.keys(dashboardProjects).length}
+            subtitle={projectId ? "Current project" : "Active projects in dashboard"}
           />
         </div>
 
@@ -401,7 +407,7 @@ export default function EpcrDashboardPage() {
 
         {/* PROJECTS TABLE */}
         <DarkCard title="Projects Summary">
-          {Object.keys(projects).length === 0 ? (
+          {Object.keys(dashboardProjects).length === 0 ? (
             <div className="text-sm text-[#7F7F7F]">No projects linked yet.</div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-[#86A7B2]/25">
@@ -413,7 +419,7 @@ export default function EpcrDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(projects)
+                  {Object.entries(dashboardProjects)
                     .sort((a, b) => b[1] - a[1])
                     .map(([project, count]) => (
                       <tr

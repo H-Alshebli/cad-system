@@ -44,6 +44,7 @@ export default function ProjectLayout({
 
   const tabs = [
     { label: "Dashboard", href: `/projects/${params.projectId}` },
+    { label: "Cases Dashboard", href: `/projects/${params.projectId}/cases-dashboard` },
     { label: "CAD", href: `/projects/${params.projectId}/cad` },
     { label: "ePCR", href: `/projects/${params.projectId}/epcr` },
     { label: "Locations", href: `/projects/${params.projectId}/locations` },
@@ -68,7 +69,9 @@ export default function ProjectLayout({
       <div className="flex gap-2 border-b">
         {tabs.map((t) => {
           const active =
-            t.href.endsWith("/checklists")
+            t.href === `/projects/${params.projectId}`
+              ? pathname === t.href
+              : t.href.endsWith("/checklists")
               ? pathname === t.href ||
                 (pathname.startsWith(`${t.href}/`) && !pathname.startsWith(`${t.href}/new`))
               : pathname === t.href || pathname.startsWith(`${t.href}/`);

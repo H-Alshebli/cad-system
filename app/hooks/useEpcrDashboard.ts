@@ -22,6 +22,7 @@ type DashboardStats = {
   healthClassification: Record<string, number>;
   complaints: Record<string, number>;
   projects: Record<string, number>;
+  scopedProjects: Record<string, number>;
   responseTime: {
     avgMinutes: number;
     minMinutes: number;
@@ -36,7 +37,8 @@ function isVisibleEpcr(item: any) {
 export function useEpcrDashboard(
   startDate?: Date,
   endDate?: Date,
-  projectFilter?: string
+  projectFilter?: string,
+  projectIdFilter?: string
 ) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -67,6 +69,7 @@ export function useEpcrDashboard(
       const healthClassification: Record<string, number> = {};
       const complaints: Record<string, number> = {};
       const projects: Record<string, number> = {};
+      const scopedProjects: Record<string, number> = {};
 
       let responseSum = 0;
       let responseMin = Infinity;
@@ -82,12 +85,18 @@ export function useEpcrDashboard(
 
       for (const epcr of visibleEpcrs) {
         const projectName = epcr.projectInfo?.projectName;
+        const projectId = epcr.projectInfo?.projectId || epcr.projectId;
 
         if (projectName) {
           projects[projectName] = (projects[projectName] || 0) + 1;
         }
 
+        if (projectIdFilter && projectId !== projectIdFilter) continue;
         if (projectFilter && projectName !== projectFilter) continue;
+
+        if (projectName) {
+          scopedProjects[projectName] = (scopedProjects[projectName] || 0) + 1;
+        }
 
         totalCases++;
 
@@ -127,6 +136,7 @@ export function useEpcrDashboard(
         healthClassification,
         complaints,
         projects,
+        scopedProjects,
         responseTime: {
           avgMinutes:
             responseCount > 0
@@ -141,7 +151,7 @@ export function useEpcrDashboard(
     });
 
     return () => unsub();
-  }, [startDate, endDate, projectFilter]);
+  }, [startDate, endDate, projectFilter, projectIdFilter]);
 
   return { loading, stats };
 }
