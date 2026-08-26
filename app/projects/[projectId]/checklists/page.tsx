@@ -32,6 +32,25 @@ function formatDuration(seconds?: number | null) {
   return `${hours}h ${minutes % 60}m`;
 }
 
+function riyadhDateKey(value: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Riyadh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
+}
+
+function checklistDateKey(item: any) {
+  const storedDate = String(item?.dateKey || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(storedDate)) return storedDate;
+
+  const date = item?.createdAt?.toDate?.() || (item?.createdAt ? new Date(item.createdAt) : null);
+  return date && !Number.isNaN(date.getTime()) ? riyadhDateKey(date) : "";
+}
+
 export default function ProjectChecklistsPage({
   params,
 }: {
@@ -45,8 +64,8 @@ export default function ProjectChecklistsPage({
   const [projectFilter, setProjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(() => riyadhDateKey());
+  const [endDate, setEndDate] = useState(() => riyadhDateKey());
 
   useEffect(() => {
     const q = allProjects
@@ -85,17 +104,14 @@ export default function ProjectChecklistsPage({
   }, [visibleChecklists]);
 
   const filteredChecklists = useMemo(() => {
-    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
-    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
-
     return visibleChecklists.filter((item) => {
       if (projectFilter && item.projectId !== projectFilter) return false;
       if (statusFilter && String(item.status || "draft") !== statusFilter) return false;
       if (phaseFilter && String(item.checklistPhase || "opening") !== phaseFilter) return false;
 
-      const itemDate = item.createdAt?.toDate?.() || (item.createdAt ? new Date(item.createdAt) : null);
-      if (start && (!itemDate || itemDate < start)) return false;
-      if (end && (!itemDate || itemDate > end)) return false;
+      const itemDate = checklistDateKey(item);
+      if (startDate && (!itemDate || itemDate < startDate)) return false;
+      if (endDate && (!itemDate || itemDate > endDate)) return false;
       return true;
     });
   }, [visibleChecklists, projectFilter, statusFilter, phaseFilter, startDate, endDate]);
@@ -151,12 +167,13 @@ export default function ProjectChecklistsPage({
       </div>
       </div>
 
-      {allProjects && (
-        <div className={`${cardClass} grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5`}>
-          <select className="input" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
-            <option value="">All projects</option>
-            {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
+      <div className={`${cardClass} grid grid-cols-1 gap-3 md:grid-cols-2 ${allProjects ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
+          {allProjects && (
+            <select className="input" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+              <option value="">All projects</option>
+              {projectOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          )}
           <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
             <option value="draft">Draft</option>
@@ -171,8 +188,28 @@ export default function ProjectChecklistsPage({
           </select>
           <input className="input" type="date" aria-label="Start date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
           <input className="input" type="date" aria-label="End date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-        </div>
-      )}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              const today = riyadhDateKey();
+              setStartDate(today);
+              setEndDate(today);
+            }}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setStartDate("");
+              setEndDate("");
+            }}
+          >
+            Show All Dates
+          </button>
+      </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className={cardClass}>
