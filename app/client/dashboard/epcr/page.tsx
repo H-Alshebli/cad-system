@@ -20,6 +20,7 @@ import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { getEpcrResponseMinutes } from "@/lib/epcrResponseTime";
+import { useClientI18n } from "@/lib/clientI18n";
 
 type Project = {
   id: string;
@@ -186,6 +187,7 @@ function truncateLabel(text: string, max = 18) {
 
 export default function ClientEpcrDashboardPage() {
   const { user, loading: userLoading } = useCurrentUser();
+  const { t, translateValue, language } = useClientI18n();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [epcrs, setEpcrs] = useState<EpcrItem[]>([]);
@@ -344,11 +346,28 @@ export default function ClientEpcrDashboardPage() {
     return first ? `${first.name} (${first.value})` : "—";
   }, [triageChartData]);
 
+  const localizedGenderData = useMemo(
+    () => genderData.map((row) => ({ ...row, name: translateValue(row.name) })),
+    [genderData, language]
+  );
+  const localizedTriageData = useMemo(
+    () => triageChartData.map((row) => ({ ...row, name: translateValue(row.name) })),
+    [triageChartData, language]
+  );
+  const localizedHealthData = useMemo(
+    () => healthChartData.map((row) => ({ ...row, name: translateValue(row.name) })),
+    [healthChartData, language]
+  );
+  const localizedComplaintsData = useMemo(
+    () => complaintsChartData.map((row) => ({ ...row, name: translateValue(row.name) })),
+    [complaintsChartData, language]
+  );
+
   if (userLoading || loading) {
     return (
       <div className="p-6">
         <div className="card-modern text-sm font-semibold text-[#274C5A]">
-          Loading ePCR dashboard...
+          {t("Loading ePCR dashboard...")}
         </div>
       </div>
     );
@@ -361,15 +380,14 @@ export default function ClientEpcrDashboardPage() {
           <div className="rounded-2xl bg-[#274C5A] p-6 text-white shadow-sm shadow-[#274C5A]/20">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8fd8e6]">
-                Client Analytics
+                {t("Client Analytics")}
               </p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight">Cases Dashboard</h1>
+              <h1 className="mt-2 text-3xl font-black tracking-tight">{t("Cases Dashboard")}</h1>
               <p className="mt-2 max-w-3xl text-sm font-medium text-white/80">
-                Client-safe analytical view of ePCR activity, project distribution,
-                triage trends, health classifications, complaints, and operational indicators.
+                {t("Client-safe analytical view of ePCR activity, project distribution, triage trends, health classifications, complaints, and operational indicators.")}
               </p>
               <p className="mt-3 text-xs font-black uppercase tracking-wide text-white/60">
-                Sensitive patient details are hidden from this dashboard.
+                {t("Sensitive patient details are hidden from this dashboard.")}
               </p>
             </div>
           </div>
@@ -378,7 +396,7 @@ export default function ClientEpcrDashboardPage() {
           {projects.length > 0 && (
             <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm shadow-[#274C5A]/5">
               <div className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[#607482]">
-                Filter by project
+                {t("Filter by project")}
               </div>
               <div className="flex flex-wrap gap-3">
               <button
@@ -389,7 +407,7 @@ export default function ClientEpcrDashboardPage() {
                     : "border-[#c8dce2] bg-white text-[#274C5A] hover:bg-[#f7fbfc]"
                 }`}
               >
-                All Projects
+                {t("All Projects")}
               </button>
 
               {projects.map((project) => {
@@ -418,72 +436,72 @@ export default function ClientEpcrDashboardPage() {
           {/* KPI CARDS */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              title="Total ePCR"
+              title={t("Total ePCR")}
               value={totalPatients}
-              subtitle="Total recorded ePCR cases"
+              subtitle={t("Total recorded ePCR cases")}
             />
 
             <KpiCard
-              title="Male Patients"
+              title={t("Male Patients")}
               value={male}
-              subtitle={`${malePct}% of total cases`}
+              subtitle={`${malePct}% ${t("of total cases")}`}
             />
 
             <KpiCard
-              title="Female Patients"
+              title={t("Female Patients")}
               value={female}
-              subtitle={`${femalePct}% of total cases`}
+              subtitle={`${femalePct}% ${t("of total cases")}`}
             />
 
             <KpiCard
-              title="Avg Response Time"
-              value={`${avgResponseMinutes} min`}
-              subtitle="Average response duration"
+              title={t("Avg Response Time")}
+              value={`${avgResponseMinutes} ${language === "ar" ? "دقيقة" : "min"}`}
+              subtitle={t("Average response duration")}
             />
 
             <KpiCard
-              title="Top Project"
+              title={t("Top Project")}
               value={topProject}
-              subtitle="Highest ePCR volume"
+              subtitle={t("Highest ePCR volume")}
             />
 
             <KpiCard
-              title="Top Complaint"
-              value={topComplaint}
-              subtitle="Most frequent complaint"
+              title={t("Top Complaint")}
+              value={topComplaint === "—" ? topComplaint : translateValue(topComplaint.replace(/ \(\d+\)$/, "")) + (topComplaint.match(/ \(\d+\)$/)?.[0] || "")}
+              subtitle={t("Most frequent complaint")}
             />
 
             <KpiCard
-              title="Top Triage"
-              value={topTriage}
-              subtitle="Most frequent triage level"
+              title={t("Top Triage")}
+              value={topTriage === "—" ? topTriage : translateValue(topTriage.replace(/ \(\d+\)$/, "")) + (topTriage.match(/ \(\d+\)$/)?.[0] || "")}
+              subtitle={t("Most frequent triage level")}
             />
 
             <KpiCard
-              title="Projects Count"
+              title={t("Projects Count")}
               value={projects.length}
-              subtitle="Assigned projects in dashboard"
+              subtitle={t("Assigned projects in dashboard")}
             />
           </div>
 
           {/* MAIN ANALYTICS GRID */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            <DarkCard title="Gender Distribution">
+            <DarkCard title={t("Gender Distribution")}>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={genderData}
+                      data={localizedGenderData}
                       dataKey="value"
                       nameKey="name"
                       outerRadius={110}
                       label
                     >
-                      {genderData.map((entry, index) => (
+                      {localizedGenderData.map((entry, index) => (
                         <Cell
                           key={`gender-${index}`}
                           fill={
-                            GENDER_COLORS[entry.name] ||
+                            GENDER_COLORS[genderData[index]?.name] ||
                             CHART_COLORS[index % CHART_COLORS.length]
                           }
                         />
@@ -496,7 +514,7 @@ export default function ClientEpcrDashboardPage() {
               </div>
             </DarkCard>
 
-            <DarkCard title="Top Projects by ePCR Volume">
+            <DarkCard title={t("Top Projects by ePCR Volume")}>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={projectChartData}>
@@ -527,10 +545,10 @@ export default function ClientEpcrDashboardPage() {
               </div>
             </DarkCard>
 
-            <DarkCard title="Triage Level Analysis">
+            <DarkCard title={t("Triage Level Analysis")}>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={triageChartData}>
+                  <BarChart data={localizedTriageData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="#d8e6ea"
@@ -546,7 +564,7 @@ export default function ClientEpcrDashboardPage() {
                     />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {triageChartData.map((_, index) => (
+                      {localizedTriageData.map((_, index) => (
                         <Cell
                           key={`triage-bar-${index}`}
                           fill={CHART_COLORS[index % CHART_COLORS.length]}
@@ -558,22 +576,22 @@ export default function ClientEpcrDashboardPage() {
               </div>
             </DarkCard>
 
-            <DarkCard title="Health Classification Analysis">
+            <DarkCard title={t("Health Classification Analysis")}>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={healthChartData}
+                      data={localizedHealthData}
                       dataKey="value"
                       nameKey="name"
                       outerRadius={110}
                       label
                     >
-                      {healthChartData.map((entry, index) => (
+                      {localizedHealthData.map((entry, index) => (
                         <Cell
                           key={`health-${index}`}
                           fill={
-                            HEALTH_CHART_COLORS[entry.name] ||
+                            HEALTH_CHART_COLORS[healthChartData[index]?.name] ||
                             CHART_COLORS[index % CHART_COLORS.length]
                           }
                         />
@@ -586,11 +604,11 @@ export default function ClientEpcrDashboardPage() {
               </div>
             </DarkCard>
 
-            <DarkCard title="Chief Complaints Analysis">
+            <DarkCard title={t("Chief Complaints Analysis")}>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={complaintsChartData}
+                    data={localizedComplaintsData}
                     layout="vertical"
                     margin={{ left: 20 }}
                   >
@@ -612,7 +630,7 @@ export default function ClientEpcrDashboardPage() {
                     />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                      {complaintsChartData.map((_, index) => (
+                      {localizedComplaintsData.map((_, index) => (
                         <Cell
                           key={`complaint-bar-${index}`}
                           fill={CHART_COLORS[index % CHART_COLORS.length]}

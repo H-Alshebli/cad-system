@@ -12,6 +12,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
+import { useClientI18n } from "@/lib/clientI18n";
 
 type Project = {
   id: string;
@@ -56,12 +57,12 @@ function getCaseDate(item: any): Date | null {
   return parsed && !isNaN(parsed.getTime()) ? parsed : null;
 }
 
-function formatCaseDate(item: any): string {
+function formatCaseDate(item: any, locale: string): string {
   const dateObj = getCaseDate(item);
 
   if (!dateObj) return "—";
 
-  return dateObj.toLocaleString("en-GB", {
+  return dateObj.toLocaleString(locale, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -105,6 +106,11 @@ function normalizeTimelineForClient(timeline: Record<string, any> = {}) {
 
 export default function ClientTimelineDashboardPage() {
   const { user, loading: userLoading } = useCurrentUser();
+  const { t, translateValue, language, locale } = useClientI18n();
+  const timelineLabels = useMemo(() => Object.fromEntries(
+    ["Received", "Assigned", "EnRoute", "OnScene", "Transporting", "Hospital", "Returning", "Closed"]
+      .map((label) => [label, translateValue(label)])
+  ), [language]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [cases, setCases] = useState<CaseItem[]>([]);
@@ -298,7 +304,7 @@ export default function ClientTimelineDashboardPage() {
 
   if (userLoading || loading) {
     return (
-      <div className="page-shell"><div className="card-modern">Loading timeline dashboard…</div></div>
+      <div className="page-shell"><div className="card-modern">{t("Loading timeline dashboard…")}</div></div>
     );
   }
 
@@ -313,11 +319,11 @@ export default function ClientTimelineDashboardPage() {
           <div className="flex flex-col gap-5 border-b border-[#86A7B2]/20 bg-gradient-to-r from-[#274C5A] to-[#315f70] p-6 text-white md:flex-row md:items-center md:justify-between">
             <div>
               <div className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black text-white">
-                Client Operations
+                {t("Client Operations")}
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-white">Timeline Dashboard</h1>
+              <h1 className="text-3xl font-black tracking-tight text-white">{t("Timeline Dashboard")}</h1>
               <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#d7e4e8]">
-                Live operational view of cases across your assigned projects.
+                {t("Live operational view of cases across your assigned projects.")}
               </p>
             </div>
           </div>
@@ -326,23 +332,23 @@ export default function ClientTimelineDashboardPage() {
         {/* FILTERS */}
         <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
           <div className="mb-3">
-            <h2 className="text-lg font-black text-[#274C5A]">Filters</h2>
+            <h2 className="text-lg font-black text-[#274C5A]">{t("Filters")}</h2>
             <p className="text-sm font-medium text-[#7F7F7F]">
-              Filter dashboard by project and case date.
+              {t("Filter dashboard by project and case date.")}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="mb-1 block text-sm font-bold text-[#274C5A]">
-                Project
+                {t("Project")}
               </label>
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
                 className="select"
               >
-                <option value="">All Projects</option>
+                <option value="">{t("All Projects")}</option>
                 {projectOptions.map((project) => (
                   <option key={project} value={project}>
                     {project}
@@ -353,7 +359,7 @@ export default function ClientTimelineDashboardPage() {
 
             <div>
               <label className="mb-1 block text-sm font-bold text-[#274C5A]">
-                Start Date
+                {t("Start Date")}
               </label>
               <input
                 type="date"
@@ -365,7 +371,7 @@ export default function ClientTimelineDashboardPage() {
 
             <div>
               <label className="mb-1 block text-sm font-bold text-[#274C5A]">
-                End Date
+                {t("End Date")}
               </label>
               <input
                 type="date"
@@ -380,7 +386,7 @@ export default function ClientTimelineDashboardPage() {
                 onClick={clearFilters}
                 className="btn-secondary w-full"
               >
-                Clear Filters
+                {t("Clear Filters")}
               </button>
             </div>
           </div>
@@ -389,33 +395,33 @@ export default function ClientTimelineDashboardPage() {
         {/* KPI */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="rounded-2xl border border-[#274C5A]/20 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
-            <h3 className="text-lg font-black">Total Cases</h3>
+            <h3 className="text-lg font-black">{t("Total Cases")}</h3>
             <p className="mt-2 text-4xl font-extrabold">{totalCases}</p>
           </div>
-          <KpiCard title="Active" value={activeCases} />
+          <KpiCard title={t("Active")} value={activeCases} />
           <KpiCard
-            title="Request Received"
+            title={t("Request Received")}
             value={receivedCases}
           />
           <KpiCard
-            title="Team Assigned"
+            title={t("Team Assigned")}
             value={assignedCases}
           />
-          <KpiCard title="EnRoute" value={enRouteCases} />
-          <KpiCard title="OnScene" value={onSceneCases} />
+          <KpiCard title={t("EnRoute")} value={enRouteCases} />
+          <KpiCard title={t("OnScene")} value={onSceneCases} />
           <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
-            <h3 className="text-sm font-bold text-[#7F7F7F]">Transporting</h3>
+            <h3 className="text-sm font-bold text-[#7F7F7F]">{t("Transporting")}</h3>
             <p className="mt-2 text-2xl font-black text-[#ef7b00]">
               {transportingCases}
             </p>
             <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
-              Hospital: {transportingHospitalCases} - Clinic:{" "}
+              {t("Hospital")}: {transportingHospitalCases} - {t("Clinic")}:{" "}
               {transportingClinicCases}
             </p>
           </div>
-          <KpiCard title="Returning" value={returningCases} />
+          <KpiCard title={t("Returning")} value={returningCases} />
           <KpiCard
-            title="Completed"
+            title={t("Completed")}
             value={completedCases}
           />
         </div>
@@ -424,12 +430,12 @@ export default function ClientTimelineDashboardPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap rounded-2xl border border-[#86A7B2]/20 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
           <div>
             <h2 className="text-xl font-black text-[#274C5A]">
-              Cases Timeline
+              {t("Cases Timeline")}
             </h2>
             <p className="text-sm font-medium text-[#7F7F7F]">
-              Showing {visibleCases.length} case
-              {visibleCases.length !== 1 ? "s" : ""}
-              {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
+              {language === "ar"
+                ? `عرض ${visibleCases.length} حالة${!showAllCases ? " (الحالات المغلقة مخفية)" : " (كل الحالات)"}`
+                : `Showing ${visibleCases.length} case${visibleCases.length !== 1 ? "s" : ""}${!showAllCases ? " (closed cases hidden)" : " (all cases)"}`}
             </p>
           </div>
 
@@ -437,7 +443,7 @@ export default function ClientTimelineDashboardPage() {
             onClick={() => setShowAllCases((prev) => !prev)}
             className="btn-secondary"
           >
-            {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
+            {showAllCases ? t("Hide Closed Cases") : t("Show All Cases")}
           </button>
         </div>
 
@@ -445,7 +451,7 @@ export default function ClientTimelineDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {visibleCases.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-dashed border-[#86A7B2] bg-white p-8 text-center text-sm font-medium text-[#7F7F7F]">
-              No cases found.
+              {t("No cases found.")}
             </div>
           ) : (
             visibleCases.map((c) => (
@@ -461,32 +467,37 @@ export default function ClientTimelineDashboardPage() {
                       </h2>
 
                       <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
-                        Date & Time: {formatCaseDate(c)}
+                        {t("Date & Time")}: {formatCaseDate(c, locale)}
                       </p>
                     </div>
 
                     <span className="rounded-full bg-[#e9f2ff] px-3 py-1 text-xs font-bold text-[#5076a5]">
-                      {clientStatus(c.status)}
+                      {translateValue(clientStatus(c.status))}
                     </span>
                   </div>
 
                   <div className="mt-3 space-y-1 text-sm font-medium text-[#7F7F7F]">
                     <p>
-                      <span className="font-bold text-[#274C5A]">Caller:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">{t("Caller")}:</span>{" "}
                       {c.callerName || "—"}
                     </p>
                     <p>
-                      <span className="font-bold text-[#274C5A]">Patient:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">{t("Patient")}:</span>{" "}
                       {c.patientName || "—"}
                     </p>
                     <p>
-                      <span className="font-bold text-[#274C5A]">Complaint:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">{t("Complaint")}:</span>{" "}
                       {c.chiefComplaint || "—"}
                     </p>
                   </div>
                 </div>
 
-                <CaseTimeline timeline={normalizeTimelineForClient(c.timeline)} />
+                <CaseTimeline
+                  timeline={normalizeTimelineForClient(c.timeline)}
+                  title={t("Timeline")}
+                  labels={timelineLabels}
+                  locale={locale}
+                />
               </div>
             ))
           )}

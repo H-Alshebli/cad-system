@@ -4,6 +4,9 @@ import { Timestamp } from "firebase/firestore";
 
 interface TimelineProps {
   timeline: Record<string, any>;
+  labels?: Partial<Record<string, string>>;
+  title?: string;
+  locale?: string;
 }
 
 /**
@@ -25,7 +28,7 @@ const STEPS = [
 /* =========================
    SAFE TIME FORMATTER
 ========================= */
-function formatTime(time: any): string | null {
+function formatTime(time: any, locale = "en-US"): string | null {
   if (!time) return null;
 
   // Firestore Timestamp
@@ -33,7 +36,7 @@ function formatTime(time: any): string | null {
     const d = time.toDate();
     return isNaN(d.getTime())
       ? null
-      : d.toLocaleTimeString("en-US", {
+      : d.toLocaleTimeString(locale, {
           hour: "2-digit",
           minute: "2-digit",
         });
@@ -43,7 +46,7 @@ function formatTime(time: any): string | null {
   if (time instanceof Date) {
     return isNaN(time.getTime())
       ? null
-      : time.toLocaleTimeString("en-US", {
+      : time.toLocaleTimeString(locale, {
           hour: "2-digit",
           minute: "2-digit",
         });
@@ -54,7 +57,7 @@ function formatTime(time: any): string | null {
     const d = new Date(time);
     return isNaN(d.getTime())
       ? null
-      : d.toLocaleTimeString("en-US", {
+      : d.toLocaleTimeString(locale, {
           hour: "2-digit",
           minute: "2-digit",
         });
@@ -66,10 +69,10 @@ function formatTime(time: any): string | null {
 /* =========================
    COMPONENT
 ========================= */
-export default function CaseTimeline({ timeline }: TimelineProps) {
+export default function CaseTimeline({ timeline, labels, title = "Timeline", locale = "en-US" }: TimelineProps) {
   return (
     <div className="rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-4 text-[#274C5A]">
-      <h3 className="mb-3 text-lg font-black">Timeline</h3>
+      <h3 className="mb-3 text-lg font-black">{title}</h3>
 
       <div className="flex items-center space-x-8 overflow-x-auto py-4">
         {STEPS.map((step, i) => {
@@ -78,7 +81,7 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
             timeline?.[step.newKey] ??
             timeline?.[step.oldKey];
 
-          const displayTime = formatTime(rawTime);
+          const displayTime = formatTime(rawTime, locale);
 
           return (
             <div
@@ -101,7 +104,7 @@ export default function CaseTimeline({ timeline }: TimelineProps) {
 
               {/* Label */}
               <span className="text-center text-sm font-black text-[#274C5A]">
-                {step.label}
+                {labels?.[step.label] || step.label}
               </span>
 
               {/* Time */}
