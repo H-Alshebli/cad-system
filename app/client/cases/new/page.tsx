@@ -18,6 +18,9 @@ import dynamic from "next/dynamic";
 
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
+import LocationSearch, {
+  LocationSearchResult,
+} from "@/app/components/LocationSearch";
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 import { reserveOperationalNumber } from "@/lib/operationalNumbers";
@@ -56,6 +59,14 @@ type ClientProject = {
   assignedAmbulances?: any[];
   projectHospitalIds?: string[];
   projectHospitals?: any[];
+  assignedClinicIds?: string[];
+  projectClinicIds?: string[];
+  assignedClinics?: any[];
+  projectClinics?: any[];
+  assignedRoamingIds?: string[];
+  projectRoamingIds?: string[];
+  assignedRoamingUnits?: any[];
+  projectRoamingUnits?: any[];
   projectLocations?: ProjectLocation[];
 };
 
@@ -114,6 +125,56 @@ function getProjectAmbulanceIds(projectData: any) {
   );
 }
 
+function getProjectClinicIds(projectData: any) {
+  const ids = [
+    ...(Array.isArray(projectData?.assignedClinicIds)
+      ? projectData.assignedClinicIds
+      : []),
+    ...(Array.isArray(projectData?.projectClinicIds)
+      ? projectData.projectClinicIds
+      : []),
+  ];
+  const embedded = [
+    ...(Array.isArray(projectData?.assignedClinics)
+      ? projectData.assignedClinics
+      : []),
+    ...(Array.isArray(projectData?.projectClinics)
+      ? projectData.projectClinics
+      : []),
+    ...(Array.isArray(projectData?.projectHospitals)
+      ? projectData.projectHospitals
+      : []),
+  ]
+        .filter((item: any) => String(item?.type || "").toLowerCase() === "clinic")
+        .map((item: any) => item?.id)
+        .filter(Boolean);
+
+  return Array.from(new Set([...ids, ...embedded].map(String).filter(Boolean)));
+}
+
+function getProjectRoamingIds(projectData: any) {
+  const directIds = [
+    ...(Array.isArray(projectData?.assignedRoamingIds)
+      ? projectData.assignedRoamingIds
+      : []),
+    ...(Array.isArray(projectData?.projectRoamingIds)
+      ? projectData.projectRoamingIds
+      : []),
+  ];
+  const embeddedIds = [
+    ...(Array.isArray(projectData?.assignedRoamingUnits)
+      ? projectData.assignedRoamingUnits
+      : []),
+    ...(Array.isArray(projectData?.projectRoamingUnits)
+      ? projectData.projectRoamingUnits
+      : []),
+  ]
+    .map((item: any) => item?.id)
+    .filter(Boolean);
+
+  return Array.from(new Set([...directIds, ...embeddedIds].map(String).filter(Boolean)));
+}
+
 function getProjectName(project: any) {
   return (
     project?.projectName ??
@@ -155,6 +216,7 @@ export default function ClientNewCasePage() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [isFromMapLink, setIsFromMapLink] = useState(false);
+  const [isFromLocationSearch, setIsFromLocationSearch] = useState(false);
   const [selectedProjectLocation, setSelectedProjectLocation] = useState<ProjectLocation | null>(null);
 
   const [unitType, setUnitType] = useState<UnitType>("ambulance");
@@ -217,6 +279,7 @@ export default function ClientNewCasePage() {
     setLat(null);
     setLng(null);
     setIsFromMapLink(false);
+    setIsFromLocationSearch(false);
   }, [projectId, projects]);
 
   useEffect(() => {
@@ -254,22 +317,7 @@ export default function ClientNewCasePage() {
           return isInProjectList || isLinkedToProject;
         });
       } else if (unitType === "clinic") {
-        const projectHospitalIds = Array.isArray(projectData?.projectHospitalIds)
-          ? projectData.projectHospitalIds
-          : [];
-
-        const projectHospitals = Array.isArray(projectData?.projectHospitals)
-          ? projectData.projectHospitals
-          : [];
-
-        const projectClinicIds = projectHospitals
-          .filter((h: any) => String(h.type || "").toLowerCase() === "clinic")
-          .map((h: any) => h.id)
-          .filter(Boolean);
-
-        const allowedClinicIds = Array.from(
-          new Set([...projectHospitalIds, ...projectClinicIds])
-        );
+        const allowedClinicIds = getProjectClinicIds(projectData);
 
         list = list.filter((item: any) => {
           if (item.archived) return false;
@@ -278,12 +326,20 @@ export default function ClientNewCasePage() {
 
           if (!isClinic) return false;
 
-          if (allowedClinicIds.length === 0) return true;
-
           return allowedClinicIds.includes(item.id);
         });
       } else {
-        list = list.filter((item: any) => !item.archived);
+        const allowedRoamingIds = getProjectRoamingIds(projectData);
+        list = list.filter((item: any) => {
+          if (item.archived) return false;
+          const linkedProjectId = String(
+            item.assignedProjectId || item.projectId || ""
+          );
+          return (
+            allowedRoamingIds.includes(item.id) ||
+            linkedProjectId === projectData.id
+          );
+        });
       }
 
       setUnits(list);
@@ -311,6 +367,30 @@ export default function ClientNewCasePage() {
       ? isAmbulanceBusy(selectedUnit)
       : false;
 
+  const availableUnitTypes = useMemo<UnitType[]>(() => {
+    const types: UnitType[] = ["ambulance"];
+    if (getProjectClinicIds(projectData).length > 0) types.push("clinic");
+    if (getProjectRoamingIds(projectData).length > 0) types.push("roaming");
+    return types;
+  }, [projectData]);
+
+  useEffect(() => {
+    if (!availableUnitTypes.includes(unitType)) {
+      setUnitType("ambulance");
+      setSelectedUnitId("");
+    }
+  }, [availableUnitTypes, unitType]);
+
+  function selectSearchedLocation(result: LocationSearchResult) {
+    setSelectedProjectLocation(null);
+    setLocationText(result.displayName);
+    setLat(result.lat);
+    setLng(result.lng);
+    setMapLink(`https://www.google.com/maps?q=${result.lat},${result.lng}`);
+    setIsFromMapLink(false);
+    setIsFromLocationSearch(true);
+  }
+
   const createCase = async () => {
     if (!user?.uid) {
       alert("User is missing.");
@@ -324,6 +404,11 @@ export default function ClientNewCasePage() {
 
     if (!chiefComplaint || !triageLevel || !locationText || !selectedUnitId) {
       alert("Please complete chief complaint, triage, location, and unit.");
+      return;
+    }
+
+    if (!availableUnitTypes.includes(unitType) || !selectedUnit) {
+      alert("The selected unit is not assigned to this project.");
       return;
     }
 
@@ -360,6 +445,8 @@ export default function ClientNewCasePage() {
           googleMapLink,
           source: selectedProjectLocation
             ? "project_location"
+            : isFromLocationSearch
+            ? "location_search"
             : isFromMapLink
             ? "google_link"
             : "manual",
@@ -577,6 +664,7 @@ export default function ClientNewCasePage() {
                       setLng(location.lng);
                       setMapLink(`https://www.google.com/maps?q=${location.lat},${location.lng}`);
                       setIsFromMapLink(true);
+                      setIsFromLocationSearch(false);
                     }}
                     onManual={() => {
                       setSelectedProjectLocation(null);
@@ -585,8 +673,14 @@ export default function ClientNewCasePage() {
                       setLat(null);
                       setLng(null);
                       setIsFromMapLink(false);
+                      setIsFromLocationSearch(false);
                     }}
                   />
+
+                  <div>
+                    <FieldLabel text="Search Location" />
+                    <LocationSearch onSelect={selectSearchedLocation} />
+                  </div>
 
                   <div>
                     <FieldLabel text="Location Description *" />
@@ -612,6 +706,7 @@ export default function ClientNewCasePage() {
                           setLat(coords.lat);
                           setLng(coords.lng);
                           setIsFromMapLink(true);
+                          setIsFromLocationSearch(false);
                         }
                       }}
                     />
@@ -660,7 +755,7 @@ export default function ClientNewCasePage() {
                   </h3>
 
                   <div className="flex flex-wrap gap-3 text-sm font-bold text-[#274C5A]">
-                    {["ambulance", "clinic", "roaming"].map((type) => (
+                    {availableUnitTypes.map((type) => (
                       <label
                         key={type}
                         className="flex items-center gap-2 rounded-full border border-[#c8dce2] bg-white px-3 py-2"
