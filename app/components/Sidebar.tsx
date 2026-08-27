@@ -26,6 +26,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import { isClientAccount } from "@/lib/userAccounts";
 import { can } from "@/lib/can";
 import { useClientBrand } from "@/lib/useClientBrand";
+import { useClientI18n } from "@/lib/clientI18n";
 
 type NavItem = {
   href: string;
@@ -46,6 +47,8 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const isClientPortalUser = can(permissions, "client_portal", "view");
   const clientAccount = isClientAccount(user);
   const clientBrand = useClientBrand(clientAccount ? user?.uid : undefined);
+  const { t, dir, language } = useClientI18n();
+  const clientText = (text: string) => clientAccount ? t(text) : text;
 
   async function logout() {
     await signOut(auth);
@@ -76,7 +79,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const clientItems: NavItem[] = [
     {
       href: "/client/dashboard",
-      label: "Dashboards",
+      label: clientText("Dashboards"),
       icon: <LayoutDashboard size={18} />,
       visible:
         can(permissions, "client_dashboards", "timeline") ||
@@ -84,13 +87,13 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     },
     {
       href: "/client/cases/new",
-      label: "Create Case",
+      label: clientText("Create Case"),
       icon: <BriefcaseMedical size={18} />,
       visible: can(permissions, "client_cases", "create"),
     },
     {
       href: "/client/cases",
-      label: "My Cases",
+      label: clientText("My Cases"),
       icon: <ClipboardList size={18} />,
       visible:
         can(permissions, "client_cases", "view") ||
@@ -226,13 +229,17 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <aside className="flex h-screen w-[288px] min-w-[288px] shrink-0 flex-col border-r border-[#86A7B2]/25 bg-white shadow-sm">
+    <aside
+      className="flex h-screen w-[288px] min-w-[288px] shrink-0 flex-col border-r border-[#86A7B2]/25 bg-white shadow-sm"
+      dir={clientAccount ? dir : "ltr"}
+      lang={clientAccount ? language : "en"}
+    >
       <div className="border-b border-[#86A7B2]/25 p-4">
         {onClose && (
           <button
             onClick={onClose}
             className="absolute right-3 top-3 rounded-xl border border-[#86A7B2]/30 bg-white p-2 text-[#274C5A] shadow-sm lg:hidden"
-            aria-label="Close menu"
+            aria-label={clientText("Close menu")}
           >
             <X size={16} />
           </button>
@@ -292,7 +299,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
             </span>
 
             <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">
-              Active
+              {clientText("Active account")}
             </span>
           </div>
         </div>
@@ -301,7 +308,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       <nav className="flex-1 space-y-6 overflow-y-auto p-3">
         {isClientPortalUser && (
           <div>
-            <div className={sectionTitleClass}>Client Portal</div>
+            <div className={sectionTitleClass}>{clientText("Client Portal")}</div>
 
             <div className="space-y-1">
               {clientItems
@@ -372,7 +379,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#274C5A] px-3 py-2.5 text-sm font-bold text-white shadow-sm shadow-[#274C5A]/20 transition hover:bg-[#1f3f4c]"
         >
           <LogOut size={16} />
-          Logout
+          {clientText("Logout")}
         </button>
       </div>
     </aside>

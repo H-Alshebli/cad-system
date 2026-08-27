@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
 import AppShell from "./components/AppShell";
+import { ClientI18nProvider } from "@/lib/clientI18n";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -63,7 +64,9 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.variable} ${mono.variable}`}
       >
-        <AppShell>{children}</AppShell>
+        <ClientI18nProvider>
+          <AppShell>{children}</AppShell>
+        </ClientI18nProvider>
       </body>
     </html>
   );

@@ -6,13 +6,9 @@ import { Activity, BarChart3, Languages } from "lucide-react";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { useClientBrand } from "@/lib/useClientBrand";
-import { ClientI18nProvider, useClientI18n } from "@/lib/clientI18n";
+import { useClientI18n } from "@/lib/clientI18n";
 
 export default function ClientDashboardsLayout({ children }: { children: React.ReactNode }) {
-  return <ClientI18nProvider><ClientDashboardsContent>{children}</ClientDashboardsContent></ClientI18nProvider>;
-}
-
-function ClientDashboardsContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, loading: userLoading } = useCurrentUser();
   const { can, loading: permissionsLoading } = usePermissions(user?.role);
