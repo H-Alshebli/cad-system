@@ -6,7 +6,6 @@ import { signOut } from "firebase/auth";
 import {
   Activity,
   Ambulance,
-  BarChart3,
   BriefcaseMedical,
   ClipboardPlus,
   ClipboardList,
@@ -74,10 +73,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   const clientItems: NavItem[] = [
     {
-      href: "/client",
-      label: "Client Home",
+      href: "/client/dashboard",
+      label: "Dashboards",
       icon: <LayoutDashboard size={18} />,
-      visible: isClientPortalUser,
+      visible:
+        can(permissions, "client_dashboards", "timeline") ||
+        can(permissions, "client_dashboards", "epcr"),
     },
     {
       href: "/client/cases/new",
@@ -92,18 +93,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       visible:
         can(permissions, "client_cases", "view") ||
         can(permissions, "client_cases", "view_own"),
-    },
-    {
-      href: "/client/dashboard/timeline",
-      label: "Timeline Dashboard",
-      icon: <Activity size={18} />,
-      visible: can(permissions, "client_dashboards", "timeline"),
-    },
-    {
-      href: "/client/dashboard/epcr",
-      label: "ePCR Dashboard",
-      icon: <BarChart3 size={18} />,
-      visible: can(permissions, "client_dashboards", "epcr"),
     },
   ];
 
