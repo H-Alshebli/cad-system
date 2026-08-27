@@ -69,58 +69,29 @@ type ChartRow = {
   value: number;
 };
 
-const HEALTH_COLORS: Record<string, string> = {
-  Occupational: "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
-  "Non-Occupational": "border-[#86A7B2]/30 bg-[#86A7B2]/12 text-[#274C5A]",
-  "General Health Illnesses": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
-  "Unspecified Medical Conditions": "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
-  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
-};
-
-const TRIAGE_COLORS: Record<string, string> = {
-  "Level 1 (Resuscitation)": "border-red-500/25 bg-red-500/10 text-red-800",
-  "Level 2 (Emergent)": "border-orange-500/25 bg-orange-500/10 text-orange-800",
-  "Level 3 (Urgent)": "border-yellow-500/25 bg-yellow-500/10 text-yellow-800",
-  "Level 4 (Less Urgent)": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
-  "Level 5 (Non-Urgent)": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
-  "Level 5 (non-urgent)": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
-  Death: "border-red-700/25 bg-red-700/10 text-red-900",
-  death: "border-red-700/25 bg-red-700/10 text-red-900",
-  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
-};
-
-const COMPLAINT_COLORS: Record<string, string> = {
-  "Cardiac complaints": "border-red-500/25 bg-red-500/10 text-red-800",
-  "Musculoskeletal complaints": "border-[#274C5A]/25 bg-[#274C5A]/10 text-[#274C5A]",
-  "Respiratory complaints": "border-cyan-500/25 bg-cyan-500/10 text-cyan-800",
-  "Digestive complaints": "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
-  "General medical complaints": "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
-  Unspecified: "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]",
-};
-
 const CHART_COLORS = [
-  "#274C5A",
-  "#86A7B2",
-  "#f59e0b",
-  "#ef4444",
-  "#06b6d4",
-  "#22c55e",
-  "#84cc16",
-  "#f97316",
+  "#8fd8e6",
+  "#005f53",
+  "#c81e1e",
+  "#f6b31a",
+  "#148f3d",
+  "#2d5c88",
+  "#9b95d9",
+  "#70c7d9",
 ];
 
 const GENDER_COLORS: Record<string, string> = {
-  Male: "#3b82f6",
-  Female: "#a855f7",
-  Unspecified: "#6b7280",
+  Male: "#8fd8e6",
+  Female: "#005f53",
+  Unspecified: "#86A7B2",
 };
 
 const HEALTH_CHART_COLORS: Record<string, string> = {
-  Occupational: "#e42923",
-  "Non-Occupational": "#3b82f6",
-  "General Health Illnesses": "#22c55e",
-  "Unspecified Medical Conditions": "#6b7280",
-  Unspecified: "#6b7280",
+  Occupational: "#8fd8e6",
+  "Non-Occupational": "#005f53",
+  "General Health Illnesses": "#148f3d",
+  "Unspecified Medical Conditions": "#86A7B2",
+  Unspecified: "#86A7B2",
 };
 
 const tooltipStyle = {
@@ -248,16 +219,20 @@ export default function ClientEpcrDashboardPage() {
     return () => unsub();
   }, []);
 
-  const allowedEpcrs = useMemo(() => {
+  const clientEpcrs = useMemo(() => {
     return epcrs.filter((e) => {
       const pid = getProjectId(e);
-
-      if (!projectIds.includes(pid)) return false;
-      if (selectedProjectId && pid !== selectedProjectId) return false;
-
-      return true;
+      return projectIds.includes(pid);
     });
-  }, [epcrs, projectIds, selectedProjectId]);
+  }, [epcrs, projectIds]);
+
+  const allowedEpcrs = useMemo(
+    () =>
+      selectedProjectId
+        ? clientEpcrs.filter((item) => getProjectId(item) === selectedProjectId)
+        : clientEpcrs,
+    [clientEpcrs, selectedProjectId]
+  );
 
   const projectsMap = useMemo(() => {
     const result: Record<string, number> = {};
@@ -353,17 +328,17 @@ export default function ClientEpcrDashboardPage() {
     <PermissionGuard module="client_dashboards" action="epcr" showMessage={true}>
       <div className="page-shell p-6">
         <div className="w-full space-y-6">
-          <div className="page-header">
+          <div className="rounded-2xl bg-[#274C5A] p-6 text-white shadow-sm shadow-[#274C5A]/20">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8fd8e6]">
                 Client Analytics
               </p>
-              <h1 className="page-title">ePCR Analytics Dashboard</h1>
-              <p className="page-subtitle mt-2">
+              <h1 className="mt-2 text-3xl font-black tracking-tight">Cases Dashboard</h1>
+              <p className="mt-2 max-w-3xl text-sm font-medium text-white/80">
                 Client-safe analytical view of ePCR activity, project distribution,
                 triage trends, health classifications, complaints, and operational indicators.
               </p>
-              <p className="mt-2 text-xs font-black uppercase tracking-wide text-[#274C5A]/70">
+              <p className="mt-3 text-xs font-black uppercase tracking-wide text-white/60">
                 Sensitive patient details are hidden from this dashboard.
               </p>
             </div>
@@ -371,7 +346,11 @@ export default function ClientEpcrDashboardPage() {
 
           {/* PROJECT FILTER */}
           {projects.length > 0 && (
-            <div className="card-modern flex flex-wrap gap-3">
+            <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm shadow-[#274C5A]/5">
+              <div className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-[#607482]">
+                Filter by project
+              </div>
+              <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setSelectedProjectId("")}
                 className={`rounded-full border px-3 py-1.5 text-sm font-black transition ${
@@ -384,7 +363,7 @@ export default function ClientEpcrDashboardPage() {
               </button>
 
               {projects.map((project) => {
-                const count = allowedEpcrs.filter(
+                const count = clientEpcrs.filter(
                   (e) => getProjectId(e) === project.id
                 ).length;
 
@@ -402,6 +381,7 @@ export default function ClientEpcrDashboardPage() {
                   </button>
                 );
               })}
+              </div>
             </div>
           )}
 
@@ -614,93 +594,7 @@ export default function ClientEpcrDashboardPage() {
               </div>
             </DarkCard>
 
-            <DarkCard title="Client Insights">
-              <div className="space-y-3 text-sm font-semibold text-[#607482]">
-                <p>
-                  This dashboard provides a client-safe view of ePCR activity
-                  across the projects assigned to your account.
-                </p>
-                <p>
-                  It helps track case volume, common complaints, triage levels,
-                  health classifications, and operational medical trends.
-                </p>
-                <p>
-                  Patient-identifiable details and internal medical notes are
-                  intentionally hidden from this view.
-                </p>
-              </div>
-            </DarkCard>
-
-            <DarkCard title="Recommended Next Metrics">
-              <ul className="space-y-2 text-sm font-semibold text-[#607482]">
-                <li>Daily / weekly case trend</li>
-                <li>Cases by location</li>
-                <li>Cases by shift</li>
-                <li>Response time per project</li>
-                <li>Referral / transport outcomes</li>
-                <li>Project activity comparison</li>
-              </ul>
-            </DarkCard>
           </div>
-
-          {/* TABLES */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            <StatsTableLite
-              title="Health Classification"
-              rows={healthChartData}
-              colorMap={HEALTH_COLORS}
-            />
-
-            <StatsTableLite
-              title="Triage Levels"
-              rows={triageChartData}
-              colorMap={TRIAGE_COLORS}
-            />
-
-            <StatsTableLite
-              title="Chief Complaints"
-              rows={complaintsChartData}
-              colorMap={COMPLAINT_COLORS}
-            />
-          </div>
-
-          {/* PROJECTS TABLE */}
-          <DarkCard title="Projects Summary">
-            {Object.keys(projectsMap).length === 0 ? (
-              <div className="text-sm font-semibold text-[#607482]">No projects linked yet.</div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-[#d8e6ea]">
-                <table className="w-full text-sm">
-                  <thead className="bg-[#f7fbfc] text-[#607482]">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium">
-                        Project Name
-                      </th>
-                      <th className="px-4 py-3 text-right font-medium">
-                        ePCR Count
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {Object.entries(projectsMap)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([project, count]) => (
-                        <tr
-                          key={project}
-                          className="border-t border-[#e1ebef] hover:bg-[#f7fbfc]"
-                        >
-                          <td className="px-4 py-3">{project}</td>
-                          <td className="px-4 py-3 text-right font-black text-[#123746]">
-                            {count}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </DarkCard>
         </div>
       </div>
     </PermissionGuard>
@@ -741,44 +635,4 @@ function KpiCard({
     </div>
   );
 }
-
-function StatsTableLite({
-  title,
-  rows,
-  colorMap,
-}: {
-  title: string;
-  rows: ChartRow[];
-  colorMap: Record<string, string>;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#d8e6ea] bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-black text-[#123746]">{title}</h2>
-
-      {rows.length === 0 ? (
-        <div className="text-sm font-semibold text-[#607482]">No data.</div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((row) => (
-            <div
-              key={row.name}
-              className="flex items-center justify-between rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] px-3 py-2"
-            >
-              <span
-                className={`rounded-full border px-2 py-1 text-xs font-black ${
-                  colorMap[row.name] || "border-[#c8dce2] bg-[#f7fbfc] text-[#607482]"
-                }`}
-              >
-                {row.name}
-              </span>
-
-              <span className="font-black text-[#123746]">{row.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
