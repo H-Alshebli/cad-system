@@ -65,6 +65,14 @@ async function buildObjectPath(form: FormData, uid: string, fileName: string) {
     return `b2c-medical-reports/${requestId}/${uniqueName}`;
   }
 
+  if (category === "project-logo") {
+    const projectId = String(form.get("projectId") || "");
+    if (!SEGMENT_PATTERN.test(projectId)) return null;
+    const projectSnapshot = await adminDb.collection("projects").doc(projectId).get();
+    if (!projectSnapshot.exists) return null;
+    return `project-logos/${projectId}/${uniqueName}`;
+  }
+
   return null;
 }
 
@@ -82,6 +90,10 @@ export async function POST(request: NextRequest) {
     const userSnapshot = await userRef.get();
     const userData = userSnapshot.data() || {};
 
+    if (category === "project-logo" && userData.role !== "admin") {
+      return NextResponse.json({ error: "Admin access is required." }, { status: 403 });
+    }
+
     if (category === "crew-profile") {
       const reviewStatus = String(userData.crewProfileReviewStatus || "draft");
       if (!EDITABLE_PROFILE_STATUSES.has(reviewStatus)) {
@@ -97,6 +109,9 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "Files must be 25 MB or smaller." }, { status: 413 });
+    }
+    if (category === "project-logo" && !String(file.type || "").startsWith("image/")) {
+      return NextResponse.json({ error: "Project logos must be image files." }, { status: 400 });
     }
 
     const path = await buildObjectPath(form, user.uid, file.name);

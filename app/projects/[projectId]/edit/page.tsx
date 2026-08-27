@@ -18,6 +18,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { isClientAccount, type UserAccountType } from "@/lib/userAccounts";
+import { uploadProjectLogo } from "@/lib/storageUploads";
 import {
   CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
@@ -188,6 +189,8 @@ export default function EditProjectPage({
   const [projectCode, setProjectCode] = useState("");
   const [projectLocationsCount, setProjectLocationsCount] = useState(0);
   const [client, setClient] = useState("");
+  const [clientLogoUrl, setClientLogoUrl] = useState("");
+  const [clientLogoFile, setClientLogoFile] = useState<File | null>(null);
   const [siteDetails, setSiteDetails] = useState("");
   const [requestType, setRequestType] = useState("");
   const [eventType, setEventType] = useState("");
@@ -259,6 +262,7 @@ export default function EditProjectPage({
           : Number(data.projectLocationsCount || 0)
       );
       setClient(data.client || "");
+      setClientLogoUrl(data.clientLogoUrl || data.clientLogo?.url || "");
       setAssignedUsers(data.assignedUsers || {});
       setClientUserIds(
         Array.isArray(data.clientUserIds) ? data.clientUserIds.filter(Boolean) : []
@@ -768,11 +772,19 @@ export default function EditProjectPage({
     });
     const cleanedReadinessUnitOverrides = cleanReadinessUnitOverrides();
 
+    let nextClientLogo: any = null;
+    if (clientLogoFile) {
+      nextClientLogo = await uploadProjectLogo(projectId, clientLogoFile);
+    }
+
     await updateDoc(doc(db, "projects", projectId), {
       projectName: selectedProjectName,
       masterProjectId: masterProjectId.trim() || null,
       projectCode: projectCode.trim() || null,
       client: client.trim(),
+      ...(nextClientLogo
+        ? { clientLogo: nextClientLogo, clientLogoUrl: nextClientLogo.url }
+        : {}),
       clientUserIds: Array.from(new Set(clientUserIds)),
 
       assignedUsers: cleanAssignedUsers,
@@ -988,6 +1000,30 @@ return (
                   value={client}
                   onChange={(e) => setClient(e.target.value)}
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className={labelClass}>Client Logo</label>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {(clientLogoUrl || clientLogoFile) && (
+                    <div className="flex h-20 w-28 items-center justify-center rounded-xl border border-[#c8dce2] bg-white p-2">
+                      <img
+                        src={clientLogoFile ? URL.createObjectURL(clientLogoFile) : clientLogoUrl}
+                        alt="Client logo preview"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className={inputClass}
+                    onChange={(e) => setClientLogoFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+                <p className="mt-1 text-xs font-medium text-[#607482]">
+                  Optional. Uploading a new image replaces the logo shown in the client portal.
+                </p>
               </div>
 
               <div>

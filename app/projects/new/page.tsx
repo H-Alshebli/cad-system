@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import { uploadProjectLogo } from "@/lib/storageUploads";
 import {
   CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
@@ -153,6 +154,7 @@ export default function NewProjectPage() {
   const [masterProjectId, setMasterProjectId] = useState("");
   const [projectCode, setProjectCode] = useState("");
   const [client, setClient] = useState("");
+  const [clientLogoFile, setClientLogoFile] = useState<File | null>(null);
   const [siteDetails, setSiteDetails] = useState("");
   const [requestType, setRequestType] = useState("");
   const [eventType, setEventType] = useState("");
@@ -725,6 +727,17 @@ export default function NewProjectPage() {
       updatedAt: serverTimestamp(),
     });
 
+    if (clientLogoFile) {
+      const uploadedLogo = await uploadProjectLogo(docRef.id, clientLogoFile);
+      if (uploadedLogo) {
+        await updateDoc(doc(db, "projects", docRef.id), {
+          clientLogo: uploadedLogo,
+          clientLogoUrl: uploadedLogo.url,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
     const ambulanceUpdates = selectedAmbulances.map((amb) => {
       const crewMembers = getCrewMembersForAmbulance(amb.id);
 
@@ -820,6 +833,19 @@ export default function NewProjectPage() {
                     value={client}
                     onChange={(e) => setClient(e.target.value)}
                   />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className={labelClass}>Client Logo</label>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className={inputClass}
+                    onChange={(e) => setClientLogoFile(e.target.files?.[0] || null)}
+                  />
+                  <p className="mt-1 text-xs font-medium text-[#607482]">
+                    Optional. Displayed in the client portal while the Lazem identity remains visible.
+                  </p>
                 </div>
 
                 <div>

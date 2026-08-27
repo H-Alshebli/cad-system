@@ -25,6 +25,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { isClientAccount } from "@/lib/userAccounts";
 import { can } from "@/lib/can";
+import { useClientBrand } from "@/lib/useClientBrand";
 
 type NavItem = {
   href: string;
@@ -44,6 +45,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const isAdmin = role === "admin";
   const isClientPortalUser = can(permissions, "client_portal", "view");
   const clientAccount = isClientAccount(user);
+  const clientBrand = useClientBrand(clientAccount ? user?.uid : undefined);
 
   async function logout() {
     await signOut(auth);
@@ -257,8 +259,16 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
         <div className="mt-4 rounded-2xl border border-[#86A7B2]/25 bg-white p-3 shadow-sm shadow-[#274C5A]/5">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#274C5A]/20 bg-[#274C5A]/10 text-sm font-black uppercase text-[#274C5A]">
-              {(user.name || user.email || "U").slice(0, 1)}
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#274C5A]/20 bg-white p-1 text-sm font-black uppercase text-[#274C5A]">
+              {clientAccount && clientBrand.logoUrl ? (
+                <img
+                  src={clientBrand.logoUrl}
+                  alt={`${clientBrand.clientName} logo`}
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                (user.name || user.email || "U").slice(0, 1)
+              )}
             </div>
 
             <div className="min-w-0 flex-1">
@@ -268,6 +278,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               <div className="mt-0.5 truncate text-xs text-[#7F7F7F]">
                 {user.email}
               </div>
+              {clientAccount && clientBrand.clientName !== "Client" && (
+                <div className="mt-0.5 truncate text-[11px] font-semibold text-[#274C5A]/70">
+                  {clientBrand.clientName}
+                </div>
+              )}
             </div>
           </div>
 
