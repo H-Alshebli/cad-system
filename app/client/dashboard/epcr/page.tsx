@@ -49,6 +49,12 @@ type EpcrItem = {
 
   healthClassification?: string;
   classification?: string;
+  patientInfo?: {
+    gender?: string;
+    triageColor?: string;
+    healthClassification?: string;
+    chiefComplaints?: string[];
+  };
 
   responseTimeMinutes?: number;
   responseTime?: {
@@ -115,20 +121,29 @@ function getProjectName(e: EpcrItem) {
 }
 
 function getGender(e: EpcrItem) {
-  return String(e.gender || e.patientGender || "Unspecified");
+  const value = e.patientInfo?.gender || e.gender || e.patientGender;
+  return !value || value.toLowerCase() === "unknown" ? "Unspecified" : String(value);
 }
 
 function getTriage(e: EpcrItem) {
-  return String(e.triage || e.triageLevel || e.level || "Unspecified");
+  return String(
+    e.patientInfo?.triageColor || e.triage || e.triageLevel || e.level || "Unspecified"
+  );
 }
 
-function getComplaint(e: EpcrItem) {
-  return String(e.chiefComplaint || e.complaint || "Unspecified");
+function getComplaints(e: EpcrItem) {
+  const values = e.patientInfo?.chiefComplaints?.filter(Boolean) || [];
+  return values.length
+    ? values
+    : [String(e.chiefComplaint || e.complaint || "Unspecified")];
 }
 
 function getHealth(e: EpcrItem) {
   return String(
-    e.healthClassification || e.classification || "Unspecified"
+    e.patientInfo?.healthClassification ||
+      e.healthClassification ||
+      e.classification ||
+      "Unspecified"
   );
 }
 
@@ -142,6 +157,21 @@ function countBy<T>(items: T[], getKey: (item: T) => string): ChartRow[] {
   items.forEach((item) => {
     const key = getKey(item) || "Unspecified";
     result[key] = (result[key] || 0) + 1;
+  });
+
+  return Object.entries(result)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function countByMany<T>(items: T[], getKeys: (item: T) => string[]): ChartRow[] {
+  const result: Record<string, number> = {};
+
+  items.forEach((item) => {
+    const keys = getKeys(item).filter(Boolean);
+    (keys.length ? keys : ["Unspecified"]).forEach((key) => {
+      result[key] = (result[key] || 0) + 1;
+    });
   });
 
   return Object.entries(result)
@@ -261,7 +291,7 @@ export default function ClientEpcrDashboardPage() {
   );
 
   const complaintsChartData = useMemo(
-    () => countBy(allowedEpcrs, getComplaint).slice(0, 8),
+    () => countByMany(allowedEpcrs, getComplaints).slice(0, 8),
     [allowedEpcrs]
   );
 
