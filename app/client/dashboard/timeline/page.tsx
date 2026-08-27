@@ -298,9 +298,7 @@ export default function ClientTimelineDashboardPage() {
 
   if (userLoading || loading) {
     return (
-      <div className="p-6 dark:bg-gray-900 min-h-screen text-white">
-        Loading timeline dashboard…
-      </div>
+      <div className="page-shell"><div className="card-modern">Loading timeline dashboard…</div></div>
     );
   }
 
@@ -310,29 +308,39 @@ export default function ClientTimelineDashboardPage() {
       action="timeline"
       showMessage={true}
     >
-      <div className="p-6 dark:bg-gray-900 min-h-screen">
-        <h1 className="text-3xl font-bold mb-6 dark:text-white">
-          Timeline Dashboard
-        </h1>
+      <div className="page-shell">
+        <div className="overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-xl shadow-[#274C5A]/10">
+          <div className="flex flex-col gap-5 border-b border-[#86A7B2]/20 bg-gradient-to-r from-[#274C5A] to-[#315f70] p-6 text-white md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black text-white">
+                Client Operations
+              </div>
+              <h1 className="text-3xl font-black tracking-tight text-white">Timeline Dashboard</h1>
+              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#d7e4e8]">
+                Live operational view of cases across your assigned projects.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* FILTERS */}
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
           <div className="mb-3">
-            <h2 className="text-lg font-bold dark:text-white">Filters</h2>
-            <p className="text-sm text-gray-400">
+            <h2 className="text-lg font-black text-[#274C5A]">Filters</h2>
+            <p className="text-sm font-medium text-[#7F7F7F]">
               Filter dashboard by project and case date.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              <label className="mb-1 block text-sm font-bold text-[#274C5A]">
                 Project
               </label>
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+                className="select"
               >
                 <option value="">All Projects</option>
                 {projectOptions.map((project) => (
@@ -344,33 +352,33 @@ export default function ClientTimelineDashboardPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              <label className="mb-1 block text-sm font-bold text-[#274C5A]">
                 Start Date
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+                className="select"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-gray-500 dark:text-gray-400">
+              <label className="mb-1 block text-sm font-bold text-[#274C5A]">
                 End Date
               </label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded border bg-white px-3 py-2 text-sm dark:bg-gray-900 dark:text-white dark:border-gray-700"
+                className="select"
               />
             </div>
 
             <div className="flex items-end">
               <button
                 onClick={clearFilters}
-                className="w-full rounded border px-3 py-2 text-sm bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+                className="btn-secondary w-full"
               >
                 Clear Filters
               </button>
@@ -379,46 +387,46 @@ export default function ClientTimelineDashboardPage() {
         </div>
 
         {/* KPI */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
-          <KpiCard title="Total Cases" value={totalCases} />
-          <KpiCard title="Active" value={activeCases} valueClass="text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="rounded-2xl border border-[#274C5A]/20 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
+            <h3 className="text-lg font-black">Total Cases</h3>
+            <p className="mt-2 text-4xl font-extrabold">{totalCases}</p>
+          </div>
+          <KpiCard title="Active" value={activeCases} />
           <KpiCard
             title="Request Received"
             value={receivedCases}
-            valueClass="text-blue-600"
           />
           <KpiCard
             title="Team Assigned"
             value={assignedCases}
-            valueClass="text-blue-600"
           />
-          <KpiCard title="EnRoute" value={enRouteCases} valueClass="text-blue-600" />
-          <KpiCard title="OnScene" value={onSceneCases} valueClass="text-blue-600" />
-          <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
-            <h3 className="text-sm text-gray-400">Transporting</h3>
-            <p className="text-2xl font-bold text-orange-600">
+          <KpiCard title="EnRoute" value={enRouteCases} />
+          <KpiCard title="OnScene" value={onSceneCases} />
+          <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+            <h3 className="text-sm font-bold text-[#7F7F7F]">Transporting</h3>
+            <p className="mt-2 text-2xl font-black text-[#ef7b00]">
               {transportingCases}
             </p>
-            <p className="text-gray-400">
+            <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
               Hospital: {transportingHospitalCases} - Clinic:{" "}
               {transportingClinicCases}
             </p>
           </div>
-          <KpiCard title="Returning" value={returningCases} valueClass="text-blue-600" />
+          <KpiCard title="Returning" value={returningCases} />
           <KpiCard
             title="Completed"
             value={completedCases}
-            valueClass="text-blue-600"
           />
         </div>
 
         {/* TIMELINE HEADER */}
-        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-2xl border border-[#86A7B2]/20 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
           <div>
-            <h2 className="text-xl font-bold dark:text-white">
+            <h2 className="text-xl font-black text-[#274C5A]">
               Cases Timeline
             </h2>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm font-medium text-[#7F7F7F]">
               Showing {visibleCases.length} case
               {visibleCases.length !== 1 ? "s" : ""}
               {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
@@ -427,7 +435,7 @@ export default function ClientTimelineDashboardPage() {
 
           <button
             onClick={() => setShowAllCases((prev) => !prev)}
-            className="px-4 py-2 rounded border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 hover:opacity-90 transition"
+            className="btn-secondary"
           >
             {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
           </button>
@@ -436,43 +444,43 @@ export default function ClientTimelineDashboardPage() {
         {/* TIMELINE CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {visibleCases.length === 0 ? (
-            <div className="col-span-full rounded-xl border border-dashed border-gray-700 p-8 text-center text-sm text-gray-400">
+            <div className="col-span-full rounded-2xl border border-dashed border-[#86A7B2] bg-white p-8 text-center text-sm font-medium text-[#7F7F7F]">
               No cases found.
             </div>
           ) : (
             visibleCases.map((c) => (
               <div
                 key={c.id}
-                className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700"
+                className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5"
               >
                 <div className="mb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h2 className="text-xl font-bold">
+                      <h2 className="text-xl font-black text-[#274C5A]">
                         {getCaseDisplayCode(c)} — {c.projectName || "Project"}
                       </h2>
 
-                      <p className="text-gray-400">
+                      <p className="mt-1 text-sm font-medium text-[#7F7F7F]">
                         Date & Time: {formatCaseDate(c)}
                       </p>
                     </div>
 
-                    <span className="rounded-full bg-blue-500/15 px-3 py-1 text-xs text-blue-300">
+                    <span className="rounded-full bg-[#e9f2ff] px-3 py-1 text-xs font-bold text-[#5076a5]">
                       {clientStatus(c.status)}
                     </span>
                   </div>
 
-                  <div className="mt-3 space-y-1 text-sm text-gray-400">
+                  <div className="mt-3 space-y-1 text-sm font-medium text-[#7F7F7F]">
                     <p>
-                      <span className="text-gray-500">Caller:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">Caller:</span>{" "}
                       {c.callerName || "—"}
                     </p>
                     <p>
-                      <span className="text-gray-500">Patient:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">Patient:</span>{" "}
                       {c.patientName || "—"}
                     </p>
                     <p>
-                      <span className="text-gray-500">Complaint:</span>{" "}
+                      <span className="font-bold text-[#274C5A]">Complaint:</span>{" "}
                       {c.chiefComplaint || "—"}
                     </p>
                   </div>
@@ -491,16 +499,14 @@ export default function ClientTimelineDashboardPage() {
 function KpiCard({
   title,
   value,
-  valueClass = "",
 }: {
   title: string;
   value: number;
-  valueClass?: string;
 }) {
   return (
-    <div className="p-4 border rounded shadow bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700">
-      <h3 className="text-sm text-gray-400">{title}</h3>
-      <p className={`text-2xl font-bold ${valueClass}`}>{value}</p>
+    <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-5 shadow-sm shadow-[#274C5A]/5">
+      <h3 className="text-sm font-bold text-[#7F7F7F]">{title}</h3>
+      <p className="mt-2 text-2xl font-black text-[#274C5A]">{value}</p>
     </div>
   );
 }
