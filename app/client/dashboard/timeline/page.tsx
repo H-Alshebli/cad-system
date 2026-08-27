@@ -13,6 +13,12 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
 import { useClientI18n } from "@/lib/clientI18n";
+import { FileDown, FileText } from "lucide-react";
+import {
+  ClientCaseExportLabels,
+  exportClientCasesExcel,
+  exportClientCasesPdf,
+} from "@/lib/clientCaseExports";
 
 type Project = {
   id: string;
@@ -111,6 +117,28 @@ export default function ClientTimelineDashboardPage() {
     ["Received", "Assigned", "EnRoute", "OnScene", "Transporting", "Hospital", "Returning", "Closed"]
       .map((label) => [label, translateValue(label)])
   ), [language]);
+  const exportLabels = useMemo<ClientCaseExportLabels>(() => ({
+    reportTitle: t("Client Timeline Report"),
+    generatedAt: t("Generated At"),
+    caseNumber: t("Case Number"),
+    project: t("Project"),
+    dateTime: t("Date & Time"),
+    status: t("Status"),
+    caller: t("Caller"),
+    patient: t("Patient"),
+    complaint: t("Complaint"),
+    location: t("Location"),
+    unit: t("Unit"),
+    received: t("Received"),
+    assigned: t("Assigned"),
+    enRoute: t("EnRoute"),
+    onScene: t("OnScene"),
+    transporting: t("Transporting"),
+    hospital: t("Hospital"),
+    returning: t("Returning"),
+    closed: t("Closed"),
+    timelineDetails: t("Timeline Details"),
+  }), [language]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [cases, setCases] = useState<CaseItem[]>([]);
@@ -302,6 +330,22 @@ export default function ClientTimelineDashboardPage() {
     setEndDate("");
   }
 
+  async function exportCases(format: "excel" | "pdf") {
+    if (visibleCases.length === 0) {
+      alert(t("No cases are available to export."));
+      return;
+    }
+    const options = {
+      filename: `HCAD-Client-Timeline-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: language === "ar" ? "المسار الزمني" : "Timeline",
+      locale,
+      labels: exportLabels,
+      statusLabel: (status?: string) => translateValue(clientStatus(status)),
+    };
+    if (format === "excel") await exportClientCasesExcel(visibleCases, options);
+    else await exportClientCasesPdf(visibleCases, options);
+  }
+
   if (userLoading || loading) {
     return (
       <div className="page-shell"><div className="card-modern">{t("Loading timeline dashboard…")}</div></div>
@@ -439,12 +483,20 @@ export default function ClientTimelineDashboardPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowAllCases((prev) => !prev)}
-            className="btn-secondary"
-          >
-            {showAllCases ? t("Hide Closed Cases") : t("Show All Cases")}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => exportCases("excel")} className="btn-secondary inline-flex items-center gap-2">
+              <FileDown size={16} /> {t("Export Excel")}
+            </button>
+            <button onClick={() => exportCases("pdf")} className="btn-secondary inline-flex items-center gap-2">
+              <FileText size={16} /> {t("Export PDF")}
+            </button>
+            <button
+              onClick={() => setShowAllCases((prev) => !prev)}
+              className="btn-secondary"
+            >
+              {showAllCases ? t("Hide Closed Cases") : t("Show All Cases")}
+            </button>
+          </div>
         </div>
 
         {/* TIMELINE CARDS */}
