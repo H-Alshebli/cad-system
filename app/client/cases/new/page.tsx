@@ -24,6 +24,7 @@ import LocationSearch, {
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 import { reserveOperationalNumber } from "@/lib/operationalNumbers";
+import { useClientI18n } from "@/lib/clientI18n";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -197,6 +198,7 @@ function normalizeMapUnits(list: any[]) {
 export default function ClientNewCasePage() {
   const router = useRouter();
   const { user, loading: userLoading } = useCurrentUser();
+  const { t, translateValue, dir, language } = useClientI18n();
 
   const [receivedAt, setReceivedAt] = useState<Timestamp | null>(null);
 
@@ -393,22 +395,22 @@ export default function ClientNewCasePage() {
 
   const createCase = async () => {
     if (!user?.uid) {
-      alert("User is missing.");
+      alert(t("User is missing."));
       return;
     }
 
     if (!projectData?.id) {
-      alert("Please select a project.");
+      alert(t("Please select a project."));
       return;
     }
 
     if (!chiefComplaint || !triageLevel || !locationText || !selectedUnitId) {
-      alert("Please complete chief complaint, triage, location, and unit.");
+      alert(t("Please complete chief complaint, triage, location, and unit."));
       return;
     }
 
     if (!availableUnitTypes.includes(unitType) || !selectedUnit) {
-      alert("The selected unit is not assigned to this project.");
+      alert(t("The selected unit is not assigned to this project."));
       return;
     }
 
@@ -517,11 +519,11 @@ export default function ClientNewCasePage() {
         });
       }
 
-      alert("Case submitted successfully.");
+      alert(t("Case submitted successfully."));
       router.push("/client/cases");
     } catch (error) {
       console.error("Create client case error:", error);
-      alert("Failed to submit case.");
+      alert(t("Failed to submit case."));
     } finally {
       setSaving(false);
     }
@@ -531,7 +533,7 @@ export default function ClientNewCasePage() {
     return (
       <div className="p-6">
         <div className="card-modern text-sm font-semibold text-[#274C5A]">
-          Loading...
+          {t("Loading...")}
         </div>
       </div>
     );
@@ -539,15 +541,15 @@ export default function ClientNewCasePage() {
 
   return (
     <PermissionGuard module="client_cases" action="create" showMessage={true}>
-      <div className="page-shell p-6">
+      <div className="page-shell p-6" dir={dir} lang={language}>
         <div className="page-header">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#74cdda]">
-              Client Case
+              {t("Client Case")}
             </p>
-            <h1 className="page-title">New Case (Project)</h1>
+            <h1 className="page-title">{t("New Case (Project)")}</h1>
             <p className="page-subtitle mt-1">
-              Create a case request linked to one of your assigned projects.
+              {t("Create a case request linked to one of your assigned projects.")}
             </p>
           </div>
         </div>
@@ -556,12 +558,12 @@ export default function ClientNewCasePage() {
           <div className="card-modern space-y-5">
             {projects.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#c8dce2] bg-[#f7fbfc] p-6 text-center text-sm font-semibold text-[#607482]">
-                No assigned projects found. Please contact Lazem team.
+                {t("No assigned projects found. Please contact Lazem team.")}
               </div>
             ) : (
               <>
                 <div>
-                  <FieldLabel text="Project *" />
+                  <FieldLabel text={t("Project *")} />
                   <select
                     className={inputClass}
                     value={projectId}
@@ -570,7 +572,7 @@ export default function ClientNewCasePage() {
                       setSelectedUnitId("");
                     }}
                   >
-                    <option value="">Select project</option>
+                    <option value="">{t("Select project")}</option>
                     {projects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {getProjectName(project)}
@@ -581,7 +583,7 @@ export default function ClientNewCasePage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <FieldLabel text="Caller Name" />
+                    <FieldLabel text={t("Caller Name")} />
                     <input
                       className={inputClass}
                       value={callerName}
@@ -590,7 +592,7 @@ export default function ClientNewCasePage() {
                   </div>
 
                   <div>
-                    <FieldLabel text="Contact Number" />
+                    <FieldLabel text={t("Contact Number")} />
                     <input
                       className={inputClass}
                       value={contactNumber}
@@ -600,16 +602,16 @@ export default function ClientNewCasePage() {
                 </div>
 
                 <div>
-                  <FieldLabel text="Prehospital Chief Complaints *" />
+                  <FieldLabel text={t("Prehospital Chief Complaints *")} />
                   <select
                     className={inputClass}
                     value={chiefComplaint}
                     onChange={(e) => setChiefComplaint(e.target.value)}
                   >
-                    <option value="">Select complaint</option>
+                    <option value="">{t("Select complaint")}</option>
                     {CHIEF_COMPLAINT_OPTIONS.map((c) => (
                       <option key={c} value={c}>
-                        {c}
+                        {translateValue(c)}
                       </option>
                     ))}
                   </select>
@@ -617,7 +619,7 @@ export default function ClientNewCasePage() {
                   {chiefComplaint === "Other" && (
                     <input
                       className={`${inputClass} mt-2`}
-                      placeholder="Specify other complaint"
+                      placeholder={t("Specify other complaint")}
                       value={otherComplaint}
                       onChange={(e) => setOtherComplaint(e.target.value)}
                     />
@@ -625,23 +627,23 @@ export default function ClientNewCasePage() {
                 </div>
 
                 <div>
-                  <FieldLabel text="Prehospital Triage Color-Coded Scale *" />
+                  <FieldLabel text={t("Prehospital Triage Color-Coded Scale *")} />
                   <select
                     className={inputClass}
                     value={triageLevel}
                     onChange={(e) => setTriageLevel(e.target.value)}
                   >
-                    <option value="">Select triage level</option>
+                    <option value="">{t("Select triage level")}</option>
                     {TRIAGE_LEVELS.map((t) => (
                       <option key={t} value={t}>
-                        {t}
+                        {translateValue(t)}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <FieldLabel text="Patient Name" />
+                  <FieldLabel text={t("Patient Name")} />
                   <input
                     className={inputClass}
                     value={patientName}
@@ -651,10 +653,11 @@ export default function ClientNewCasePage() {
 
                 <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
                   <h3 className="text-sm font-black text-[#123746]">
-                    Location
+                    {t("Location")}
                   </h3>
 
                   <ProjectLocationSelector
+                    localized
                     locations={readProjectLocations(projectData)}
                     selectedId={selectedProjectLocation?.id || ""}
                     onSelect={(location) => {
@@ -678,12 +681,12 @@ export default function ClientNewCasePage() {
                   />
 
                   <div>
-                    <FieldLabel text="Search Location" />
-                    <LocationSearch onSelect={selectSearchedLocation} />
+                    <FieldLabel text={t("Search Location")} />
+                    <LocationSearch localized onSelect={selectSearchedLocation} />
                   </div>
 
                   <div>
-                    <FieldLabel text="Location Description *" />
+                    <FieldLabel text={t("Location Description *")} />
                     <input
                       className={inputClass}
                       value={locationText}
@@ -692,7 +695,7 @@ export default function ClientNewCasePage() {
                   </div>
 
                   <div>
-                    <FieldLabel text="Google Maps Link (Auto-Pin)" />
+                    <FieldLabel text={t("Google Maps Link (Auto-Pin)")} />
                     <input
                       className={inputClass}
                       value={mapLink}
@@ -717,7 +720,7 @@ export default function ClientNewCasePage() {
                       className={`${inputClass} ${
                         isFromMapLink ? "opacity-50 cursor-not-allowed" : ""
                       }`}
-                      placeholder="Latitude"
+                      placeholder={t("Latitude")}
                       disabled={isFromMapLink}
                       value={lat ?? ""}
                       onChange={(e) =>
@@ -729,7 +732,7 @@ export default function ClientNewCasePage() {
                       className={`${inputClass} ${
                         isFromMapLink ? "opacity-50 cursor-not-allowed" : ""
                       }`}
-                      placeholder="Longitude"
+                      placeholder={t("Longitude")}
                       disabled={isFromMapLink}
                       value={lng ?? ""}
                       onChange={(e) =>
@@ -744,14 +747,14 @@ export default function ClientNewCasePage() {
                       target="_blank"
                       className="text-sm font-bold text-[#274C5A] underline"
                     >
-                      Open in Google Maps
+                      {t("Open in Google Maps")}
                     </a>
                   )}
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
                   <h3 className="text-sm font-black text-[#123746]">
-                    Assign Unit
+                    {t("Assign Unit")}
                   </h3>
 
                   <div className="flex flex-wrap gap-3 text-sm font-bold text-[#274C5A]">
@@ -768,7 +771,7 @@ export default function ClientNewCasePage() {
                             setSelectedUnitId("");
                           }}
                         />
-                        {type}
+                        {translateValue(type)}
                       </label>
                     ))}
                   </div>
@@ -806,18 +809,17 @@ export default function ClientNewCasePage() {
                                     : "border border-emerald-500/25 bg-emerald-500/10 text-emerald-800"
                                 }`}
                               >
-                                {busy ? "Busy" : "Available"}
+                                {busy ? t("Busy") : t("Available")}
                               </span>
                             </div>
 
                             <div className="mt-1 text-xs font-semibold text-[#607482]">
-                              {u.location || "No location"}
+                              {u.location || t("No location")}
                             </div>
 
                             {selected && busy && (
                               <div className="mt-2 text-xs font-bold text-red-800">
-                                Warning: this ambulance is currently busy, but
-                                you can still assign it.
+                                {t("Warning: this ambulance is currently busy, but you can still assign it.")}
                               </div>
                             )}
                           </button>
@@ -832,7 +834,7 @@ export default function ClientNewCasePage() {
                       value={selectedUnitId}
                       onChange={(e) => setSelectedUnitId(e.target.value)}
                     >
-                      <option value="">Select unit</option>
+                      <option value="">{t("Select unit")}</option>
                       {units.map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.code || u.name || u.id}
@@ -843,7 +845,7 @@ export default function ClientNewCasePage() {
 
                   {unitType && units.length === 0 && (
                     <p className="text-sm font-semibold text-[#607482]">
-                      No units found for this project/type.
+                      {t("No units found for this project/type.")}
                     </p>
                   )}
                 </div>
@@ -857,7 +859,7 @@ export default function ClientNewCasePage() {
                       : "bg-[#274C5A] hover:bg-[#1d3b47]"
                   }`}
                 >
-                  {saving ? "Creating..." : "Create Case"}
+                  {saving ? t("Creating...") : t("Create Case")}
                 </button>
               </>
             )}
@@ -876,7 +878,7 @@ export default function ClientNewCasePage() {
               centerLat={lat ?? undefined}
               centerLng={lng ?? undefined}
               showRecenterButton={true}
-              recenterLabel="Back to location"
+              recenterLabel={t("Back to location")}
             />
           </div>
         </div>

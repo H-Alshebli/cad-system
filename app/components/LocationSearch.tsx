@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { Loader2, MapPin, Search } from "lucide-react";
 
 import { auth } from "@/lib/firebase";
+import { useClientI18n } from "@/lib/clientI18n";
 
 export type LocationSearchResult = {
   id: string;
@@ -14,9 +15,13 @@ export type LocationSearchResult = {
 
 export default function LocationSearch({
   onSelect,
+  localized = false,
 }: {
   onSelect: (result: LocationSearchResult) => void;
+  localized?: boolean;
 }) {
+  const { t } = useClientI18n();
+  const text = (value: string) => localized ? t(value) : value;
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LocationSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,7 +32,7 @@ export default function LocationSearch({
     const normalizedQuery = query.trim().replace(/\s+/g, " ");
 
     if (normalizedQuery.length < 3) {
-      setError("Enter at least 3 characters.");
+      setError(text("Enter at least 3 characters."));
       return;
     }
 
@@ -37,7 +42,7 @@ export default function LocationSearch({
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      if (!token) throw new Error(text("Your session has expired. Please sign in again."));
 
       const response = await fetch(
         `/api/geocoding/search?q=${encodeURIComponent(normalizedQuery)}`,
@@ -67,10 +72,10 @@ export default function LocationSearch({
       const nextResults = Array.isArray(payload?.results) ? payload.results : [];
       setResults(nextResults);
       if (nextResults.length === 0) {
-        setError("No matching places found. You can still enter the coordinates manually.");
+        setError(text("No matching places found. You can still enter the coordinates manually."));
       }
     } catch (searchError: any) {
-      setError(searchError?.message || "Location search failed.");
+      setError(searchError?.message || text("Location search failed."));
     } finally {
       setLoading(false);
     }
@@ -95,7 +100,7 @@ export default function LocationSearch({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="h-11 w-full rounded-xl border border-[#c8dce2] bg-white pl-10 pr-3 text-sm font-semibold text-[#123746] outline-none transition placeholder:text-[#8aa0aa] focus:border-[#74cdda] focus:ring-4 focus:ring-[#74cdda]/20"
-            placeholder="Search for a place or address in Saudi Arabia"
+            placeholder={text("Search for a place or address in Saudi Arabia")}
             maxLength={120}
           />
         </label>
@@ -105,7 +110,7 @@ export default function LocationSearch({
           className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#274C5A] px-5 text-sm font-black text-white transition hover:bg-[#1d3b47] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? <Loader2 size={17} className="animate-spin" /> : <Search size={17} />}
-          Search
+          {text("Search")}
         </button>
       </form>
 
@@ -130,7 +135,7 @@ export default function LocationSearch({
       )}
 
       <p className="text-[11px] font-medium text-[#607482]">
-        Search runs only when you press Search. Results ©{" "}
+        {text("Search runs only when you press Search. Results ©")}{" "}
         <a
           href="https://www.openstreetmap.org/copyright"
           target="_blank"

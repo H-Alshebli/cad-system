@@ -3,18 +3,23 @@
 import { useMemo, useState } from "react";
 import { Check, MapPin, Search } from "lucide-react";
 import { ProjectLocation } from "@/lib/projectLocations";
+import { useClientI18n } from "@/lib/clientI18n";
 
 export default function ProjectLocationSelector({
   locations,
   selectedId,
   onSelect,
   onManual,
+  localized = false,
 }: {
   locations: ProjectLocation[];
   selectedId: string;
   onSelect: (location: ProjectLocation) => void;
   onManual: () => void;
+  localized?: boolean;
 }) {
+  const { t } = useClientI18n();
+  const text = (value: string) => localized ? t(value) : value;
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const activeLocations = useMemo(
@@ -41,9 +46,9 @@ export default function ProjectLocationSelector({
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-[#274C5A] p-2 text-white"><MapPin size={17} /></div>
         <div>
-          <div className="text-sm font-black text-[#123746]">Select project factory / site *</div>
+          <div className="text-sm font-black text-[#123746]">{text("Select project factory / site *")}</div>
           <div className="mt-0.5 text-xs font-semibold text-[#607482]">
-            The location and map pin will be filled automatically.
+            {text("The location and map pin will be filled automatically.")}
           </div>
         </div>
       </div>
@@ -53,8 +58,8 @@ export default function ProjectLocationSelector({
         className="mt-3 flex w-full items-center justify-between rounded-xl border border-[#c8dce2] bg-white px-3 py-3 text-left text-sm font-bold text-[#123746]"
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{selected ? `${selected.siteName} — Site ${selected.siteNumber}` : "Choose a factory or site"}</span>
-        <span className="text-xs text-[#607482]">{activeLocations.length} sites</span>
+        <span>{selected ? `${selected.siteName} — ${text("Site")} ${selected.siteNumber}` : text("Choose a factory or site")}</span>
+        <span className="text-xs text-[#607482]">{activeLocations.length} {text("sites")}</span>
       </button>
 
       {open && (
@@ -64,7 +69,7 @@ export default function ProjectLocationSelector({
             <input
               className="input pl-9"
               autoFocus
-              placeholder="Search by factory name or site number"
+              placeholder={text("Search by factory name or site number")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -83,12 +88,12 @@ export default function ProjectLocationSelector({
               >
                 <span>
                   <span className="block text-sm font-black text-[#123746]">{location.siteName}</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-[#607482]">Site {location.siteNumber} · {location.coordinates}</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-[#607482]">{text("Site")} {location.siteNumber} · {location.coordinates}</span>
                 </span>
                 {selectedId === location.id && <Check className="shrink-0 text-emerald-600" size={17} />}
               </button>
             ))}
-            {filtered.length === 0 && <div className="p-5 text-center text-sm font-semibold text-[#607482]">No matching location.</div>}
+            {filtered.length === 0 && <div className="p-5 text-center text-sm font-semibold text-[#607482]">{text("No matching location.")}</div>}
           </div>
         </div>
       )}
@@ -101,7 +106,7 @@ export default function ProjectLocationSelector({
           setOpen(false);
         }}
       >
-        Location not listed — enter manually
+        {text("Location not listed — enter manually")}
       </button>
     </div>
   );

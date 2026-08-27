@@ -10,6 +10,7 @@ import {
   ClipboardPlus,
   ClipboardList,
   LayoutDashboard,
+  Languages,
   LogOut,
   MapPin,
   Stethoscope,
@@ -47,7 +48,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const isClientPortalUser = can(permissions, "client_portal", "view");
   const clientAccount = isClientAccount(user);
   const clientBrand = useClientBrand(clientAccount ? user?.uid : undefined);
-  const { t, dir, language } = useClientI18n();
+  const { t, dir, language, toggleLanguage } = useClientI18n();
   const clientText = (text: string) => clientAccount ? t(text) : text;
 
   async function logout() {
@@ -374,6 +375,16 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       <div className="border-t border-[#86A7B2]/25 p-4">
+        {clientAccount && (
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#86A7B2]/35 bg-white px-3 py-2.5 text-sm font-black text-[#274C5A] transition hover:bg-[#f5f9fa]"
+          >
+            <Languages size={16} />
+            {language === "ar" ? "English" : "العربية"}
+          </button>
+        )}
         <button
           onClick={logout}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#274C5A] px-3 py-2.5 text-sm font-bold text-white shadow-sm shadow-[#274C5A]/20 transition hover:bg-[#1f3f4c]"
