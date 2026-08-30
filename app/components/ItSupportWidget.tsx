@@ -9,7 +9,7 @@ import { isClientAccount } from "@/lib/userAccounts";
 
 const IT_TICKETING_URL =
   process.env.NEXT_PUBLIC_IT_TICKETING_URL ||
-  "https://lazem-it-ticketing.vercel.app/";
+  "https://lazem-it-ticketing.vercel.app/tickets/new";
 
 export default function ItSupportWidget() {
   const [open, setOpen] = useState(false);
