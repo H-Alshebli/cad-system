@@ -11,6 +11,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Languages,
+  LifeBuoy,
   LogOut,
   MapPin,
   Stethoscope,
@@ -34,7 +35,12 @@ type NavItem = {
   label: string;
   icon: React.ReactNode;
   visible: boolean;
+  external?: boolean;
 };
+
+const IT_TICKETING_URL =
+  process.env.NEXT_PUBLIC_IT_TICKETING_URL ||
+  "https://lazem-it-ticketing.vercel.app/";
 
 export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
@@ -167,6 +173,13 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       label: "Submissions",
       icon: <ClipboardList size={18} />,
       visible: isAdmin || can(permissions, "submissions", "view"),
+    },
+    {
+      href: IT_TICKETING_URL,
+      label: "IT Support",
+      icon: <LifeBuoy size={18} />,
+      visible: isAdmin || can(permissions, "it_support", "view"),
+      external: true,
     },
   ];
 
@@ -336,17 +349,31 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="space-y-1">
             {operationsItems
               .filter((item) => item.visible)
-              .map((item) => (
-                <Link
-                  key={item.href}
-                  className={linkClass(item.href)}
-                  href={item.href}
-                  onClick={onClose}
-                >
-                  <span className="text-current/80">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
+              .map((item) =>
+                item.external ? (
+                  <a
+                    key={item.href}
+                    className={linkClass(item.href)}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={onClose}
+                  >
+                    <span className="text-current/80">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </a>
+                ) : (
+                  <Link
+                    key={item.href}
+                    className={linkClass(item.href)}
+                    href={item.href}
+                    onClick={onClose}
+                  >
+                    <span className="text-current/80">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              )}
           </div>
         </div>
         )}

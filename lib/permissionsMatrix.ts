@@ -105,6 +105,9 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
 
   submissions: ["view", "export"],
 
+  // Controls visibility of the external Lazem IT support desk link.
+  it_support: ["view"],
+
   ambulances: ["view", "create", "edit", "assign", "archive", "delete"],
 
   destinations: ["view", "create", "edit", "delete"],
@@ -151,6 +154,7 @@ export const MODULE_LABELS: Record<string, string> = {
   checklist_review_global: "Checklist Review – All Projects",
   epcr: "ePCR",
   submissions: "Submissions",
+  it_support: "IT Support",
   ambulances: "Ambulances",
   destinations: "Hospitals / Destinations",
   clinics: "Clinics",
@@ -213,6 +217,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   submissions:
     "Case and ePCR submission review, consolidated visibility, and export access.",
+
+  it_support:
+    "Open the Lazem IT ticketing portal in a separate browser tab.",
 
   ambulances:
     "Ambulance list, creation, editing, project assignment, team assignment, GPS, and archiving.",
@@ -326,6 +333,7 @@ export const PERMISSION_GROUPS = [
       "checklist_review_global",
       "epcr",
       "submissions",
+      "it_support",
     ],
   },
   {
