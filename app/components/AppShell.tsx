@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 import CaseAlertListener from "./CaseAlertListener";
 import ChatNotificationListener from "./ChatNotificationListener";
 import EnvironmentBanner from "./EnvironmentBanner";
+import ItSupportWidget from "./ItSupportWidget";
 import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { isClientAccount } from "@/lib/userAccounts";
@@ -180,6 +181,7 @@ export default function AppShell({
 
           <CaseAlertListener />
           <ChatNotificationListener />
+          <ItSupportWidget />
         </div>
       </main>
     </div>
