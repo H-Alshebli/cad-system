@@ -357,6 +357,14 @@ export function normalizePermissions(permissions: PermissionsMap = {}) {
     normalized[moduleKey] = {};
 
     actions.forEach((action) => {
+      if (moduleKey === "it_support" && action === "view") {
+        // IT support is available to employee roles by default. Saving an
+        // explicit false value on a role is the opt-out control.
+        normalized[moduleKey][action] =
+          permissions?.[moduleKey]?.[action] !== false;
+        return;
+      }
+
       normalized[moduleKey][action] = Boolean(
         permissions?.[moduleKey]?.[action]
       );
