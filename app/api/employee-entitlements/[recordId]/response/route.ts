@@ -34,9 +34,11 @@ export async function POST(request: NextRequest, { params }: { params: { recordI
   if (record.status !== "sent") return NextResponse.json({ error: "This statement is not awaiting a response." }, { status: 409 });
 
   const status = action === "agree" ? "agreed" : "disputed";
+  const employeeResponse = { action, comment, userId: actor.uid, userName: actor.name, at: new Date().toISOString() };
   await ref.update({
     status,
-    employeeResponse: { action, comment, userId: actor.uid, userName: actor.name, at: new Date().toISOString() },
+    employeeResponse,
+    responseHistory: FieldValue.arrayUnion(employeeResponse),
     respondedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     auditHistory: FieldValue.arrayUnion({ action, actorId: actor.uid, comment, at: new Date().toISOString() }),

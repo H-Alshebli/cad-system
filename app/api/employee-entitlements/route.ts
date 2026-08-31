@@ -51,8 +51,77 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "");
   const batchId = String(body.batchId || "").trim();
   const recordId = String(body.recordId || "").trim();
-  if (!new Set(["send_batch", "send_record"]).has(action)) {
+  if (!new Set(["send_batch", "send_record", "correct_and_resend", "reject_dispute"]).has(action)) {
     return NextResponse.json({ error: "Invalid send action." }, { status: 400 });
+  }
+
+  if (action === "correct_and_resend" || action === "reject_dispute") {
+    const document = await adminDb.collection("employeeEntitlements").doc(recordId).get();
+    if (!document.exists) return NextResponse.json({ error: "Entitlement record not found." }, { status: 404 });
+    const data = document.data() || {};
+    if (data.status !== "disputed") {
+      return NextResponse.json({ error: "Only a disputed statement can be reviewed." }, { status: 409 });
+    }
+    const comment = String(body.comment || "").trim();
+    if (!comment) return NextResponse.json({ error: "An HR response is required." }, { status: 400 });
+    const responseHistory = data.employeeResponse
+      ? FieldValue.arrayUnion(data.employeeResponse)
+      : FieldValue.arrayUnion();
+
+    if (action === "reject_dispute") {
+      await document.ref.update({
+        status: "dispute_rejected",
+        hrResolution: { action, comment, actorId: actor.uid, actorName: actor.name, at: new Date().toISOString() },
+        resolvedAt: FieldValue.serverTimestamp(),
+        resolvedBy: actor.uid,
+        resolvedByName: actor.name,
+        responseHistory,
+        updatedAt: FieldValue.serverTimestamp(),
+        auditHistory: FieldValue.arrayUnion({ action, actorId: actor.uid, comment, at: new Date().toISOString() }),
+      });
+    } else {
+      const values = ["otEntitlement", "otPaid", "perDiemEntitlement", "perDiemPaid"].map((key) => Number(body[key]));
+      if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+        return NextResponse.json({ error: "All corrected amounts must be valid positive numbers or zero." }, { status: 400 });
+      }
+      const [otEntitlement, otPaid, perDiemEntitlement, perDiemPaid] = values;
+      if (otPaid > otEntitlement || perDiemPaid > perDiemEntitlement) {
+        return NextResponse.json({ error: "Paid amount cannot exceed the entitlement amount." }, { status: 400 });
+      }
+      const overtime = { ...(data.overtime || {}), entitlement: otEntitlement, sourcePaid: otPaid, sourceRemaining: otEntitlement - otPaid, operationalPaid: otPaid, operationalRemaining: otEntitlement - otPaid };
+      const perDiem = { ...(data.perDiem || {}), entitlement: perDiemEntitlement, sourceRemaining: perDiemEntitlement - perDiemPaid, operationalPaid: perDiemPaid, operationalRemaining: perDiemEntitlement - perDiemPaid };
+      await document.ref.update({
+        overtime,
+        perDiem,
+        combined: { entitlement: otEntitlement + perDiemEntitlement, paid: otPaid + perDiemPaid, remaining: otEntitlement - otPaid + perDiemEntitlement - perDiemPaid },
+        status: "sent",
+        hrResolution: { action, comment, actorId: actor.uid, actorName: actor.name, at: new Date().toISOString() },
+        correctedAt: FieldValue.serverTimestamp(),
+        correctedBy: actor.uid,
+        correctedByName: actor.name,
+        resentAt: FieldValue.serverTimestamp(),
+        sentAt: FieldValue.serverTimestamp(),
+        sentBy: actor.uid,
+        sentByName: actor.name,
+        responseHistory,
+        updatedAt: FieldValue.serverTimestamp(),
+        auditHistory: FieldValue.arrayUnion({ action, actorId: actor.uid, comment, previousCombined: data.combined || {}, at: new Date().toISOString() }),
+      });
+    }
+
+    await adminDb.collection("notifications").add({
+      type: "employee_entitlement_hr_resolution",
+      entitlementId: document.id,
+      batchId: data.batchId,
+      recipientUserIds: [data.userId],
+      recipientEmails: data.employeeEmail ? [data.employeeEmail] : [],
+      title: action === "correct_and_resend" ? "Entitlement statement corrected" : "Entitlement dispute reviewed",
+      message: action === "correct_and_resend" ? "HR corrected and resent your entitlement statement for review." : "HR reviewed your dispute. Open your profile to view the response.",
+      link: "/crew-profile#employee-entitlements",
+      readByUserIds: [],
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return NextResponse.json({ status: action === "correct_and_resend" ? "sent" : "dispute_rejected" });
   }
 
   const documents = action === "send_batch"

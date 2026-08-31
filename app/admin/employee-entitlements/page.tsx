@@ -35,6 +35,7 @@ type EntitlementRecord = {
   sentByName?: string;
   respondedAt?: string;
   employeeResponse?: { action?: string; comment?: string; userName?: string; at?: string };
+  hrResolution?: { action?: string; comment?: string; actorName?: string; at?: string };
 };
 
 const money = new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -47,12 +48,13 @@ function formatDate(value?: string) {
 }
 
 function recordStatusLabel(status?: string) {
-  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Disputed" } as Record<string, string>)[status || ""] || "Unknown";
+  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Disputed", dispute_rejected: "Dispute Rejected / Closed" } as Record<string, string>)[status || ""] || "Unknown";
 }
 
 function statusBadgeClass(status?: string) {
   if (status === "agreed") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
   if (status === "disputed") return "border-red-500/25 bg-red-500/10 text-red-700";
+  if (status === "dispute_rejected") return "border-slate-500/25 bg-slate-500/10 text-slate-700";
   if (status === "sent") return "border-amber-500/25 bg-amber-500/10 text-amber-700";
   return "border-slate-500/25 bg-slate-500/10 text-slate-700";
 }
@@ -173,6 +175,35 @@ export default function EmployeeEntitlementsAdminPage() {
     } finally { setBusy(""); }
   }
 
+  async function reviewDispute(record: EntitlementRecord, action: "correct_and_resend" | "reject_dispute") {
+    const comment = window.prompt(action === "correct_and_resend" ? "Explain the correction to the employee:" : "Explain why the dispute is rejected:")?.trim();
+    if (!comment) return;
+    const payload: Record<string, any> = { action, recordId: record.id, comment };
+    if (action === "correct_and_resend") {
+      const prompts: Array<[string, string, number]> = [
+        ["otEntitlement", "Correct Overtime entitlement:", Number(record.overtime?.entitlement || 0)],
+        ["otPaid", "Correct Overtime paid amount:", Number(record.overtime?.operationalPaid || 0)],
+        ["perDiemEntitlement", "Correct Per Diem entitlement:", Number(record.perDiem?.entitlement || 0)],
+        ["perDiemPaid", "Correct Per Diem paid amount:", Number(record.perDiem?.operationalPaid || 0)],
+      ];
+      for (const [key, label, current] of prompts) {
+        const entered = window.prompt(label, String(current));
+        if (entered === null) return;
+        payload[key] = Number(entered.replace(/,/g, ""));
+      }
+      if (!window.confirm("Save the corrected amounts and resend this statement to the employee?")) return;
+    } else if (!window.confirm("Reject this dispute and close the statement with your HR response?")) return;
+
+    setBusy(`review:${record.id}`); setError(""); setMessage("");
+    try {
+      const result = await apiRequest("/api/employee-entitlements", { method: "POST", body: JSON.stringify(payload) });
+      setMessage(result.status === "sent" ? "Statement corrected and resent to the employee." : "Dispute reviewed and closed.");
+      await loadRecords();
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : "Could not review the dispute.");
+    } finally { setBusy(""); }
+  }
+
   const invalidRows = previewRows.filter((row) => row.issues.length);
   const batches = useMemo(() => {
     const map = new Map<string, EntitlementRecord[]>();
@@ -236,10 +267,13 @@ export default function EmployeeEntitlementsAdminPage() {
             const sentCount = items.filter((item) => item.status === "sent").length;
             const agreedCount = items.filter((item) => item.status === "agreed").length;
             const disputedCount = items.filter((item) => item.status === "disputed").length;
-            const responseCount = agreedCount + disputedCount;
+            const resolvedCount = items.filter((item) => item.status === "dispute_rejected").length;
+            const responseCount = agreedCount + disputedCount + resolvedCount;
             const batchStatusLabel = draftCount > 0
               ? "Draft"
-              : responseCount === items.length
+              : disputedCount > 0
+              ? "Needs HR Review"
+              : agreedCount + resolvedCount === items.length
               ? "Completed"
               : responseCount > 0
               ? "Partially Responded"
@@ -285,7 +319,7 @@ export default function EmployeeEntitlementsAdminPage() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  {[["Employees", items.length], ["Draft", draftCount], ["Awaiting", sentCount], ["Agreed", agreedCount], ["Disputed", disputedCount]].map(([label, value]) => (
+                  {[["Employees", items.length], ["Draft", draftCount], ["Awaiting", sentCount], ["Agreed", agreedCount], ["Needs Review", disputedCount], ["Closed", resolvedCount]].map(([label, value]) => (
                     <div key={String(label)} className="card-soft py-3"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-xl font-black">{value}</div></div>
                   ))}
                 </div>
@@ -295,7 +329,7 @@ export default function EmployeeEntitlementsAdminPage() {
                     <div className="grid gap-3 md:grid-cols-[1fr_240px]">
                       <label className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={16} /><input className="input-field w-full pl-10" value={batchSearch} onChange={(event) => setBatchSearch(event.target.value)} placeholder="Search employee name, ID, or email" /></label>
                       <select className="input-field" value={batchStatus} onChange={(event) => setBatchStatus(event.target.value)}>
-                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Disputed</option>
+                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Needs HR Review</option><option value="dispute_rejected">Dispute Rejected / Closed</option>
                       </select>
                     </div>
                     <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -310,7 +344,11 @@ export default function EmployeeEntitlementsAdminPage() {
                               <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
                               <td className="p-3"><span className={`badge ${statusBadgeClass(item.status)}`}>{recordStatusLabel(item.status)}</span></td>
                               <td className="p-3 text-xs">{formatDate(item.sentAt)}{item.sentByName && <div className="mt-1 text-slate-500">By {item.sentByName}</div>}</td>
-                              <td className="p-3 text-xs">{item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">{item.employeeResponse.comment}</div>}</> : "No response yet"}</td>
+                              <td className="p-3 text-xs">
+                                {item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">Employee: {item.employeeResponse.comment}</div>}</> : "No response yet"}
+                                {item.hrResolution?.comment && <div className="mt-2 max-w-sm rounded-xl border border-blue-200 bg-blue-50 p-2 font-semibold text-blue-700">HR: {item.hrResolution.comment}</div>}
+                                {item.status === "disputed" && canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-primary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "correct_and_resend")}>Correct & Resend</button><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "reject_dispute")}>Reject Dispute</button></div>}
+                              </td>
                             </tr>
                           ))}
                           {!filteredItems.length && <tr><td className="p-5 text-center text-slate-500" colSpan={7}>No employees match these filters.</td></tr>}
