@@ -2,7 +2,7 @@
 
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Send, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, Search, Send, Upload } from "lucide-react";
 
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { auth } from "@/lib/firebase";
@@ -24,12 +24,38 @@ type EntitlementRecord = {
   batchId: string;
   employeeId: string;
   employeeName: string;
+  employeeEmail?: string;
+  overtime?: { entitlement?: number; operationalPaid?: number; operationalRemaining?: number };
+  perDiem?: { entitlement?: number; operationalPaid?: number; operationalRemaining?: number };
   combined?: { entitlement?: number; paid?: number; remaining?: number };
   status?: string;
   createdAt?: string;
+  createdByName?: string;
+  sentAt?: string;
+  sentByName?: string;
+  respondedAt?: string;
+  employeeResponse?: { action?: string; comment?: string; userName?: string; at?: string };
 };
 
 const money = new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function formatDate(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function recordStatusLabel(status?: string) {
+  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Disputed" } as Record<string, string>)[status || ""] || "Unknown";
+}
+
+function statusBadgeClass(status?: string) {
+  if (status === "agreed") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+  if (status === "disputed") return "border-red-500/25 bg-red-500/10 text-red-700";
+  if (status === "sent") return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+  return "border-slate-500/25 bg-slate-500/10 text-slate-700";
+}
 
 async function apiRequest(path: string, init?: RequestInit) {
   await auth.authStateReady();
@@ -80,6 +106,9 @@ export default function EmployeeEntitlementsAdminPage() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [expandedBatchId, setExpandedBatchId] = useState("");
+  const [batchSearch, setBatchSearch] = useState("");
+  const [batchStatus, setBatchStatus] = useState("all");
   const canImport = isAdmin || can("employee_entitlements", "import");
   const canSend = isAdmin || can("employee_entitlements", "send");
 
@@ -207,7 +236,91 @@ export default function EmployeeEntitlementsAdminPage() {
             const sentCount = items.filter((item) => item.status === "sent").length;
             const agreedCount = items.filter((item) => item.status === "agreed").length;
             const disputedCount = items.filter((item) => item.status === "disputed").length;
-            return <div key={batchId} className="card-modern flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><FileSpreadsheet className="text-[#0F766E]" /><div><div className="font-black">Batch {batchId}</div><div className="mt-1 flex flex-wrap gap-2 text-xs font-bold text-slate-500"><span>{items.length} employees</span>{draftCount > 0 && <span>• {draftCount} draft</span>}{sentCount > 0 && <span>• {sentCount} awaiting</span>}{agreedCount > 0 && <span className="text-emerald-700">• {agreedCount} agreed</span>}{disputedCount > 0 && <span className="text-red-700">• {disputedCount} disputed</span>}</div></div></div>{canSend && draftCount > 0 && <button className="btn-primary gap-2" disabled={Boolean(busy)} onClick={() => sendBatch(batchId)}><Send size={15} />{busy === `send:${batchId}` ? "Sending..." : "Send All"}</button>}</div>;
+            const responseCount = agreedCount + disputedCount;
+            const batchStatusLabel = draftCount > 0
+              ? "Draft"
+              : responseCount === items.length
+              ? "Completed"
+              : responseCount > 0
+              ? "Partially Responded"
+              : "Sent — Awaiting Responses";
+            const isExpanded = expandedBatchId === batchId;
+            const search = batchSearch.trim().toLowerCase();
+            const filteredItems = items.filter((item) => {
+              const matchesSearch = !search || [item.employeeId, item.employeeName, item.employeeEmail]
+                .filter(Boolean).join(" ").toLowerCase().includes(search);
+              return matchesSearch && (batchStatus === "all" || item.status === batchStatus);
+            });
+            const firstItem = items[0];
+            return (
+              <div key={batchId} className="card-modern space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <FileSpreadsheet className="mt-1 text-[#0F766E]" />
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-black">Batch {batchId}</div>
+                        <span className="badge">{batchStatusLabel}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Imported {formatDate(firstItem?.createdAt)} by {firstItem?.createdByName || "HR"}
+                        {firstItem?.sentAt && ` • Sent ${formatDate(firstItem.sentAt)} by ${firstItem.sentByName || "HR"}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {canSend && draftCount > 0 && (
+                      <button className="btn-primary gap-2" disabled={Boolean(busy)} onClick={() => sendBatch(batchId)}>
+                        <Send size={15} />{busy === `send:${batchId}` ? "Sending..." : "Send All"}
+                      </button>
+                    )}
+                    <button type="button" className="btn-secondary gap-2" onClick={() => {
+                      setExpandedBatchId(isExpanded ? "" : batchId);
+                      setBatchSearch(""); setBatchStatus("all");
+                    }}>
+                      {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                      {isExpanded ? "Hide Details" : "View Details"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {[["Employees", items.length], ["Draft", draftCount], ["Awaiting", sentCount], ["Agreed", agreedCount], ["Disputed", disputedCount]].map(([label, value]) => (
+                    <div key={String(label)} className="card-soft py-3"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-xl font-black">{value}</div></div>
+                  ))}
+                </div>
+
+                {isExpanded && (
+                  <div className="space-y-3 border-t border-slate-200 pt-4">
+                    <div className="grid gap-3 md:grid-cols-[1fr_240px]">
+                      <label className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={16} /><input className="input-field w-full pl-10" value={batchSearch} onChange={(event) => setBatchSearch(event.target.value)} placeholder="Search employee name, ID, or email" /></label>
+                      <select className="input-field" value={batchStatus} onChange={(event) => setBatchStatus(event.target.value)}>
+                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Disputed</option>
+                      </select>
+                    </div>
+                    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                      <table className="min-w-[1200px] w-full text-sm">
+                        <thead><tr className="border-b bg-slate-50 text-left text-xs uppercase text-slate-500"><th className="p-3">Employee</th><th className="p-3">Overtime</th><th className="p-3">Per Diem</th><th className="p-3">Combined</th><th className="p-3">Status</th><th className="p-3">Sent</th><th className="p-3">Response</th></tr></thead>
+                        <tbody>
+                          {filteredItems.map((item) => (
+                            <tr key={item.id} className="border-b align-top last:border-0">
+                              <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div></td>
+                              <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div></td>
+                              <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div></td>
+                              <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
+                              <td className="p-3"><span className={`badge ${statusBadgeClass(item.status)}`}>{recordStatusLabel(item.status)}</span></td>
+                              <td className="p-3 text-xs">{formatDate(item.sentAt)}{item.sentByName && <div className="mt-1 text-slate-500">By {item.sentByName}</div>}</td>
+                              <td className="p-3 text-xs">{item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">{item.employeeResponse.comment}</div>}</> : "No response yet"}</td>
+                            </tr>
+                          ))}
+                          {!filteredItems.length && <tr><td className="p-5 text-center text-slate-500" colSpan={7}>No employees match these filters.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
           })}
         </section>
       </div>
