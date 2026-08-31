@@ -2,7 +2,7 @@
 
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Send, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Send, Upload } from "lucide-react";
 
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { auth } from "@/lib/firebase";
@@ -32,7 +32,10 @@ type EntitlementRecord = {
 const money = new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 async function apiRequest(path: string, init?: RequestInit) {
-  const token = await auth.currentUser?.getIdToken();
+  await auth.authStateReady();
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("Your session is not ready. Please refresh the page and sign in again.");
+  const token = await currentUser.getIdToken();
   const response = await fetch(path, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers || {}) },
@@ -40,6 +43,29 @@ async function apiRequest(path: string, init?: RequestInit) {
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || "The request could not be completed.");
   return result;
+}
+
+const sampleHeaders = [
+  "Employee ID", "Employee Name", "OT 2025", "OT 2026", "OT Entitlement",
+  "OT Source Paid", "OT Source Remaining", "OT Payment Marker", "OT Employment",
+  "Per Diem 2025", "Per Diem 2026", "Per Diem Entitlement",
+  "Per Diem Source Remaining", "Per Diem Payment Marker", "Per Diem Employment",
+  "Payment Date", "HR Notes",
+];
+
+function downloadSampleWorkbook() {
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    ["HCAD Employee Entitlements Import Template"],
+    ["Complete one row per employee. Do not rename the Final Import sheet or column headers."],
+    ["Payment Marker: leave blank or use Paid. Employment: Active, Left Company, or Not in source."],
+    [],
+    sampleHeaders,
+  ]);
+  worksheet["!cols"] = sampleHeaders.map((header) => ({ wch: Math.max(16, header.length + 2) }));
+  worksheet["!freeze"] = { xSplit: 0, ySplit: 5 };
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Final Import");
+  XLSX.writeFile(workbook, "HCAD-Employee-Entitlements-Import-Sample.xlsx");
 }
 
 export default function EmployeeEntitlementsAdminPage() {
@@ -134,11 +160,16 @@ export default function EmployeeEntitlementsAdminPage() {
             <h1 className="page-title">Employee Entitlements</h1>
             <p className="page-subtitle">Preview, validate, import, and send Overtime and Per Diem acknowledgments.</p>
           </div>
-          {canImport && (
-            <button className="btn-primary gap-2" onClick={() => inputRef.current?.click()} disabled={Boolean(busy)}>
-              <Upload size={16} /> {busy === "preview" ? "Reading..." : "Upload Final Excel"}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary gap-2" onClick={downloadSampleWorkbook}>
+              <Download size={16} /> Download Sample Excel
             </button>
-          )}
+            {canImport && (
+              <button className="btn-primary gap-2" onClick={() => inputRef.current?.click()} disabled={Boolean(busy)}>
+                <Upload size={16} /> {busy === "preview" ? "Reading..." : "Upload Final Excel"}
+              </button>
+            )}
+          </div>
           <input ref={inputRef} className="hidden" type="file" accept=".xlsx,.xls" onChange={(event) => {
             const file = event.target.files?.[0]; if (file) void selectFile(file); event.target.value = "";
           }} />
