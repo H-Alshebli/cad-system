@@ -613,6 +613,42 @@ export default function CrewProfilesDashboardPage() {
     }
   }
 
+  async function updateEmployeeId(targetUser: CrewUser) {
+    const currentValue = getCrewProfileValues(targetUser).employeeId || "";
+    const employeeId = window.prompt(
+      "Enter the Employee ID. It must not be assigned to another employee:",
+      currentValue
+    );
+    if (employeeId === null) return;
+    if (!employeeId.trim()) {
+      window.alert("Employee ID is required.");
+      return;
+    }
+
+    setReviewingProfile(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/crew-profile/review", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: targetUser.id,
+          action: "update_employee_id",
+          employeeId: employeeId.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update the Employee ID.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not update the Employee ID.");
+    } finally {
+      setReviewingProfile(false);
+    }
+  }
+
   function exportToExcel() {
     const exportRows = filteredRows.map((row) => {
       const attachments = row.user.crewProfileAttachments || {};
@@ -1033,6 +1069,14 @@ export default function CrewProfilesDashboardPage() {
 
                   {canReviewAttachments && (
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={reviewingProfile}
+                        onClick={() => updateEmployeeId(selectedRow.user)}
+                        className="btn-secondary"
+                      >
+                        Edit Employee ID
+                      </button>
                       <button
                         type="button"
                         disabled={reviewingProfile}

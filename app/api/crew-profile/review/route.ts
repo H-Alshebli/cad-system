@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const userId = String(body.userId || "").trim();
   const action = String(body.action || "").trim();
   const notes = String(body.notes || "").trim();
-  if (!userId || !new Set(["verify", "request_changes", "reopen", "reject_update", "update_contract"]).has(action)) {
+  if (!userId || !new Set(["verify", "request_changes", "reopen", "reject_update", "update_contract", "update_employee_id"]).has(action)) {
     return NextResponse.json({ error: "Invalid review action." }, { status: 400 });
   }
   if (action === "request_changes" && !notes) {
@@ -57,6 +57,63 @@ export async function POST(request: NextRequest) {
   const userSnapshot = await userRef.get();
   if (!userSnapshot.exists) {
     return NextResponse.json({ error: "Crew profile not found." }, { status: 404 });
+  }
+
+  if (action === "update_employee_id") {
+    const employeeId = String(body.employeeId || "").trim();
+    if (!employeeId) {
+      return NextResponse.json({ error: "Employee ID is required." }, { status: 400 });
+    }
+    if (employeeId.length > 40 || /[\u0000-\u001F\u007F]/.test(employeeId)) {
+      return NextResponse.json({ error: "Invalid Employee ID." }, { status: 400 });
+    }
+
+    const [topLevelMatches, profileMatches] = await Promise.all([
+      adminDb.collection("users").where("employeeId", "==", employeeId).limit(2).get(),
+      adminDb
+        .collection("users")
+        .where("crewProfile.employeeId", "==", employeeId)
+        .limit(2)
+        .get(),
+    ]);
+    const conflictingUser = [...topLevelMatches.docs, ...profileMatches.docs].find(
+      (document) => document.id !== userId
+    );
+    if (conflictingUser) {
+      return NextResponse.json(
+        { error: "This Employee ID is already assigned to another employee." },
+        { status: 409 }
+      );
+    }
+
+    const targetUser = userSnapshot.data() || {};
+    const currentProfile = targetUser.crewProfile || {};
+    const previousEmployeeId = String(
+      currentProfile.employeeId || targetUser.employeeId || ""
+    ).trim();
+    const reviewerName =
+      authenticated.reviewer.name ||
+      authenticated.reviewer.displayName ||
+      authenticated.token.email ||
+      "HR Reviewer";
+
+    await userRef.update({
+      employeeId,
+      crewProfile: { ...currentProfile, employeeId },
+      crewProfileUpdatedAt: FieldValue.serverTimestamp(),
+      profileUpdatedAt: FieldValue.serverTimestamp(),
+      crewProfileReviewHistory: FieldValue.arrayUnion({
+        action,
+        actorId: authenticated.token.uid,
+        actorName: reviewerName,
+        actorEmail: authenticated.token.email || "",
+        previousEmployeeId,
+        employeeId,
+        at: new Date().toISOString(),
+      }),
+    });
+
+    return NextResponse.json({ employeeId });
   }
 
 
