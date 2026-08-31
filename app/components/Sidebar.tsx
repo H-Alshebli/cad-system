@@ -18,6 +18,7 @@ import {
   Truck,
   UserRound,
   Users,
+  WalletCards,
   X,
 } from "lucide-react";
 
@@ -200,6 +201,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       label: "Crew Profiles",
       icon: <UserRound size={18} />,
       visible: isAdmin || can(permissions, "crew_profile", "view_all"),
+    },
+    {
+      href: "/admin/employee-entitlements",
+      label: "Employee Entitlements",
+      icon: <WalletCards size={18} />,
+      visible: isAdmin || can(permissions, "employee_entitlements", "view_all"),
     },
     {
       href: "/admin/roles",

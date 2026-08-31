@@ -74,6 +74,15 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
 
   crew_profile: ["view", "edit_own", "view_all", "edit_all"],
 
+  employee_entitlements: [
+    "view_own",
+    "view_all",
+    "import",
+    "send",
+    "respond",
+    "export",
+  ],
+
   readiness_checklists: [
     "view",
     "view_all",
@@ -150,6 +159,7 @@ export const MODULE_LABELS: Record<string, string> = {
   missions: "My Missions",
   missions_plus: "My Missions+",
   crew_profile: "Crew Profile",
+  employee_entitlements: "Employee Entitlements",
   readiness_checklists: "Readiness Checklists",
   checklist_review_global: "Checklist Review – All Projects",
   epcr: "ePCR",
@@ -206,6 +216,9 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   crew_profile:
     "Crew member personal, employment, license, contact, and bank profile data.",
+
+  employee_entitlements:
+    "Overtime and per diem imports, HR distribution, employee acknowledgment, disputes, and audit history.",
 
   readiness_checklists:
     "Project EMS readiness checks linked to missions, units, shifts, inspectors, and supervisor review.",
@@ -329,6 +342,7 @@ export const PERMISSION_GROUPS = [
       "missions",
       "missions_plus",
       "crew_profile",
+      "employee_entitlements",
       "readiness_checklists",
       "checklist_review_global",
       "epcr",
@@ -360,6 +374,18 @@ export function normalizePermissions(permissions: PermissionsMap = {}) {
       if (moduleKey === "it_support" && action === "view") {
         // IT support is available to employee roles by default. Saving an
         // explicit false value on a role is the opt-out control.
+        normalized[moduleKey][action] =
+          permissions?.[moduleKey]?.[action] !== false;
+        return;
+      }
+
+      if (
+        moduleKey === "employee_entitlements" &&
+        (action === "view_own" || action === "respond")
+      ) {
+        // Employee self-service access is enabled by default and can be
+        // explicitly disabled on a role. Server APIs still restrict users to
+        // their own records and exclude client accounts.
         normalized[moduleKey][action] =
           permissions?.[moduleKey]?.[action] !== false;
         return;

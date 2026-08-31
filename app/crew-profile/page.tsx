@@ -42,6 +42,7 @@ import {
   sanitizeSaudiIban,
 } from "@/lib/crewProfile";
 import { getProjectDisplayName } from "@/lib/displayLabels";
+import EmployeeEntitlementsPanel from "@/app/components/EmployeeEntitlementsPanel";
 import {
   CREW_ORGANIZATION_ROLES,
   SAUDI_BANKS,
@@ -535,6 +536,8 @@ export default function CrewProfilePage() {
           </p>
         </div>
       )}
+
+      <EmployeeEntitlementsPanel />
 
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-4">
