@@ -16,8 +16,12 @@ type PreviewRow = {
   accountEmail: string;
   combined: { entitlement: number; paid: number; remaining: number };
   employmentStatus: string;
+  monthlyOvertime?: MonthlyEntry[];
+  monthlyPerDiem?: MonthlyEntry[];
   issues: string[];
 };
+
+type MonthlyEntry = { month: string; quantity: number };
 
 type EntitlementRecord = {
   id: string;
@@ -36,6 +40,8 @@ type EntitlementRecord = {
   respondedAt?: string;
   employeeResponse?: { action?: string; comment?: string; userName?: string; at?: string };
   hrResolution?: { action?: string; comment?: string; actorName?: string; at?: string };
+  monthlyOvertime?: MonthlyEntry[];
+  monthlyPerDiem?: MonthlyEntry[];
 };
 
 const money = new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -80,19 +86,20 @@ const sampleHeaders = [
   "Per Diem Source Remaining", "Per Diem Payment Marker", "Per Diem Employment",
   "Payment Date", "HR Notes",
 ];
+const monthlyHeaders = ["Employee ID", "Employee Name", "Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+
+function templateSheet(title: string, instructions: string, headers: string[]) {
+  const worksheet = XLSX.utils.aoa_to_sheet([[title], [instructions], ["Use Employee ID to link this sheet to Final Import. Enter zero or leave blank when there is no activity."], [], headers]);
+  worksheet["!cols"] = headers.map((header) => ({ wch: Math.max(15, header.length + 2) }));
+  worksheet["!freeze"] = { xSplit: 0, ySplit: 5 };
+  return worksheet;
+}
 
 function downloadSampleWorkbook() {
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    ["HCAD Employee Entitlements Import Template"],
-    ["Complete one row per employee. Do not rename the Final Import sheet or column headers."],
-    ["Payment Marker: leave blank or use Paid. Employment: Active, Left Company, or Not in source."],
-    [],
-    sampleHeaders,
-  ]);
-  worksheet["!cols"] = sampleHeaders.map((header) => ({ wch: Math.max(16, header.length + 2) }));
-  worksheet["!freeze"] = { xSplit: 0, ySplit: 5 };
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Final Import");
+  XLSX.utils.book_append_sheet(workbook, templateSheet("HCAD Employee Entitlements Import Template", "Complete one row per employee. Payment Marker: blank or Paid. Employment: Active, Left Company, or Not in source.", sampleHeaders), "Final Import");
+  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Overtime Hours", "Enter the employee's overtime hours for each month. Do not enter an hourly rate.", monthlyHeaders), "Monthly OT Hours");
+  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Per Diem Days", "Enter the employee's Per Diem days for each month. Do not enter a daily rate.", monthlyHeaders), "Monthly Per Diem");
   XLSX.writeFile(workbook, "HCAD-Employee-Entitlements-Import-Sample.xlsx");
 }
 
@@ -102,8 +109,11 @@ export default function EmployeeEntitlementsAdminPage() {
   const { can, isAdmin } = usePermissions(user?.role);
   const [fileName, setFileName] = useState("");
   const [rawRows, setRawRows] = useState<Record<string, any>[]>([]);
+  const [monthlyOtRows, setMonthlyOtRows] = useState<Record<string, any>[]>([]);
+  const [monthlyPerDiemRows, setMonthlyPerDiemRows] = useState<Record<string, any>[]>([]);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [summary, setSummary] = useState<any>(null);
+  const [workbookIssues, setWorkbookIssues] = useState<string[]>([]);
   const [records, setRecords] = useState<EntitlementRecord[]>([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -113,6 +123,27 @@ export default function EmployeeEntitlementsAdminPage() {
   const [batchStatus, setBatchStatus] = useState("all");
   const canImport = isAdmin || can("employee_entitlements", "import");
   const canSend = isAdmin || can("employee_entitlements", "send");
+  const canExport = isAdmin || can("employee_entitlements", "export");
+
+  function exportBatch(batchId: string, items: EntitlementRecord[]) {
+    const workbook = XLSX.utils.book_new();
+    const summaryRows = items.map((item) => ({
+      "Employee ID": item.employeeId, "Employee Name": item.employeeName, Email: item.employeeEmail || "",
+      "OT Entitlement": item.overtime?.entitlement || 0, "OT Paid": item.overtime?.operationalPaid || 0, "OT Remaining": item.overtime?.operationalRemaining || 0,
+      "Per Diem Entitlement": item.perDiem?.entitlement || 0, "Per Diem Paid": item.perDiem?.operationalPaid || 0, "Per Diem Remaining": item.perDiem?.operationalRemaining || 0,
+      "Combined Entitlement": item.combined?.entitlement || 0, Paid: item.combined?.paid || 0, Remaining: item.combined?.remaining || 0,
+      Status: recordStatusLabel(item.status), Sent: item.sentAt || "", Responded: item.respondedAt || "",
+      "Employee Response": item.employeeResponse?.comment || "", "HR Response": item.hrResolution?.comment || "",
+    }));
+    const monthlyRows = (field: "monthlyOvertime" | "monthlyPerDiem") => items.map((item) => {
+      const quantities = Object.fromEntries((item[field] || []).map((entry) => [entry.month, entry.quantity]));
+      return { "Employee ID": item.employeeId, "Employee Name": item.employeeName, ...Object.fromEntries(monthlyHeaders.slice(2).map((month) => [month, quantities[month] || 0])) };
+    });
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Entitlements Summary");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyOvertime")), "Monthly OT Hours");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyPerDiem")), "Monthly Per Diem");
+    XLSX.writeFile(workbook, `HCAD-Employee-Entitlements-${batchId}.xlsx`);
+  }
 
   async function loadRecords() {
     try {
@@ -128,19 +159,27 @@ export default function EmployeeEntitlementsAdminPage() {
   }, [user?.uid]);
 
   async function selectFile(file: File) {
-    setBusy("preview"); setError(""); setMessage(""); setPreviewRows([]); setSummary(null);
+    setBusy("preview"); setError(""); setMessage(""); setPreviewRows([]); setSummary(null); setWorkbookIssues([]);
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const worksheet = workbook.Sheets["Final Import"];
+      const otWorksheet = workbook.Sheets["Monthly OT Hours"];
+      const perDiemWorksheet = workbook.Sheets["Monthly Per Diem"];
       if (!worksheet) throw new Error('The workbook must contain a sheet named "Final Import".');
+      if (!otWorksheet) throw new Error('The workbook must contain a sheet named "Monthly OT Hours".');
+      if (!perDiemWorksheet) throw new Error('The workbook must contain a sheet named "Monthly Per Diem".');
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { range: 4, defval: "" });
+      const otRows = XLSX.utils.sheet_to_json<Record<string, any>>(otWorksheet, { range: 4, defval: "" });
+      const perDiemRows = XLSX.utils.sheet_to_json<Record<string, any>>(perDiemWorksheet, { range: 4, defval: "" });
       if (!rows.length || !("Employee ID" in rows[0])) throw new Error("The Final Import header row is missing or invalid.");
-      setFileName(file.name); setRawRows(rows);
+      if (otRows.length && !("Employee ID" in otRows[0])) throw new Error("The Monthly OT Hours header row is invalid.");
+      if (perDiemRows.length && !("Employee ID" in perDiemRows[0])) throw new Error("The Monthly Per Diem header row is invalid.");
+      setFileName(file.name); setRawRows(rows); setMonthlyOtRows(otRows); setMonthlyPerDiemRows(perDiemRows);
       const result = await apiRequest("/api/employee-entitlements/import", {
         method: "POST",
-        body: JSON.stringify({ action: "preview", fileName: file.name, rows }),
+        body: JSON.stringify({ action: "preview", fileName: file.name, rows, monthlyOtRows: otRows, monthlyPerDiemRows: perDiemRows }),
       });
-      setPreviewRows(result.rows || []); setSummary(result.summary || null);
+      setPreviewRows(result.rows || []); setSummary(result.summary || null); setWorkbookIssues(result.workbookIssues || []);
       setMessage("Preview completed. No data has been saved.");
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : "Could not read the workbook.");
@@ -152,7 +191,7 @@ export default function EmployeeEntitlementsAdminPage() {
     try {
       const result = await apiRequest("/api/employee-entitlements/import", {
         method: "POST",
-        body: JSON.stringify({ action: "import", fileName, rows: rawRows }),
+        body: JSON.stringify({ action: "import", fileName, rows: rawRows, monthlyOtRows, monthlyPerDiemRows }),
       });
       setMessage(`Draft batch imported successfully. Batch: ${result.batchId}`);
       await loadRecords();
@@ -246,14 +285,15 @@ export default function EmployeeEntitlementsAdminPage() {
                 ["Entitlement", money.format(summary.entitlement)], ["Paid", money.format(summary.paid)], ["Remaining", money.format(summary.remaining)],
               ].map(([label, value]) => <div key={String(label)} className="card-soft"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-xl font-black">{value}</div></div>)}
             </div>
+            {workbookIssues.length > 0 && <div className="notice-danger"><div className="mb-2 font-black">Workbook structure issues</div><ul className="list-disc space-y-1 pl-5">{workbookIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#86A7B2]/30 bg-white p-4">
               <div><div className="font-black">{fileName}</div><div className="text-sm text-slate-500">Preview only — nothing is saved until Import Draft.</div></div>
-              {canImport && <button className="btn-primary" disabled={Boolean(busy) || invalidRows.length > 0} onClick={importDraft}>{busy === "import" ? "Importing..." : "Import Draft"}</button>}
+              {canImport && <button className="btn-primary" disabled={Boolean(busy) || invalidRows.length > 0 || workbookIssues.length > 0} onClick={importDraft}>{busy === "import" ? "Importing..." : "Import Draft"}</button>}
             </div>
             <div className="card-modern overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead><tr className="border-b text-left text-xs uppercase text-slate-500"><th className="p-3">Employee</th><th className="p-3">HCAD Match</th><th className="p-3">Entitlement</th><th className="p-3">Remaining</th><th className="p-3">Validation</th></tr></thead>
-                <tbody>{previewRows.map((row) => <tr key={row.employeeId} className="border-b last:border-0"><td className="p-3"><div className="font-black">{row.employeeId} — {row.employeeName}</div><div className="text-xs text-slate-500">{row.employmentStatus}</div></td><td className="p-3">{row.userId ? row.accountEmail || row.userId : "Not matched"}</td><td className="p-3 font-bold">{money.format(row.combined.entitlement)}</td><td className="p-3 font-bold">{money.format(row.combined.remaining)}</td><td className="p-3">{row.issues.length ? <span className="inline-flex gap-1 text-red-700"><AlertTriangle size={15} />{row.issues.join("; ")}</span> : <span className="inline-flex gap-1 text-emerald-700"><CheckCircle2 size={15} />PASS</span>}</td></tr>)}</tbody>
+                <tbody>{previewRows.map((row) => <tr key={row.employeeId} className="border-b last:border-0"><td className="p-3"><div className="font-black">{row.employeeId} — {row.employeeName}</div><div className="text-xs text-slate-500">{row.employmentStatus} • {row.monthlyOvertime?.length || 0} OT months • {row.monthlyPerDiem?.length || 0} Per Diem months</div></td><td className="p-3">{row.userId ? row.accountEmail || row.userId : "Not matched"}</td><td className="p-3 font-bold">{money.format(row.combined.entitlement)}</td><td className="p-3 font-bold">{money.format(row.combined.remaining)}</td><td className="p-3">{row.issues.length ? <span className="inline-flex gap-1 text-red-700"><AlertTriangle size={15} />{row.issues.join("; ")}</span> : <span className="inline-flex gap-1 text-emerald-700"><CheckCircle2 size={15} />PASS</span>}</td></tr>)}</tbody>
               </table>
             </div>
           </section>
@@ -303,6 +343,7 @@ export default function EmployeeEntitlementsAdminPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {canExport && <button type="button" className="btn-secondary gap-2" onClick={() => exportBatch(batchId, items)}><Download size={15} />Export Excel</button>}
                     {canSend && draftCount > 0 && (
                       <button className="btn-primary gap-2" disabled={Boolean(busy)} onClick={() => sendBatch(batchId)}>
                         <Send size={15} />{busy === `send:${batchId}` ? "Sending..." : "Send All"}
@@ -339,8 +380,8 @@ export default function EmployeeEntitlementsAdminPage() {
                           {filteredItems.map((item) => (
                             <tr key={item.id} className="border-b align-top last:border-0">
                               <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div></td>
-                              <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div></td>
-                              <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div></td>
+                              <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div>{Boolean(item.monthlyOvertime?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyOvertime?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyOvertime?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} hrs</b></div>)}</div></details>}</td>
+                              <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div>{Boolean(item.monthlyPerDiem?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyPerDiem?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyPerDiem?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} days</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
                               <td className="p-3"><span className={`badge ${statusBadgeClass(item.status)}`}>{recordStatusLabel(item.status)}</span></td>
                               <td className="p-3 text-xs">{formatDate(item.sentAt)}{item.sentByName && <div className="mt-1 text-slate-500">By {item.sentByName}</div>}</td>

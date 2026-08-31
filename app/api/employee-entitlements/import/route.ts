@@ -22,13 +22,45 @@ async function userIndex() {
   return index;
 }
 
-async function prepareRows(rows: EntitlementImportRow[]) {
+const monthColumns = ["Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+
+function monthlyIndex(rows: EntitlementImportRow[], kind: string) {
+  const index = new Map<string, { entries: Array<{ month: string; quantity: number }>; issues: string[] }>();
+  rows.forEach((row) => {
+    const employeeId = String(row["Employee ID"] || "").trim();
+    if (!employeeId) return;
+    const issues: string[] = [];
+    if (index.has(employeeId)) issues.push(`Employee ID appears more than once in ${kind}`);
+    const entries = monthColumns.flatMap((month) => {
+      const raw = row[month];
+      if (raw === "" || raw === null || raw === undefined || raw === "-") return [];
+      const quantity = Number(String(raw).replace(/,/g, ""));
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        issues.push(`Invalid ${kind} value for ${month}`);
+        return [];
+      }
+      return quantity > 0 ? [{ month, quantity }] : [];
+    });
+    index.set(employeeId, { entries, issues });
+  });
+  return index;
+}
+
+async function prepareRows(rows: EntitlementImportRow[], monthlyOtRows: EntitlementImportRow[], monthlyPerDiemRows: EntitlementImportRow[]) {
   const index = await userIndex();
+  const overtimeIndex = monthlyIndex(monthlyOtRows, "Monthly OT Hours");
+  const perDiemIndex = monthlyIndex(monthlyPerDiemRows, "Monthly Per Diem");
   const seenEmployeeIds = new Set<string>();
   return rows.map((input) => {
     const normalized = normalizeEntitlementRow(input);
     const matches = index.get(normalized.employeeId) || [];
     const issues = [...normalized.issues];
+    const monthlyOvertime = overtimeIndex.get(normalized.employeeId)?.entries || [];
+    const monthlyPerDiem = perDiemIndex.get(normalized.employeeId)?.entries || [];
+    issues.push(...(overtimeIndex.get(normalized.employeeId)?.issues || []));
+    issues.push(...(perDiemIndex.get(normalized.employeeId)?.issues || []));
+    if (normalized.overtime.entitlement > 0 && !monthlyOvertime.length) issues.push("Monthly OT Hours details are missing");
+    if (normalized.perDiem.entitlement > 0 && !monthlyPerDiem.length) issues.push("Monthly Per Diem details are missing");
     if (!matches.length) issues.push("Employee ID was not found in HCAD");
     if (matches.length > 1) issues.push("Employee ID is assigned to multiple HCAD users");
     if (seenEmployeeIds.has(normalized.employeeId)) issues.push("Employee ID appears more than once in the workbook");
@@ -39,6 +71,8 @@ async function prepareRows(rows: EntitlementImportRow[]) {
       userId: match?.id || "",
       accountName: String(match?.data.name || match?.data.displayName || ""),
       accountEmail: String(match?.data.email || ""),
+      monthlyOvertime,
+      monthlyPerDiem,
       issues,
     };
   });
@@ -51,6 +85,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const action = String(body.action || "preview");
   const rows = Array.isArray(body.rows) ? body.rows : [];
+  const monthlyOtRows = Array.isArray(body.monthlyOtRows) ? body.monthlyOtRows : [];
+  const monthlyPerDiemRows = Array.isArray(body.monthlyPerDiemRows) ? body.monthlyPerDiemRows : [];
   if (!rows.length || rows.length > 200) {
     return NextResponse.json({ error: "The import must contain between 1 and 200 employees." }, { status: 400 });
   }
@@ -58,26 +94,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "HR entitlement import permission is required." }, { status: 403 });
   }
 
-  const prepared = await prepareRows(rows);
+  const prepared = await prepareRows(rows, monthlyOtRows, monthlyPerDiemRows);
   const invalid = prepared.filter((row) => row.issues.length);
+  const finalEmployeeIds = new Set(rows.map((row: EntitlementImportRow) => String(row["Employee ID"] || "").trim()).filter(Boolean));
+  const workbookIssues = [
+    ...monthlyOtRows.map((row: EntitlementImportRow) => String(row["Employee ID"] || "").trim()).filter((id: string) => id && !finalEmployeeIds.has(id)).map((id: string) => `Employee ID ${id} exists in Monthly OT Hours but not in Final Import`),
+    ...monthlyPerDiemRows.map((row: EntitlementImportRow) => String(row["Employee ID"] || "").trim()).filter((id: string) => id && !finalEmployeeIds.has(id)).map((id: string) => `Employee ID ${id} exists in Monthly Per Diem but not in Final Import`),
+  ];
   const summary = {
     total: prepared.length,
     matched: prepared.filter((row) => row.userId).length,
-    invalid: invalid.length,
+    invalid: invalid.length + workbookIssues.length,
     entitlement: prepared.reduce((sum, row) => sum + row.combined.entitlement, 0),
     paid: prepared.reduce((sum, row) => sum + row.combined.paid, 0),
     remaining: prepared.reduce((sum, row) => sum + row.combined.remaining, 0),
   };
 
   if (action === "preview") {
-    return NextResponse.json({ rows: prepared, summary });
+    return NextResponse.json({ rows: prepared, summary, workbookIssues });
   }
   if (action !== "import") {
     return NextResponse.json({ error: "Invalid import action." }, { status: 400 });
   }
-  if (invalid.length) {
+  if (invalid.length || workbookIssues.length) {
     return NextResponse.json(
-      { error: "Resolve every preview error before importing.", rows: prepared, summary },
+      { error: "Resolve every preview error before importing.", rows: prepared, summary, workbookIssues },
       { status: 409 }
     );
   }
@@ -113,6 +154,8 @@ export async function POST(request: NextRequest) {
       period: row.period,
       overtime: row.overtime,
       perDiem: row.perDiem,
+      monthlyOvertime: row.monthlyOvertime,
+      monthlyPerDiem: row.monthlyPerDiem,
       combined: row.combined,
       employmentStatus: row.employmentStatus,
       paymentDate: row.paymentDate || "",
