@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, ClipboardCheck, LayoutDashboard } from "lucide-react";
+import { BarChart3, ClipboardCheck, LayoutDashboard, Sparkles } from "lucide-react";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 
@@ -25,6 +25,12 @@ export default function DashboardsLayout({ children }: { children: React.ReactNo
       visible: isAdmin || can("dashboards", "epcr"),
     },
     {
+      href: "/dashboards/cases-plus",
+      label: "Cases Dashboard Plus",
+      icon: <Sparkles size={17} />,
+      visible: isAdmin || can("dashboards", "epcr"),
+    },
+    {
       href: "/dashboards/checklists",
       label: "Checklist Review",
       icon: <ClipboardCheck size={17} />,
@@ -38,23 +44,21 @@ export default function DashboardsLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen bg-[#f5f7f8]">
-      <div className="border-b border-[#86A7B2]/25 bg-white px-6 pt-5">
-        <div className="mb-4">
-          <h1 className="text-2xl font-black text-[#274C5A]">Dashboards</h1>
-          <p className="mt-1 text-sm font-medium text-[#607482]">
-            Operational monitoring and clinical analytics in one workspace.
-          </p>
-        </div>
-        <nav className="flex flex-wrap gap-2" aria-label="Dashboard navigation">
+      <div className="border-b border-[#86A7B2]/25 bg-white px-4 py-2 md:px-6">
+        <div className="flex min-h-12 items-center gap-3 rounded-xl border border-[#86A7B2]/20 bg-white px-2">
+          <div className="hidden shrink-0 px-2 text-sm font-black text-[#274C5A] md:block">
+            Dashboards
+          </div>
+        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="Dashboard navigation">
           {tabs.map((tab) => {
             const active = pathname === tab.href;
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`inline-flex items-center gap-2 rounded-t-xl border px-4 py-2.5 text-sm font-bold transition ${
+                className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition ${
                   active
-                    ? "border-[#86A7B2]/35 border-b-white bg-white text-[#274C5A]"
+                    ? "border-[#274C5A] bg-[#274C5A] text-white shadow-sm"
                     : "border-transparent text-[#607482] hover:bg-[#f5f9fa] hover:text-[#274C5A]"
                 }`}
               >
@@ -64,6 +68,7 @@ export default function DashboardsLayout({ children }: { children: React.ReactNo
             );
           })}
         </nav>
+        </div>
       </div>
       {children}
     </div>

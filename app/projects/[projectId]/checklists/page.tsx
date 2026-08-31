@@ -148,16 +148,13 @@ export default function ProjectChecklistsPage({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl bg-[#274C5A] p-5 text-white shadow-sm shadow-[#274C5A]/20">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex min-h-[74px] items-center rounded-2xl bg-[#274C5A] px-5 py-4 text-white shadow-sm shadow-[#274C5A]/20">
+      <div className="flex w-full flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="mb-2 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide">
-            HCAD Readiness
-          </div>
-          <h2 className="text-xl font-black text-white">
+          <h2 className="text-2xl font-black text-white">
             {allProjects ? "Checklist Review" : "Readiness Review Dashboard"}
           </h2>
-          <p className="mt-1 text-sm font-medium text-white/78">
+          <p className="mt-1 text-xs font-medium text-white/78">
             {allProjects
               ? "EMS readiness checks across all projects by project, unit, shift, mission, and inspector."
               : "EMS readiness checks for this project by unit, shift, mission, and inspector."}
