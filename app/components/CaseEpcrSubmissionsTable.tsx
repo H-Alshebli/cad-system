@@ -1,7 +1,8 @@
 // /components/CaseEpcrSubmissionsTable.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   collection,
   onSnapshot,
@@ -10,8 +11,39 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import Link from "next/link";
 import { getCaseDisplayCode, getEpcrDisplayCode } from "@/lib/displayLabels";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
+
+const HISTORICAL_IMPORT_HEADERS = [
+  "Submission ID", "Project ID", "Project Name", "Report Date", "Patient First Name",
+  "Patient Last Name", "Patient ID / Iqama", "Age", "Gender", "Phone", "Nationality",
+  "Chief Complaint", "Signs and Symptoms", "Triage Level", "Health Classification",
+  "Narrative", "Primary Assessment", "Secondary Assessment", "Impression", "Medications",
+  "Procedures", "Oxygen Therapy", "Pickup Location", "Destination", "Crew Names",
+  "Ambulance / Unit", "Original PDF URL", "Legacy Notes",
+];
+
+type ImportPreviewRow = { rowNumber: number; submissionId: string; patientName: string; project: string; reportDate: string; status: "ready" | "needs_review" | "duplicate"; warnings: string[] };
+
+function downloadHistoricalImportSample() {
+  const workbook = XLSX.utils.book_new();
+  const instructions = XLSX.utils.aoa_to_sheet([
+    ["HCAD Historical ePCR Import"],
+    ["Fill one row per Jotform submission. Do not rename the Historical ePCR Import sheet or headers."],
+    ["Missing fields will not block upload. They will be imported as Draft / Needs Review."],
+    ["Separate list values such as symptoms, medications, procedures, and crew names with semicolons."],
+    ["Use Submission ID whenever available to prevent duplicate reports."],
+  ]);
+  const data = XLSX.utils.aoa_to_sheet([HISTORICAL_IMPORT_HEADERS]);
+  data["!cols"] = HISTORICAL_IMPORT_HEADERS.map((header) => ({ wch: Math.min(30, Math.max(16, header.length + 2)) }));
+  data["!freeze"] = { xSplit: 0, ySplit: 1 };
+  XLSX.utils.book_append_sheet(workbook, instructions, "Instructions");
+  XLSX.utils.book_append_sheet(workbook, data, "Historical ePCR Import");
+  XLSX.writeFile(workbook, "HCAD-Historical-ePCR-Import-Sample.xlsx");
+}
 
 type FirestoreDate = Timestamp | Date | string | null | undefined;
 
@@ -382,6 +414,9 @@ export default function CaseEpcrSubmissionsTable({
 }: {
   projectId?: string;
 }) {
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useCurrentUser();
+  const { can, isAdmin } = usePermissions(user?.role);
   const [cases, setCases] = useState<CaseDoc[]>([]);
   const [epcrs, setEpcrs] = useState<EpcrDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -389,6 +424,55 @@ export default function CaseEpcrSubmissionsTable({
   const [search, setSearch] = useState("");
   const [caseStatusFilter, setCaseStatusFilter] = useState("all");
   const [epcrStatusFilter, setEpcrStatusFilter] = useState("all");
+  const [importFileName, setImportFileName] = useState("");
+  const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
+  const [importPreview, setImportPreview] = useState<ImportPreviewRow[]>([]);
+  const [importSummary, setImportSummary] = useState<Record<string, number> | null>(null);
+  const [importBusy, setImportBusy] = useState("");
+  const [importError, setImportError] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const canImport = isAdmin || can("submissions", "import");
+
+  async function historicalImportRequest(action: "preview" | "import", rows: Record<string, unknown>[], fileName = importFileName) {
+    await auth.authStateReady();
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error("Authentication is required.");
+    const response = await fetch("/api/submissions/historical-import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action, fileName, rows }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Historical import could not be completed.");
+    return result;
+  }
+
+  async function previewHistoricalFile(file: File) {
+    setImportBusy("preview"); setImportError(""); setImportMessage(""); setImportPreview([]); setImportSummary(null);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = workbook.Sheets["Historical ePCR Import"] || workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) throw new Error("The workbook does not contain a readable sheet.");
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      if (!rows.length) throw new Error("The selected import sheet has no data rows.");
+      setImportFileName(file.name); setImportRows(rows);
+      const result = await historicalImportRequest("preview", rows, file.name);
+      setImportPreview(result.preview || []); setImportSummary(result.summary || null);
+      setImportMessage("Preview completed. No database records have been created yet.");
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Could not read this workbook."); }
+    finally { setImportBusy(""); }
+  }
+
+  async function applyHistoricalImport() {
+    if (!importRows.length || !window.confirm("Import all non-duplicate rows as historical Draft ePCR records? Rows with warnings will be marked Needs Review.")) return;
+    setImportBusy("import"); setImportError(""); setImportMessage("");
+    try {
+      const result = await historicalImportRequest("import", importRows);
+      setImportSummary(result.summary || importSummary);
+      setImportMessage(`Import completed. ${result.summary?.imported || 0} record(s) imported; ${result.summary?.skippedDuplicates || 0} duplicate(s) skipped.`);
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Could not import historical records."); }
+    finally { setImportBusy(""); }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -558,6 +642,32 @@ export default function CaseEpcrSubmissionsTable({
           <p className="mt-2 text-2xl font-black text-[#274C5A]">{totalClosed}</p>
         </div>
       </div>
+
+      {canImport && (
+        <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-lg font-black">Historical ePCR Import</h2><p className="mt-1 text-sm text-[#7F7F7F]">Upload Jotform history for comparison. Missing fields do not block upload; they are marked for review.</p></div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={downloadHistoricalImportSample} className="rounded-xl border border-[#86A7B2]/30 px-4 py-2 text-sm font-black">Download Import Sample</button>
+              <button type="button" disabled={Boolean(importBusy)} onClick={() => importInputRef.current?.click()} className="rounded-xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white disabled:opacity-50">{importBusy === "preview" ? "Reading..." : "Import Excel"}</button>
+              <input ref={importInputRef} className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void previewHistoricalFile(file); event.target.value = ""; }} />
+            </div>
+          </div>
+          {importError && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{importError}</div>}
+          {importMessage && <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{importMessage}</div>}
+          {importSummary && (
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[["Rows", importSummary.total || 0], ["Ready", importSummary.ready || 0], ["Needs Review", importSummary.needsReview || 0], ["Duplicates", importSummary.duplicates || 0]].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-3"><div className="text-xs font-bold text-[#7F7F7F]">{label}</div><div className="mt-1 text-xl font-black">{value}</div></div>)}
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-[#86A7B2]/25">
+                <table className="min-w-[1000px] w-full text-sm"><thead><tr className="border-b bg-[#f8fbfc] text-left text-xs uppercase text-[#7F7F7F]"><th className="p-3">Row</th><th className="p-3">Submission</th><th className="p-3">Patient</th><th className="p-3">Project</th><th className="p-3">Date</th><th className="p-3">Status & Findings</th></tr></thead><tbody>{importPreview.map((row) => <tr key={`${row.rowNumber}-${row.submissionId}`} className="border-b align-top last:border-0"><td className="p-3 font-bold">{row.rowNumber}</td><td className="p-3">{row.submissionId || "Generated on import"}</td><td className="p-3">{row.patientName || "—"}</td><td className="p-3">{row.project || "—"}</td><td className="p-3">{row.reportDate ? new Date(row.reportDate).toLocaleDateString("en-GB") : "—"}</td><td className="p-3"><span className={statusBadge(row.status)}>{row.status.replaceAll("_", " ")}</span>{row.warnings.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">{row.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}</td></tr>)}</tbody></table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-xs text-[#7F7F7F]">Warnings remain visible and are imported as Draft / Needs Review. Duplicate submissions are reported and skipped.</div><button type="button" disabled={Boolean(importBusy)} onClick={applyHistoricalImport} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{importBusy === "import" ? "Importing..." : "Import Draft Records"}</button></div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
         <div className="grid gap-3 xl:grid-cols-[minmax(320px,1fr)_220px_220px_180px]">
