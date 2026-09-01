@@ -112,7 +112,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "view_sensitive",
   ],
 
-  submissions: ["view", "export"],
+  submissions: ["view", "export", "import"],
 
   // Controls visibility of the external Lazem IT support desk link.
   it_support: ["view"],
