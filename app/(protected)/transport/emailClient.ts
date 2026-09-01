@@ -1,5 +1,7 @@
 // app/(protected)/transport/emailClient.ts
 
+import { auth } from "@/lib/firebase";
+
 export type RecipientGroup = "OPS" | "SALES";
 
 export type SendEmailPayload = {
@@ -26,13 +28,13 @@ function cleanPayload<T extends Record<string, any>>(payload: T): T {
 
 export async function sendEmail(payload: SendEmailPayload): Promise<SendEmailResponse> {
   const cleaned = cleanPayload(payload);
-
-  // ✅ Debug
-  console.log("[sendEmail] payload =>", cleaned);
+  await auth.authStateReady();
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) return { ok: false, error: "Authentication is required to send email." };
 
   const res = await fetch("/api/send-email", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(cleaned),
   });
 
