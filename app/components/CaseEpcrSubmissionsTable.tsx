@@ -439,7 +439,7 @@ export default function CaseEpcrSubmissionsTable({
     .filter((row) => row.originalProject && row.warnings.some((warning) => warning.includes("not linked to an HCAD project")))
     .map((row) => row.originalProject as string))).sort((left, right) => left.localeCompare(right)), [importPreview]);
 
-  async function historicalImportRequest(action: "preview" | "import", rows: Record<string, unknown>[], fileName = importFileName, projectMappings = importProjectMappings) {
+  async function historicalImportRequest(action: "preview" | "import" | "repair", rows: Record<string, unknown>[], fileName = importFileName, projectMappings = importProjectMappings) {
     await auth.authStateReady();
     const token = await auth.currentUser?.getIdToken();
     if (!token) throw new Error("Authentication is required.");
@@ -451,6 +451,16 @@ export default function CaseEpcrSubmissionsTable({
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Historical import could not be completed.");
     return result;
+  }
+
+  async function repairHistoricalImports() {
+    if (!window.confirm("Repair the clinical fields of previously imported Jotform ePCR records? Existing HCAD/ePCR numbers will not change.")) return;
+    setImportBusy("repair"); setImportError(""); setImportMessage("");
+    try {
+      const result = await historicalImportRequest("repair", []);
+      setImportMessage(`Repair completed. ${Number(result.repaired || 0).toLocaleString()} imported ePCR record(s) updated.`);
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Could not repair imported records."); }
+    finally { setImportBusy(""); }
   }
 
   async function previewHistoricalFile(file: File) {
@@ -676,6 +686,7 @@ export default function CaseEpcrSubmissionsTable({
             <div><h2 className="text-lg font-black">Historical ePCR Import</h2><p className="mt-1 text-sm text-[#7F7F7F]">Upload Jotform history for comparison. Missing fields do not block upload; they are marked for review.</p></div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={downloadHistoricalImportSample} className="rounded-xl border border-[#86A7B2]/30 px-4 py-2 text-sm font-black">Download Import Sample</button>
+              <button type="button" disabled={Boolean(importBusy)} onClick={() => void repairHistoricalImports()} className="rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-black text-amber-900 disabled:opacity-50">{importBusy === "repair" ? "Repairing..." : "Repair Imported ePCR"}</button>
               <button type="button" disabled={Boolean(importBusy)} onClick={() => importInputRef.current?.click()} className="rounded-xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white disabled:opacity-50">{importBusy === "preview" ? "Reading..." : "Import Excel"}</button>
               <input ref={importInputRef} className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void previewHistoricalFile(file); event.target.value = ""; }} />
             </div>

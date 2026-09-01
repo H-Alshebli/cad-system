@@ -49,6 +49,86 @@ function isJotformExport(row: ImportRow) {
   return "Submission Date" in row || "Prehospital Chief Complaints" in row || "Nerrative" in row || "Vital Sings" in row;
 }
 
+function yesNo(value: unknown) {
+  const normalized = text(value).toLowerCase();
+  if (normalized.startsWith("yes")) return "yes";
+  if (normalized.startsWith("no")) return "no";
+  return "";
+}
+
+function parseVitals(value: unknown) {
+  const raw = text(value);
+  const read = (label: string) => raw.match(new RegExp(`${label}:\\s*([^,]*)`, "i"))?.[1]?.trim() || "";
+  return [{ temp: read("Temp"), hr: read("HR"), bp: read("BP"), spo2: read("SPo2"), gcs: read("GCS"), bgl: read("BGL"), time: { timeHHMM: read("Time") } }];
+}
+
+function parseItems(value: unknown, kind: "Medications" | "Consumables") {
+  const raw = text(value);
+  if (!raw) return [];
+  return raw.split(new RegExp(`\\n(?=${kind}:)`, "i")).map((entry) => {
+    const read = (label: string, next: string) => entry.match(new RegExp(`${label}:\\s*(.*?)(?=,\\s*(?:${next}):|$)`, "i"))?.[1]?.trim() || "";
+    const name = read(kind, "Other|Qty|Routes of Drug Administration|Drug Dose");
+    const other = read("Other", "Qty|Routes of Drug Administration|Drug Dose");
+    const qty = read("Qty", "Routes of Drug Administration|Drug Dose");
+    if (kind === "Medications") {
+      const route = read("Routes of Drug Administration", "Drug Dose");
+      const dose = read("Drug Dose", "$a");
+      return { medication: name || "Other", other: [other, route && `Route: ${route}`, dose && `Dose: ${dose}`].filter(Boolean).join("; "), qty };
+    }
+    return { consumable: name || "Other", other, qty };
+  });
+}
+
+function normalizeTriage(value: string) {
+  if (/level\s*5/i.test(value)) return "Level 5 (non-urgent)";
+  if (/level\s*4/i.test(value)) return "Level 4 (Less Urgent)";
+  if (/level\s*3/i.test(value)) return "Level 3 (Urgent)";
+  if (/level\s*2/i.test(value)) return "Level 2 (Emergent)";
+  if (/level\s*1/i.test(value)) return "Level 1 (Resuscitation)";
+  if (/death/i.test(value)) return "death";
+  return value;
+}
+
+function normalizeClassification(value: string) {
+  if (/occupational injuries|^occupational$/i.test(value)) return "Occupational";
+  if (/non.?occupational/i.test(value)) return "Non-Occupational";
+  if (/general health/i.test(value)) return "General Health Illnesses";
+  if (/unspecified/i.test(value)) return "Unspecified Medical Conditions";
+  return value ? "other" : "";
+}
+
+function clinicalFields(row: ReturnType<typeof normalize>) {
+  const raw = row.raw;
+  const names = row.crewNames; const badges = row.crewBadges; const units = row.crewUnits;
+  const positions = repeated(raw, "Position"); const crewSignatures = repeated(raw, "Signature");
+  const destinationRaw = row.destination;
+  const refused = yesNo(row.refusal) === "yes";
+  const destination = refused ? "No Transport and/or Treatment" : /treated on scene/i.test(destinationRaw) ? "Treated on Scene" : /hospital/i.test(destinationRaw) ? "Scene to Hospital" : destinationRaw;
+  const knownComplaints = ["Cardiac complaints", "Respiratory complaints", "Musculoskeletal complaints", "Digestive complaints", "Metabolic and endocrine complaints", "General medical complaints", "Environmental and toxicological complaints", "Obstetric and gynecology complaints", "Gastrointestinal complaints", "Behavioral and psychological complaints", "Infectious disease complaints", "Other critical complaints"];
+  const primaryComplaints = list(raw["Prehospital Chief Complaints"]);
+  const chiefComplaints = Array.from(new Set((primaryComplaints.length ? primaryComplaints : row.complaintCategories).map((item) => knownComplaints.find((known) => known.toLowerCase() === item.toLowerCase()) || "Other")));
+  const detailSources: Array<[string, string]> = [["Cardiac Complaints", "Cardiac complaints"], ["Respiratory Complaints", "Respiratory complaints"], ["Neurological Complaints", "Other"], ["Gastrointestinal Complaints", "Gastrointestinal complaints"], ["Psychiatric and Behavioral Complaints", "Behavioral and psychological complaints"], ["Metabolic and Endocrine Complaints", "Metabolic and endocrine complaints"], ["Infectious Disease Complaints", "Infectious disease complaints"], ["General Medical Complaints", "General medical complaints"], ["Obstetric and Gynecological Complaints", "Obstetric and gynecology complaints"], ["Environmental and Toxicological Complaints", "Environmental and toxicological complaints"], ["Other Critical Complaints", "Other critical complaints"]];
+  const chiefComplaintDetails = detailSources.reduce<Record<string, string[]>>((result, [source, target]) => {
+    const values = list(raw[source]);
+    if (values.length) result[target] = [...(result[target] || []), ...values];
+    return result;
+  }, {});
+  return {
+    patientInfo: {
+      patientId: row.patientId, firstName: row.firstName, lastName: row.lastName, age: row.age, gender: row.gender.toLowerCase(), phone: row.phone,
+      weightKg: safeAge(raw["Weight KG"]), factoryName: row.originalProjectName, nationality: row.nationality,
+      triageColor: normalizeTriage(row.triage), healthClassification: normalizeClassification(row.classification), chiefComplaints,
+      chiefComplaintDetails, signsAndSymptoms: row.symptoms,
+    },
+    medicalHistory: { conditions: list(raw["Relevant Medical History"]), eyes: list(raw["Eyes"]), other: text(raw["Other"]) },
+    headToToe: { generalAppearance: text(raw["General Appearance"]), headNeck: text(raw["Head/Neck"]), chest: text(raw["Chest"]), abdomen: text(raw["Abdomen"]), backPelvis: text(raw["Back/Pelvis"]), extremities: text(raw["Extremities"]), other: text(raw["Other_1"] || raw["Physical Examination"]), painLocations: [] },
+    narrativeVitals: { contactedMedicalDirector: yesNo(row.medicalDirectorContacted), narrative: row.narrative, vitalsList: parseVitals(row.vitals), medications: parseItems(row.medications.join("\n"), "Medications"), consumables: parseItems(row.consumables.join("\n"), "Consumables") },
+    outcome: { destination, noTransferReason: refused ? "Patient Refused Transport" : destination === "Treated on Scene" ? "Transport No Longer Required" : "", noTransferReasonOther: "", hospitalName: row.hospitalName, hospitalMember: text(raw["Hospital Member"]), hospitalSignatureDataUrl: text(raw["Hospital Signature"]), patientSignatureDataUrl: text(raw["Patient Signature"]) },
+    transferTeam: { members: [0, 1].map((index) => ({ name: names[index] || "", badgeNo: badges[index] || "", unit: units[index] || "", position: positions[index] || "", signatureDataUrl: crewSignatures[index] || "" })) },
+    time: { movingTime: { timeHHMM: row.timeline.movingTime }, arrivalToPTTime: { timeHHMM: row.timeline.arrivalToPatientTime }, leavingSceneTime: { timeHHMM: row.timeline.leavingSceneTime }, hospitalTime: { timeHHMM: row.timeline.hospitalTime }, waitingTime: { timeHHMM: row.timeline.waitingTime }, dischargeTime: { timeHHMM: row.timeline.dischargeTime }, arrivalTime: { timeHHMM: row.timeline.arrivalTime }, backTime: { timeHHMM: row.timeline.backTime } },
+  };
+}
+
 function projectKey(value: unknown) {
   return text(value).toLocaleLowerCase("en").normalize("NFKC").replace(/[\u064B-\u065F\u0670]/g, "").replace(/[^\p{L}\p{N}]+/gu, "");
 }
@@ -85,8 +165,9 @@ function normalize(row: ImportRow, rowNumber: number, projects: ProjectOption[],
   const fullPatientName = pick(row, "Patient Name", "Patient Name / اسم المريض:", "Patient Name / اسم المريض");
   const configuredFirstName = text(row["Patient First Name"]);
   const configuredLastName = text(row["Patient Last Name"]);
-  const firstName = configuredFirstName || fullPatientName;
-  const lastName = configuredLastName;
+  const patientNameParts = fullPatientName.split(/\s+/).filter(Boolean);
+  const firstName = configuredFirstName || (patientNameParts.length > 1 ? patientNameParts.slice(0, -1).join(" ") : fullPatientName);
+  const lastName = configuredLastName || (patientNameParts.length > 1 ? patientNameParts.at(-1) || "" : "");
   const primaryProjectName = pick(row, "Project Name", "Factory Name", "Test project 1");
   const projectName = projectKey(primaryProjectName) === "other" ? pick(row, "Project Name Other", "Factory Name", "Test project 1") : primaryProjectName || text(row["Project Name Other"]);
   const suppliedProjectId = text(row["Project ID"]);
@@ -176,7 +257,6 @@ export async function POST(request: NextRequest) {
   const action = text(body.action || "preview");
   const rows: ImportRow[] = Array.isArray(body.rows) ? body.rows : [];
   const projectMappings: Record<string, string> = body.projectMappings && typeof body.projectMappings === "object" && !Array.isArray(body.projectMappings) ? body.projectMappings : {};
-  if (!rows.length || rows.length > 200) return NextResponse.json({ error: "Upload between 1 and 200 rows per batch." }, { status: 400 });
   const projectSnapshot = await adminDb.collection("projects").get();
   const projects: ProjectOption[] = projectSnapshot.docs.map((document) => {
     const data = document.data() || {};
@@ -188,6 +268,22 @@ export async function POST(request: NextRequest) {
       aliases: Array.isArray(data.importAliases) ? data.importAliases.map(text).filter(Boolean) : [],
     };
   });
+  if (action === "repair") {
+    const imported = await adminDb.collection("epcr").where("sourceType", "==", "JOTFORM_IMPORT").limit(200).get();
+    const repairable = imported.docs.filter((document) => {
+      const data = document.data() || {};
+      return data.clinicalMappingVersion !== 1 && data.legacyData?.originalRow && typeof data.legacyData.originalRow === "object";
+    });
+    const writer = adminDb.bulkWriter();
+    repairable.forEach((document, index) => {
+      const data = document.data() || {};
+      const normalized = normalize(data.legacyData.originalRow as ImportRow, index + 2, projects, {});
+      writer.update(document.ref, { ...clinicalFields(normalized), clinicalMappingVersion: 1, clinicalMappingRepairedAt: FieldValue.serverTimestamp(), clinicalMappingRepairedBy: authenticated.uid, updatedAt: FieldValue.serverTimestamp() });
+    });
+    await writer.close();
+    return NextResponse.json({ repaired: repairable.length, inspected: imported.size });
+  }
+  if (!rows.length || rows.length > 200) return NextResponse.json({ error: "Upload between 1 and 200 rows per batch." }, { status: 400 });
   const normalized = rows.map((row, index) => normalize(row, index + 2, projects, projectMappings));
   const duplicateIds = new Set<string>();
   const seen = new Set<string>();
@@ -211,7 +307,7 @@ export async function POST(request: NextRequest) {
     const createdAt = row.date ? Timestamp.fromDate(row.date) : FieldValue.serverTimestamp();
     const common = { sourceType: "JOTFORM_IMPORT", externalReference: row.reference, importBatchId: batchRef.id, importReviewStatus: row.warnings.length ? "needs_review" : "ready_for_review", importWarnings: row.warnings, importedAt: FieldValue.serverTimestamp(), importedBy: authenticated.uid, importedByName: authenticated.name };
     writer.create(adminDb.collection("cases").doc(id), { ...common, caseNumber, caseSequence: caseStart + index, projectId: row.projectId || null, projectName: row.projectName || null, patientName: row.fullPatientName, patient: { name: row.fullPatientName, phone: row.phone, age: row.age, gender: row.gender }, chiefComplaint: row.complaint, level: row.triage, locationText: row.pickup, location: { text: row.pickup, source: "jotform_import" }, destination: { name: row.hospitalName || row.destination, type: row.destination }, assignedUnit: row.unit ? { code: row.unit, type: "ambulance" } : null, status: "Closed", dispatchStatus: "Closed", historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp() });
-    writer.create(adminDb.collection("epcr").doc(id), { ...common, epcrId: id, epcrNumber, epcrSequence: epcrStart + index, caseId: id, caseNumber, projectId: row.projectId || null, projectName: row.projectName || null, projectInfo: { projectId: row.projectId, projectName: row.projectName }, patientInfo: { patientId: row.patientId, firstName: row.firstName, lastName: row.lastName, fullName: row.fullPatientName, age: row.age, gender: row.gender, phone: row.phone, nationality: row.nationality, triageColor: row.triage, finalReassessmentLevel: row.finalTriage, healthClassification: row.classification, chiefComplaints: row.complaintCategories.length ? row.complaintCategories : row.complaint ? [row.complaint] : [], signsAndSymptoms: row.symptoms, relevantMedicalHistory: row.medicalHistory }, narrative: { narrative: row.narrative }, assessment: { primaryAssessment: row.primaryAssessment, secondaryAssessment: row.secondaryAssessment, impression: row.impression, physicalExam: row.physicalExam, vitalsRaw: row.vitals }, treatment: { medications: row.medications.map((name) => ({ name, source: "jotform_import" })), consumables: row.consumables.map((name) => ({ name, source: "jotform_import" })), procedures: row.procedures, oxygenTherapy: row.oxygen }, outcome: { destination: row.destination, hospitalName: row.hospitalName, refusal: row.refusal, medicalDirectorContacted: row.medicalDirectorContacted }, timeline: row.timeline, caseSnapshot: { sourceType: "JOTFORM_IMPORT", assignedAmbulanceCode: row.unit, crewNames: row.crewNames, crewBadges: row.crewBadges, crewUnits: row.crewUnits }, legacyData: { source: "Jotform", sourceFormat: row.sourceFormat, submissionId: row.submissionId, legacyEpcrNumber: row.legacyEpcrNumber, originalPdfUrl: row.originalPdfUrl, signedDocument: row.signedDocument, signatureUrls: row.signatures, notes: row.legacyNotes, originalRow: row.raw }, status: "draft", locked: false, historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp(), createdBy: authenticated.uid, createdByName: authenticated.name });
+    writer.create(adminDb.collection("epcr").doc(id), { ...common, epcrId: id, epcrNumber, epcrSequence: epcrStart + index, caseId: id, caseNumber, projectId: row.projectId || null, projectName: row.projectName || null, projectInfo: { projectId: row.projectId, projectName: row.projectName }, narrative: { narrative: row.narrative }, assessment: { primaryAssessment: row.primaryAssessment, secondaryAssessment: row.secondaryAssessment, impression: row.impression, physicalExam: row.physicalExam, vitalsRaw: row.vitals }, treatment: { medications: row.medications.map((name) => ({ name, source: "jotform_import" })), consumables: row.consumables.map((name) => ({ name, source: "jotform_import" })), procedures: row.procedures, oxygenTherapy: row.oxygen }, timeline: row.timeline, caseSnapshot: { sourceType: "JOTFORM_IMPORT", assignedAmbulanceCode: row.unit, crewNames: row.crewNames, crewBadges: row.crewBadges, crewUnits: row.crewUnits }, legacyData: { source: "Jotform", sourceFormat: row.sourceFormat, submissionId: row.submissionId, legacyEpcrNumber: row.legacyEpcrNumber, originalPdfUrl: row.originalPdfUrl, signedDocument: row.signedDocument, signatureUrls: row.signatures, notes: row.legacyNotes, originalRow: row.raw }, ...clinicalFields(row), clinicalMappingVersion: 1, status: "draft", locked: false, historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp(), createdBy: authenticated.uid, createdByName: authenticated.name });
   });
   await writer.close();
   await batchRef.set({ fileName: text(body.fileName || "Jotform Import.xlsx"), status: "imported_for_review", summary: { ...summary, imported: importable.length, skippedDuplicates: summary.duplicates }, importedBy: authenticated.uid, importedByName: authenticated.name, importedByEmail: authenticated.email, createdAt: FieldValue.serverTimestamp(), rows: preview });
