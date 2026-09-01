@@ -6,6 +6,7 @@ import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
 import { getUserAccountType } from "@/lib/userAccounts";
 
 export const runtime = "nodejs";
+const CLINICAL_MAPPING_VERSION = 2;
 
 const HEADERS = [
   "Submission ID", "Project ID", "Project Name", "Report Date", "Patient First Name",
@@ -54,6 +55,19 @@ function yesNo(value: unknown) {
   if (normalized.startsWith("yes")) return "yes";
   if (normalized.startsWith("no")) return "no";
   return "";
+}
+
+function normalizeTime(value: unknown) {
+  const raw = text(value);
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)?$/i);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = match[3]?.toLowerCase();
+  if (hour > 23 || minute > 59 || (period && (hour < 1 || hour > 12))) return "";
+  if (period === "am" && hour === 12) hour = 0;
+  if (period === "pm" && hour !== 12) hour += 12;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function parseVitals(value: unknown) {
@@ -125,7 +139,7 @@ function clinicalFields(row: ReturnType<typeof normalize>) {
     narrativeVitals: { contactedMedicalDirector: yesNo(row.medicalDirectorContacted), narrative: row.narrative, vitalsList: parseVitals(row.vitals), medications: parseItems(row.medications.join("\n"), "Medications"), consumables: parseItems(row.consumables.join("\n"), "Consumables") },
     outcome: { destination, noTransferReason: refused ? "Patient Refused Transport" : destination === "Treated on Scene" ? "Transport No Longer Required" : "", noTransferReasonOther: "", hospitalName: row.hospitalName, hospitalMember: text(raw["Hospital Member"]), hospitalSignatureDataUrl: text(raw["Hospital Signature"]), patientSignatureDataUrl: text(raw["Patient Signature"]) },
     transferTeam: { members: [0, 1].map((index) => ({ name: names[index] || "", badgeNo: badges[index] || "", unit: units[index] || "", position: positions[index] || "", signatureDataUrl: crewSignatures[index] || "" })) },
-    time: { movingTime: { timeHHMM: row.timeline.movingTime }, arrivalToPTTime: { timeHHMM: row.timeline.arrivalToPatientTime }, leavingSceneTime: { timeHHMM: row.timeline.leavingSceneTime }, hospitalTime: { timeHHMM: row.timeline.hospitalTime }, waitingTime: { timeHHMM: row.timeline.waitingTime }, dischargeTime: { timeHHMM: row.timeline.dischargeTime }, arrivalTime: { timeHHMM: row.timeline.arrivalTime }, backTime: { timeHHMM: row.timeline.backTime } },
+    time: { movingTime: { timeHHMM: normalizeTime(row.timeline.movingTime) }, arrivalToPTTime: { timeHHMM: normalizeTime(row.timeline.arrivalToPatientTime) }, leavingSceneTime: { timeHHMM: normalizeTime(row.timeline.leavingSceneTime) }, hospitalTime: { timeHHMM: normalizeTime(row.timeline.hospitalTime) }, waitingTime: { timeHHMM: normalizeTime(row.timeline.waitingTime) }, dischargeTime: { timeHHMM: normalizeTime(row.timeline.dischargeTime) }, arrivalTime: { timeHHMM: normalizeTime(row.timeline.arrivalTime) }, backTime: { timeHHMM: normalizeTime(row.timeline.backTime) } },
   };
 }
 
@@ -272,13 +286,13 @@ export async function POST(request: NextRequest) {
     const imported = await adminDb.collection("epcr").where("sourceType", "==", "JOTFORM_IMPORT").limit(200).get();
     const repairable = imported.docs.filter((document) => {
       const data = document.data() || {};
-      return data.clinicalMappingVersion !== 1 && data.legacyData?.originalRow && typeof data.legacyData.originalRow === "object";
+      return data.clinicalMappingVersion !== CLINICAL_MAPPING_VERSION && data.legacyData?.originalRow && typeof data.legacyData.originalRow === "object";
     });
     const writer = adminDb.bulkWriter();
     repairable.forEach((document, index) => {
       const data = document.data() || {};
       const normalized = normalize(data.legacyData.originalRow as ImportRow, index + 2, projects, {});
-      writer.update(document.ref, { ...clinicalFields(normalized), clinicalMappingVersion: 1, clinicalMappingRepairedAt: FieldValue.serverTimestamp(), clinicalMappingRepairedBy: authenticated.uid, updatedAt: FieldValue.serverTimestamp() });
+      writer.update(document.ref, { ...clinicalFields(normalized), clinicalMappingVersion: CLINICAL_MAPPING_VERSION, clinicalMappingRepairedAt: FieldValue.serverTimestamp(), clinicalMappingRepairedBy: authenticated.uid, updatedAt: FieldValue.serverTimestamp() });
     });
     await writer.close();
     return NextResponse.json({ repaired: repairable.length, inspected: imported.size });
@@ -307,7 +321,7 @@ export async function POST(request: NextRequest) {
     const createdAt = row.date ? Timestamp.fromDate(row.date) : FieldValue.serverTimestamp();
     const common = { sourceType: "JOTFORM_IMPORT", externalReference: row.reference, importBatchId: batchRef.id, importReviewStatus: row.warnings.length ? "needs_review" : "ready_for_review", importWarnings: row.warnings, importedAt: FieldValue.serverTimestamp(), importedBy: authenticated.uid, importedByName: authenticated.name };
     writer.create(adminDb.collection("cases").doc(id), { ...common, caseNumber, caseSequence: caseStart + index, projectId: row.projectId || null, projectName: row.projectName || null, patientName: row.fullPatientName, patient: { name: row.fullPatientName, phone: row.phone, age: row.age, gender: row.gender }, chiefComplaint: row.complaint, level: row.triage, locationText: row.pickup, location: { text: row.pickup, source: "jotform_import" }, destination: { name: row.hospitalName || row.destination, type: row.destination }, assignedUnit: row.unit ? { code: row.unit, type: "ambulance" } : null, status: "Closed", dispatchStatus: "Closed", historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp() });
-    writer.create(adminDb.collection("epcr").doc(id), { ...common, epcrId: id, epcrNumber, epcrSequence: epcrStart + index, caseId: id, caseNumber, projectId: row.projectId || null, projectName: row.projectName || null, projectInfo: { projectId: row.projectId, projectName: row.projectName }, narrative: { narrative: row.narrative }, assessment: { primaryAssessment: row.primaryAssessment, secondaryAssessment: row.secondaryAssessment, impression: row.impression, physicalExam: row.physicalExam, vitalsRaw: row.vitals }, treatment: { medications: row.medications.map((name) => ({ name, source: "jotform_import" })), consumables: row.consumables.map((name) => ({ name, source: "jotform_import" })), procedures: row.procedures, oxygenTherapy: row.oxygen }, timeline: row.timeline, caseSnapshot: { sourceType: "JOTFORM_IMPORT", assignedAmbulanceCode: row.unit, crewNames: row.crewNames, crewBadges: row.crewBadges, crewUnits: row.crewUnits }, legacyData: { source: "Jotform", sourceFormat: row.sourceFormat, submissionId: row.submissionId, legacyEpcrNumber: row.legacyEpcrNumber, originalPdfUrl: row.originalPdfUrl, signedDocument: row.signedDocument, signatureUrls: row.signatures, notes: row.legacyNotes, originalRow: row.raw }, ...clinicalFields(row), clinicalMappingVersion: 1, status: "draft", locked: false, historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp(), createdBy: authenticated.uid, createdByName: authenticated.name });
+    writer.create(adminDb.collection("epcr").doc(id), { ...common, epcrId: id, epcrNumber, epcrSequence: epcrStart + index, caseId: id, caseNumber, projectId: row.projectId || null, projectName: row.projectName || null, projectInfo: { projectId: row.projectId, projectName: row.projectName }, narrative: { narrative: row.narrative }, assessment: { primaryAssessment: row.primaryAssessment, secondaryAssessment: row.secondaryAssessment, impression: row.impression, physicalExam: row.physicalExam, vitalsRaw: row.vitals }, treatment: { medications: row.medications.map((name) => ({ name, source: "jotform_import" })), consumables: row.consumables.map((name) => ({ name, source: "jotform_import" })), procedures: row.procedures, oxygenTherapy: row.oxygen }, timeline: row.timeline, caseSnapshot: { sourceType: "JOTFORM_IMPORT", assignedAmbulanceCode: row.unit, crewNames: row.crewNames, crewBadges: row.crewBadges, crewUnits: row.crewUnits }, legacyData: { source: "Jotform", sourceFormat: row.sourceFormat, submissionId: row.submissionId, legacyEpcrNumber: row.legacyEpcrNumber, originalPdfUrl: row.originalPdfUrl, signedDocument: row.signedDocument, signatureUrls: row.signatures, notes: row.legacyNotes, originalRow: row.raw }, ...clinicalFields(row), clinicalMappingVersion: CLINICAL_MAPPING_VERSION, status: "draft", locked: false, historicalImport: true, createdAt, updatedAt: FieldValue.serverTimestamp(), createdBy: authenticated.uid, createdByName: authenticated.name });
   });
   await writer.close();
   await batchRef.set({ fileName: text(body.fileName || "Jotform Import.xlsx"), status: "imported_for_review", summary: { ...summary, imported: importable.length, skippedDuplicates: summary.duplicates }, importedBy: authenticated.uid, importedByName: authenticated.name, importedByEmail: authenticated.email, createdAt: FieldValue.serverTimestamp(), rows: preview });
