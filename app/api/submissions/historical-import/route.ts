@@ -17,6 +17,7 @@ const HEADERS = [
 ] as const;
 
 type ImportRow = Record<string, unknown>;
+type ProjectOption = { id: string; projectName: string; projectCode: string; masterProjectId: string; aliases: string[] };
 
 function text(value: unknown) { return String(value ?? "").trim(); }
 function list(value: unknown) { return text(value).split(/[;,\n]+/).map((item) => item.trim()).filter(Boolean); }
@@ -48,6 +49,18 @@ function isJotformExport(row: ImportRow) {
   return "Submission Date" in row || "Prehospital Chief Complaints" in row || "Nerrative" in row || "Vital Sings" in row;
 }
 
+function projectKey(value: unknown) {
+  return text(value).toLocaleLowerCase("en").normalize("NFKC").replace(/[\u064B-\u065F\u0670]/g, "").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function resolveProject(projectId: string, projectName: string, projects: ProjectOption[]) {
+  const direct = projectId ? projects.find((project) => project.id === projectId) : null;
+  if (direct) return direct;
+  const wanted = projectKey(projectName);
+  if (!wanted) return null;
+  return projects.find((project) => [project.projectName, project.projectCode, project.masterProjectId, ...project.aliases].some((value) => projectKey(value) === wanted)) || null;
+}
+
 async function actor(request: NextRequest) {
   const match = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
@@ -65,7 +78,7 @@ async function actor(request: NextRequest) {
   } catch { return null; }
 }
 
-function normalize(row: ImportRow, rowNumber: number) {
+function normalize(row: ImportRow, rowNumber: number, projects: ProjectOption[]) {
   const rawJotform = isJotformExport(row);
   const submissionId = text(row["Submission ID"]);
   const date = reportDate(pick(row, "Report Date", "Submission Date", "Date", "Date 1"));
@@ -74,7 +87,10 @@ function normalize(row: ImportRow, rowNumber: number) {
   const configuredLastName = text(row["Patient Last Name"]);
   const firstName = configuredFirstName || fullPatientName;
   const lastName = configuredLastName;
-  const projectName = pick(row, "Project Name", "Factory Name", "Project Name Other", "Test project 1");
+  const primaryProjectName = pick(row, "Project Name", "Factory Name", "Test project 1");
+  const projectName = projectKey(primaryProjectName) === "other" ? pick(row, "Project Name Other", "Factory Name", "Test project 1") : primaryProjectName || text(row["Project Name Other"]);
+  const suppliedProjectId = text(row["Project ID"]);
+  const matchedProject = resolveProject(suppliedProjectId, projectName, projects);
   const complaintCategories = [
     "Prehospital Chief Complaints", "Cardiac Complaints", "Respiratory Complaints", "Neurological Complaints",
     "Gastrointestinal Complaints", "Psychiatric and Behavioral Complaints", "Metabolic and Endocrine Complaints",
@@ -93,7 +109,8 @@ function normalize(row: ImportRow, rowNumber: number) {
   ].filter(Boolean);
   const warnings: string[] = [];
   if (!submissionId) warnings.push("Submission ID is missing; duplicate detection will be limited");
-  if (!text(row["Project ID"]) && !projectName) warnings.push("Project is missing");
+  if (!suppliedProjectId && !projectName) warnings.push("Project is missing");
+  else if (!matchedProject) warnings.push(`Project \"${projectName || suppliedProjectId}\" is not linked to an HCAD project`);
   if (!date) warnings.push("Report Date is missing or invalid");
   if (!firstName && !lastName) warnings.push("Patient name is missing");
   if (!complaint) warnings.push("Chief Complaint is missing");
@@ -105,7 +122,7 @@ function normalize(row: ImportRow, rowNumber: number) {
     submissionId,
     reference: submissionId ? `JOTFORM-${submissionId}` : `JOTFORM-ROW-${rowNumber}`,
     sourceFormat: rawJotform ? "JOTFORM_EPCR_V1" : "HCAD_IMPORT_TEMPLATE",
-    projectId: text(row["Project ID"]), projectName, date,
+    projectId: matchedProject?.id || suppliedProjectId, projectName: matchedProject?.projectName || projectName, originalProjectName: projectName, date,
     firstName, lastName, fullPatientName: `${firstName} ${lastName}`.trim(),
     patientId: pick(row, "Patient ID / Iqama", "ID/Iqama", "ID Number / رقم الهوية الوطنية/ الإقامة:", "ID Number / رقم الهوية الوطنية/ الإقامة"),
     age: safeAge(row["Age"]), gender: text(row["Gender"]) || "unknown",
@@ -158,14 +175,25 @@ export async function POST(request: NextRequest) {
   const action = text(body.action || "preview");
   const rows: ImportRow[] = Array.isArray(body.rows) ? body.rows : [];
   if (!rows.length || rows.length > 200) return NextResponse.json({ error: "Upload between 1 and 200 rows per batch." }, { status: 400 });
-  const normalized = rows.map((row, index) => normalize(row, index + 2));
+  const projectSnapshot = await adminDb.collection("projects").get();
+  const projects: ProjectOption[] = projectSnapshot.docs.map((document) => {
+    const data = document.data() || {};
+    return {
+      id: document.id,
+      projectName: text(data.projectName || data.name),
+      projectCode: text(data.projectCode),
+      masterProjectId: text(data.masterProjectId),
+      aliases: Array.isArray(data.importAliases) ? data.importAliases.map(text).filter(Boolean) : [],
+    };
+  });
+  const normalized = rows.map((row, index) => normalize(row, index + 2, projects));
   const duplicateIds = new Set<string>();
   const seen = new Set<string>();
   normalized.forEach((row) => { if (row.submissionId && seen.has(row.submissionId)) duplicateIds.add(row.submissionId); seen.add(row.submissionId); });
   const checks = await Promise.all(normalized.map((row) => adminDb.collection("epcr").doc(`jotform_${referenceHash(row.reference)}`).get()));
   const preview = normalized.map((row, index) => {
     const duplicate = checks[index].exists || Boolean(row.submissionId && duplicateIds.has(row.submissionId));
-    return { rowNumber: row.rowNumber, submissionId: row.submissionId, patientName: row.fullPatientName, project: row.projectName || row.projectId, reportDate: row.date?.toISOString() || "", sourceFormat: row.sourceFormat, legacyEpcrNumber: row.legacyEpcrNumber, status: duplicate ? "duplicate" : row.warnings.length ? "needs_review" : "ready", warnings: duplicate ? [...row.warnings, "Submission already exists or is repeated in this file"] : row.warnings };
+    return { rowNumber: row.rowNumber, submissionId: row.submissionId, patientName: row.fullPatientName, project: row.projectName || row.projectId, originalProject: row.originalProjectName, projectId: row.projectId, reportDate: row.date?.toISOString() || "", sourceFormat: row.sourceFormat, legacyEpcrNumber: row.legacyEpcrNumber, status: duplicate ? "duplicate" : row.warnings.length ? "needs_review" : "ready", warnings: duplicate ? [...row.warnings, "Submission already exists or is repeated in this file"] : row.warnings };
   });
   const summary = { total: preview.length, ready: preview.filter((row) => row.status === "ready").length, needsReview: preview.filter((row) => row.status === "needs_review").length, duplicates: preview.filter((row) => row.status === "duplicate").length };
   if (action === "preview") return NextResponse.json({ preview, summary });
