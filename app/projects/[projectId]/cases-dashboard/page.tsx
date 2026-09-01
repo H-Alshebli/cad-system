@@ -1,16 +1,11 @@
 "use client";
 
-import EpcrDashboardPage from "@/app/(protected)/dashboard/epcr/page";
-import { CasesDashboardScope } from "@/app/components/CasesDashboardScope";
+import CasesDashboardPlusPage from "@/app/components/CasesDashboardPlus";
 
 export default function ProjectCasesDashboardPage({
   params,
 }: {
   params: { projectId: string };
 }) {
-  return (
-    <CasesDashboardScope projectId={params.projectId} embedded>
-      <EpcrDashboardPage />
-    </CasesDashboardScope>
-  );
+  return <CasesDashboardPlusPage projectId={params.projectId} />;
 }

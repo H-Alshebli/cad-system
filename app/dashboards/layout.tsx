@@ -21,14 +21,14 @@ export default function DashboardsLayout({ children }: { children: React.ReactNo
     {
       href: "/dashboards/cases",
       label: "Cases Dashboard",
-      icon: <BarChart3 size={17} />,
+      icon: <Sparkles size={17} />,
       visible: isAdmin || can("dashboards", "epcr"),
     },
     {
-      href: "/dashboards/cases-plus",
-      label: "Cases Dashboard Plus",
-      icon: <Sparkles size={17} />,
-      visible: isAdmin || can("dashboards", "epcr"),
+      href: "/dashboards/cases-legacy",
+      label: "Legacy Cases Dashboard",
+      icon: <BarChart3 size={17} />,
+      visible: isAdmin || can("dashboards", "epcr_legacy"),
     },
     {
       href: "/dashboards/checklists",

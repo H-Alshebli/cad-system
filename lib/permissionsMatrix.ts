@@ -3,7 +3,7 @@
 export type PermissionsMap = Record<string, Record<string, boolean>>;
 
 export const PERMISSION_MATRIX: Record<string, string[]> = {
-  dashboards: ["view", "timeline", "epcr", "executive", "all_data"],
+  dashboards: ["view", "timeline", "epcr", "epcr_legacy", "executive", "all_data"],
 
   projects: [
     "view",
@@ -163,6 +163,7 @@ export const MODULE_LABELS: Record<string, string> = {
   readiness_checklists: "Readiness Checklists",
   checklist_review_global: "Checklist Review – All Projects",
   epcr: "ePCR",
+  epcr_legacy: "Legacy Cases Dashboard",
   submissions: "Submissions",
   it_support: "IT Support",
   ambulances: "Ambulances",
