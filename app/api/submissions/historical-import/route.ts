@@ -78,7 +78,7 @@ async function actor(request: NextRequest) {
   } catch { return null; }
 }
 
-function normalize(row: ImportRow, rowNumber: number, projects: ProjectOption[]) {
+function normalize(row: ImportRow, rowNumber: number, projects: ProjectOption[], projectMappings: Record<string, string>) {
   const rawJotform = isJotformExport(row);
   const submissionId = text(row["Submission ID"]);
   const date = reportDate(pick(row, "Report Date", "Submission Date", "Date", "Date 1"));
@@ -90,7 +90,8 @@ function normalize(row: ImportRow, rowNumber: number, projects: ProjectOption[])
   const primaryProjectName = pick(row, "Project Name", "Factory Name", "Test project 1");
   const projectName = projectKey(primaryProjectName) === "other" ? pick(row, "Project Name Other", "Factory Name", "Test project 1") : primaryProjectName || text(row["Project Name Other"]);
   const suppliedProjectId = text(row["Project ID"]);
-  const matchedProject = resolveProject(suppliedProjectId, projectName, projects);
+  const mappedProjectId = text(projectMappings[projectName]);
+  const matchedProject = resolveProject(mappedProjectId || suppliedProjectId, projectName, projects);
   const complaintCategories = [
     "Prehospital Chief Complaints", "Cardiac Complaints", "Respiratory Complaints", "Neurological Complaints",
     "Gastrointestinal Complaints", "Psychiatric and Behavioral Complaints", "Metabolic and Endocrine Complaints",
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const action = text(body.action || "preview");
   const rows: ImportRow[] = Array.isArray(body.rows) ? body.rows : [];
+  const projectMappings: Record<string, string> = body.projectMappings && typeof body.projectMappings === "object" && !Array.isArray(body.projectMappings) ? body.projectMappings : {};
   if (!rows.length || rows.length > 200) return NextResponse.json({ error: "Upload between 1 and 200 rows per batch." }, { status: 400 });
   const projectSnapshot = await adminDb.collection("projects").get();
   const projects: ProjectOption[] = projectSnapshot.docs.map((document) => {
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
       aliases: Array.isArray(data.importAliases) ? data.importAliases.map(text).filter(Boolean) : [],
     };
   });
-  const normalized = rows.map((row, index) => normalize(row, index + 2, projects));
+  const normalized = rows.map((row, index) => normalize(row, index + 2, projects, projectMappings));
   const duplicateIds = new Set<string>();
   const seen = new Set<string>();
   normalized.forEach((row) => { if (row.submissionId && seen.has(row.submissionId)) duplicateIds.add(row.submissionId); seen.add(row.submissionId); });
@@ -196,7 +198,7 @@ export async function POST(request: NextRequest) {
     return { rowNumber: row.rowNumber, submissionId: row.submissionId, patientName: row.fullPatientName, project: row.projectName || row.projectId, originalProject: row.originalProjectName, projectId: row.projectId, reportDate: row.date?.toISOString() || "", sourceFormat: row.sourceFormat, legacyEpcrNumber: row.legacyEpcrNumber, status: duplicate ? "duplicate" : row.warnings.length ? "needs_review" : "ready", warnings: duplicate ? [...row.warnings, "Submission already exists or is repeated in this file"] : row.warnings };
   });
   const summary = { total: preview.length, ready: preview.filter((row) => row.status === "ready").length, needsReview: preview.filter((row) => row.status === "needs_review").length, duplicates: preview.filter((row) => row.status === "duplicate").length };
-  if (action === "preview") return NextResponse.json({ preview, summary });
+  if (action === "preview") return NextResponse.json({ preview, summary, projectOptions: projects.map(({ id, projectName, projectCode }) => ({ id, projectName, projectCode })).sort((left, right) => left.projectName.localeCompare(right.projectName)) });
   if (action !== "import") return NextResponse.json({ error: "Invalid import action." }, { status: 400 });
 
   const importable = normalized.filter((_, index) => preview[index].status !== "duplicate");

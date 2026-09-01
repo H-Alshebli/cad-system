@@ -26,7 +26,8 @@ const HISTORICAL_IMPORT_HEADERS = [
   "Ambulance / Unit", "Original PDF URL", "Legacy Notes",
 ];
 
-type ImportPreviewRow = { rowNumber: number; submissionId: string; patientName: string; project: string; reportDate: string; status: "ready" | "needs_review" | "duplicate"; warnings: string[] };
+type ImportPreviewRow = { rowNumber: number; submissionId: string; patientName: string; project: string; originalProject?: string; projectId?: string; reportDate: string; status: "ready" | "needs_review" | "duplicate"; warnings: string[] };
+type ImportProjectOption = { id: string; projectName: string; projectCode?: string };
 
 function downloadHistoricalImportSample() {
   const workbook = XLSX.utils.book_new();
@@ -431,16 +432,21 @@ export default function CaseEpcrSubmissionsTable({
   const [importBusy, setImportBusy] = useState("");
   const [importError, setImportError] = useState("");
   const [importMessage, setImportMessage] = useState("");
+  const [importProjectOptions, setImportProjectOptions] = useState<ImportProjectOption[]>([]);
+  const [importProjectMappings, setImportProjectMappings] = useState<Record<string, string>>({});
   const canImport = isAdmin || can("submissions", "import");
+  const unresolvedImportProjects = useMemo(() => Array.from(new Set(importPreview
+    .filter((row) => row.originalProject && row.warnings.some((warning) => warning.includes("not linked to an HCAD project")))
+    .map((row) => row.originalProject as string))).sort((left, right) => left.localeCompare(right)), [importPreview]);
 
-  async function historicalImportRequest(action: "preview" | "import", rows: Record<string, unknown>[], fileName = importFileName) {
+  async function historicalImportRequest(action: "preview" | "import", rows: Record<string, unknown>[], fileName = importFileName, projectMappings = importProjectMappings) {
     await auth.authStateReady();
     const token = await auth.currentUser?.getIdToken();
     if (!token) throw new Error("Authentication is required.");
     const response = await fetch("/api/submissions/historical-import", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ action, fileName, rows }),
+      body: JSON.stringify({ action, fileName, rows, projectMappings }),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Historical import could not be completed.");
@@ -457,9 +463,23 @@ export default function CaseEpcrSubmissionsTable({
       if (!rows.length) throw new Error("The selected import sheet has no data rows.");
       setImportFileName(file.name); setImportRows(rows);
       const result = await historicalImportRequest("preview", rows, file.name);
-      setImportPreview(result.preview || []); setImportSummary(result.summary || null);
+      setImportPreview(result.preview || []); setImportSummary(result.summary || null); setImportProjectOptions(result.projectOptions || []);
       setImportMessage("Preview completed. No database records have been created yet.");
     } catch (error) { setImportError(error instanceof Error ? error.message : "Could not read this workbook."); }
+    finally { setImportBusy(""); }
+  }
+
+  async function mapImportProject(sourceProject: string, hcadProjectId: string) {
+    const nextMappings = { ...importProjectMappings, [sourceProject]: hcadProjectId };
+    setImportProjectMappings(nextMappings);
+    try { window.localStorage.setItem("hcad-jotform-project-mappings", JSON.stringify(nextMappings)); } catch {}
+    if (!importRows.length) return;
+    setImportBusy("mapping"); setImportError(""); setImportMessage(`Applying project mapping for ${sourceProject}...`);
+    try {
+      const result = await historicalImportRequest("preview", importRows, importFileName, nextMappings);
+      setImportPreview(result.preview || []); setImportSummary(result.summary || null); setImportProjectOptions(result.projectOptions || importProjectOptions);
+      setImportMessage("Project mapping applied. No database records have been created yet.");
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Could not apply project mapping."); }
     finally { setImportBusy(""); }
   }
 
@@ -473,6 +493,13 @@ export default function CaseEpcrSubmissionsTable({
     } catch (error) { setImportError(error instanceof Error ? error.message : "Could not import historical records."); }
     finally { setImportBusy(""); }
   }
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("hcad-jotform-project-mappings");
+      if (stored) setImportProjectMappings(JSON.parse(stored));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -655,6 +682,23 @@ export default function CaseEpcrSubmissionsTable({
           </div>
           {importError && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{importError}</div>}
           {importMessage && <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{importMessage}</div>}
+          {unresolvedImportProjects.length > 0 && (
+            <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <div className="font-black text-amber-900">Link Jotform Projects to HCAD</div>
+              <p className="mt-1 text-sm text-amber-800">Choose the matching HCAD project for each imported project name. Your choices are saved for the next Excel batches.</p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {unresolvedImportProjects.map((sourceProject) => (
+                  <label key={sourceProject} className="grid gap-1 text-sm font-bold text-[#274C5A]">
+                    <span>Jotform: {sourceProject}</span>
+                    <select value={importProjectMappings[sourceProject] || ""} disabled={Boolean(importBusy)} onChange={(event) => void mapImportProject(sourceProject, event.target.value)} className="rounded-xl border border-amber-300 bg-white px-3 py-2 font-semibold outline-none">
+                      <option value="">Select matching HCAD project</option>
+                      {importProjectOptions.map((project) => <option key={project.id} value={project.id}>{project.projectName}{project.projectCode ? ` — ${project.projectCode}` : ""}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           {importSummary && (
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -663,7 +707,7 @@ export default function CaseEpcrSubmissionsTable({
               <div className="overflow-x-auto rounded-xl border border-[#86A7B2]/25">
                 <table className="min-w-[1000px] w-full text-sm"><thead><tr className="border-b bg-[#f8fbfc] text-left text-xs uppercase text-[#7F7F7F]"><th className="p-3">Row</th><th className="p-3">Submission</th><th className="p-3">Patient</th><th className="p-3">Project</th><th className="p-3">Date</th><th className="p-3">Status & Findings</th></tr></thead><tbody>{importPreview.map((row) => <tr key={`${row.rowNumber}-${row.submissionId}`} className="border-b align-top last:border-0"><td className="p-3 font-bold">{row.rowNumber}</td><td className="p-3">{row.submissionId || "Generated on import"}</td><td className="p-3">{row.patientName || "—"}</td><td className="p-3">{row.project || "—"}</td><td className="p-3">{row.reportDate ? new Date(row.reportDate).toLocaleDateString("en-GB") : "—"}</td><td className="p-3"><span className={statusBadge(row.status)}>{row.status.replaceAll("_", " ")}</span>{row.warnings.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">{row.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}</td></tr>)}</tbody></table>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-xs text-[#7F7F7F]">Warnings remain visible and are imported as Draft / Needs Review. Duplicate submissions are reported and skipped.</div><button type="button" disabled={Boolean(importBusy)} onClick={applyHistoricalImport} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{importBusy === "import" ? "Importing..." : "Import Draft Records"}</button></div>
+              <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-xs text-[#7F7F7F]">Warnings remain visible and are imported as Draft / Needs Review. Duplicate submissions are reported and skipped.</div><button type="button" disabled={Boolean(importBusy) || unresolvedImportProjects.length > 0} title={unresolvedImportProjects.length > 0 ? "Link all Jotform projects before importing" : undefined} onClick={applyHistoricalImport} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">{importBusy === "import" ? "Importing..." : unresolvedImportProjects.length > 0 ? "Link Projects First" : "Import Draft Records"}</button></div>
             </div>
           )}
         </div>
