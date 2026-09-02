@@ -129,6 +129,8 @@ export async function POST(request: NextRequest) {
   const fullNameAr = String(body.fullNameAr || "").trim();
   const nextStatus = action === "submit" ? "submitted" : currentStatus || "draft";
   const nowIso = new Date().toISOString();
+  const requestedRole = String(crewProfile.jobTitle || "").trim();
+  const previousRoleRequestStatus = String(user.roleRequestStatus || "");
 
   await userRef.update({
     crewProfile,
@@ -141,6 +143,14 @@ export async function POST(request: NextRequest) {
           crewProfileSubmittedAt: FieldValue.serverTimestamp(),
           crewProfileSubmittedBy: authUser.uid,
           crewProfileReviewNotes: "",
+          requestedRole,
+          requestedJobTitle: requestedRole,
+          roleRequestStatus:
+            previousRoleRequestStatus === "changes_requested"
+              ? "resubmitted"
+              : "pending",
+          roleRequestedAt: FieldValue.serverTimestamp(),
+          roleReviewNote: "",
         }
       : {}),
     crewProfileReviewHistory: FieldValue.arrayUnion({
