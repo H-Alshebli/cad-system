@@ -89,6 +89,12 @@ export default function UsersPage() {
   useEffect(() => onSnapshot(collection(db, "roles"), (snapshot) => setRoles(snapshot.docs.map((entry) => entry.id).sort((a, b) => a.localeCompare(b)))), []);
 
   const enrichedUsers = useMemo(() => users.map(enrichUser).sort((a, b) => a.priority - b.priority || dateMillis(b.roleRequestedAt) - dateMillis(a.roleRequestedAt) || String(a.name || a.email).localeCompare(String(b.name || b.email))), [users]);
+  const activeTemporaryCount = enrichedUsers.filter(
+    (entry) =>
+      entry.active &&
+      getUserAccountType(entry) === "employee" &&
+      getCrewProfileRequirementMode(entry) === "temporary"
+  ).length;
   const stats = useMemo(() => ({
     attention: enrichedUsers.filter((entry) => entry.priority < 10).length,
     roleApproval: enrichedUsers.filter((entry) => ["pending", "resubmitted"].includes(normalized(entry.roleRequestStatus))).length,
@@ -128,6 +134,27 @@ export default function UsersPage() {
     } catch (error) { window.alert(error instanceof Error ? error.message : "Could not update the account."); } finally { setBusyUserId(""); }
   }
 
+  async function upgradeActiveProfilesToFull() {
+    if (!canEdit || activeTemporaryCount === 0) return;
+    if (!window.confirm(`Convert ${activeTemporaryCount} active employee profile(s) from Temporary to Full?`)) return;
+    setBusyUserId("bulk-full");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/users/role-review", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upgrade_active_profiles_to_full" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not upgrade active profiles.");
+      window.alert(`${result.updated || 0} active profile(s) converted to Full.`);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not upgrade active profiles.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
+
   async function updateAccountType(userId: string, accountType: UserAccountType) { if (canEdit) await updateDoc(doc(db, "users", userId), { accountType }); }
   async function updateProfileRequirementMode(target: EnrichedUser, mode: CrewProfileRequirementMode) {
     if (!canEdit) return;
@@ -145,7 +172,7 @@ export default function UsersPage() {
   const statsCards: Array<[string, number, string, any]> = [["Needs Attention", stats.attention, "needs_attention", AlertTriangle], ["Role Approval", stats.roleApproval, "role_approval", ShieldCheck], ["Inactive", stats.inactive, "inactive", Users], ["Profile Issues", stats.profileIssues, "profile_issues", AlertTriangle], ["Active", stats.active, "active", CheckCircle2]];
 
   return <PermissionGuard module="users" action="view" showMessage><div className="page-shell space-y-5">
-    <div className="page-header"><div><span className="badge">Administration</span><h1 className="page-title mt-3">Users Management</h1><p className="page-subtitle">Attention-first role approval, profile review, and account access.</p></div><button onClick={exportToExcel} className="btn-primary">Export Filtered Excel</button></div>
+    <div className="page-header"><div><span className="badge">Administration</span><h1 className="page-title mt-3">Users Management</h1><p className="page-subtitle">Attention-first role approval, profile review, and account access.</p></div><div className="flex flex-wrap gap-2">{activeTemporaryCount > 0 && <button disabled={!canEdit || busyUserId === "bulk-full"} onClick={upgradeActiveProfilesToFull} className="btn-secondary">{busyUserId === "bulk-full" ? "Upgrading..." : `Move Active to Full (${activeTemporaryCount})`}</button>}<button onClick={exportToExcel} className="btn-primary">Export Filtered Excel</button></div></div>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{statsCards.map(([label, value, filter, Icon]) => <button key={label} onClick={() => setAttentionFilter(filter)} className={`card-modern text-left transition hover:border-[#74cdda] ${attentionFilter === filter ? "border-[#274C5A] ring-2 ring-[#274C5A]/10" : ""}`}><Icon size={17} className="text-[#274C5A]"/><div className="mt-2 text-xs font-bold text-[#607482]">{label}</div><div className="text-2xl font-black text-[#123746]">{value}</div></button>)}</div>
     <div className="card-modern space-y-3"><div className="relative"><Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#607482]"/><input className="input w-full pl-11" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, Arabic name, email, employee ID, mobile, job title, or role"/></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <select className="select" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}><option value="all">All Accounts</option><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
@@ -168,7 +195,7 @@ export default function UsersPage() {
         <td className="p-3 font-bold text-[#274C5A]">{entry.role || "none"}</td>
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
-        <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary">Temporary</option><option value="full">Full</option></select></td>
+        <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || entry.active} title={entry.active ? "Active employee profiles are always Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary">Temporary</option><option value="full">Full</option></select></td>
         <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{showActivation && canApproveRole && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">Approve & Activate</button>}{showActivation && !canApproveRole && <a href="/admin/crew-profiles" className="btn-primary px-3 py-2 text-xs">Review Profile First</a>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Changes</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}</div></td>
       </tr>;
     })}</tbody></table></div>

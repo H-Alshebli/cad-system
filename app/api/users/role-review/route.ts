@@ -2,8 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
+import {
+  getCrewProfileCompletion,
+  getCrewProfileValues,
+} from "@/lib/crewProfile";
 
 export const runtime = "nodejs";
+
+function fullProfileSummary(user: Record<string, any>) {
+  const completion = getCrewProfileCompletion(
+    getCrewProfileValues(user),
+    user.crewProfileAttachments || {},
+    "full"
+  );
+  return {
+    crewProfileRequirementMode: "full",
+    crewProfileCompletion: completion.percent,
+    crewProfileMissingFields: completion.missing.map((field) => field.key),
+    crewProfilePendingVerificationFields: completion.pendingVerification.map((field) => field.key),
+    crewProfileRejectedFields: completion.rejected.map((field) => field.key),
+    crewProfileExpiredFields: completion.expired.map((field) => field.key),
+    crewProfileExpiringSoonFields: completion.expiringSoon.map((field) => field.key),
+    crewProfileStatus: completion.status,
+    crewProfileComplianceStatus: completion.complianceStatus,
+    crewProfileIsComplete: completion.isComplete,
+    crewProfileIsCompliant: completion.isCompliant,
+    ...(!completion.isComplete && user.crewProfileReviewStatus === "verified"
+      ? {
+          crewProfileReviewStatus: "changes_required",
+          crewProfileReviewNotes:
+            "Complete the remaining Full profile requirements after account activation.",
+        }
+      : {}),
+  };
+}
 
 async function authenticate(request: NextRequest) {
   const authorization = request.headers.get("authorization") || "";
@@ -38,6 +70,28 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "").trim();
   const selectedRole = String(body.role || "").trim();
   const note = String(body.note || "").trim();
+  if (action === "upgrade_active_profiles_to_full") {
+    const snapshot = await adminDb.collection("users").where("active", "==", true).get();
+    const eligible = snapshot.docs.filter((entry) => {
+      const data = entry.data();
+      return data.accountType !== "client" && data.crewProfileRequirementMode !== "full";
+    });
+    for (let index = 0; index < eligible.length; index += 400) {
+      const batch = adminDb.batch();
+      eligible.slice(index, index + 400).forEach((entry) => {
+        const data = entry.data();
+        batch.update(entry.ref, {
+          ...fullProfileSummary(data),
+          profileUpdatedAt: FieldValue.serverTimestamp(),
+          profileRequirementUpgradedAt: FieldValue.serverTimestamp(),
+          profileRequirementUpgradedBy: authenticated.token.uid,
+        });
+      });
+      await batch.commit();
+    }
+    return NextResponse.json({ ok: true, updated: eligible.length });
+  }
+
   if (!userId || !new Set(["approve", "request_changes", "reject", "suspend", "activate"]).has(action)) {
     return NextResponse.json({ error: "Invalid role review action." }, { status: 400 });
   }
@@ -97,6 +151,7 @@ export async function POST(request: NextRequest) {
       roleRequestStatus: "approved",
       active: true,
       accountStatus: "active",
+      ...fullProfileSummary(target),
     });
   } else if (action === "request_changes") {
     await userRef.update({
@@ -110,7 +165,12 @@ export async function POST(request: NextRequest) {
   } else if (action === "suspend") {
     await userRef.update({ ...common, active: false, accountStatus: "suspended" });
   } else {
-    await userRef.update({ ...common, active: true, accountStatus: "active" });
+    await userRef.update({
+      ...common,
+      active: true,
+      accountStatus: "active",
+      ...(target.accountType !== "client" ? fullProfileSummary(target) : {}),
+    });
   }
 
   return NextResponse.json({ ok: true });
