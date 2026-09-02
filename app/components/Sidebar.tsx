@@ -47,6 +47,8 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { permissions, loading: permLoading } = usePermissions(role);
 
   const isAdmin = role === "admin";
+  const isOperationalCrewRole =
+    /paramedic|ambulance|response.?team|medical.?team|driver|emt|crew/i.test(role);
   const isClientPortalUser = can(permissions, "client_portal", "view");
   const clientAccount = isClientAccount(user);
   const clientBrand = useClientBrand(clientAccount ? user?.uid : undefined);
@@ -177,7 +179,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       href: "/projects",
       label: "Projects",
       icon: <ClipboardList size={18} />,
-      visible: isAdmin || can(permissions, "projects", "view"),
+      visible:
+        !isOperationalCrewRole &&
+        (isAdmin || can(permissions, "projects", "view")),
     },
     {
       href: "/ambulances",

@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -62,6 +63,7 @@ export async function createB2CCase(input: any) {
     notes: input.notes || "",
     assignedUnit: null,
     assignedUserIds: [],
+    participantUserIds: [],
     acknowledged: false,
     acknowledgedBy: null,
     acknowledgedAt: null,
@@ -99,6 +101,9 @@ export async function assignCaseToTeam(caseId: string, input: any) {
     },
     assignedTeamGroup: input.assignedTeamGroup || "",
     assignedUserIds,
+    ...(assignedUserIds.length
+      ? { participantUserIds: arrayUnion(...assignedUserIds) }
+      : {}),
     dispatchStatus: "Assigned",
     status: "Assigned",
     "timeline.assignedAt": serverTimestamp(),

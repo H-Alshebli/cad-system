@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, query, where } from "firebase/firestore";
 
 import CaseDetailsPage from "@/app/cases/[id]/page";
 import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 
 export default function ModernCadCaseDetailsPage({
   params,
@@ -13,6 +15,10 @@ export default function ModernCadCaseDetailsPage({
 }) {
   const [resolvedId, setResolvedId] = useState("");
   const [notFound, setNotFound] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const { user, loading: userLoading } = useCurrentUser();
+  const { can, loading: permissionLoading } = usePermissions(user?.role);
 
   useEffect(() => {
     const reference = decodeURIComponent(params.caseId).trim();
@@ -41,6 +47,40 @@ export default function ModernCadCaseDetailsPage({
       });
   }, [params.caseId]);
 
+  useEffect(() => {
+    if (!resolvedId || userLoading || permissionLoading) return;
+
+    setAuthorized(false);
+    setAccessDenied(false);
+    getDoc(doc(db, "cases", resolvedId))
+      .then((snapshot) => {
+        if (!snapshot.exists()) {
+          setNotFound(true);
+          return;
+        }
+        if (can("cad_cases_new", "view_all")) {
+          setAuthorized(true);
+          return;
+        }
+
+        const data = snapshot.data();
+        const userId = user?.uid || "";
+        const assigned = [
+          ...(Array.isArray(data.assignedUserIds) ? data.assignedUserIds : []),
+          ...(Array.isArray(data.participantUserIds) ? data.participantUserIds : []),
+        ].includes(userId);
+        if (can("cad_cases_new", "view_assigned") && assigned) {
+          setAuthorized(true);
+        } else {
+          setAccessDenied(true);
+        }
+      })
+      .catch((error) => {
+        console.error("Could not authorize case access", error);
+        setAccessDenied(true);
+      });
+  }, [can, permissionLoading, resolvedId, user?.uid, userLoading]);
+
   if (notFound) {
     return (
       <div className="page-shell">
@@ -51,7 +91,17 @@ export default function ModernCadCaseDetailsPage({
     );
   }
 
-  if (!resolvedId) {
+  if (accessDenied) {
+    return (
+      <div className="page-shell">
+        <div className="card-modern text-sm font-bold text-rose-700">
+          You do not have permission to view this case.
+        </div>
+      </div>
+    );
+  }
+
+  if (!resolvedId || !authorized) {
     return <div className="page-shell text-sm font-semibold text-[#607482]">Loading case...</div>;
   }
 

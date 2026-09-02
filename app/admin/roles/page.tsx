@@ -20,6 +20,7 @@ import {
   PERMISSION_MATRIX,
   PermissionsMap,
   normalizePermissions,
+  normalizeRolePermissions,
 } from "@/lib/permissionsMatrix";
 import PermissionGuard from "@/app/components/PermissionGuard";
 
@@ -57,7 +58,7 @@ export default function RolesPage() {
 
       setSelectedRoleId(roleId);
       setRoleName(roleId);
-      setPermissions(normalizePermissions(data.permissions || {}));
+      setPermissions(normalizeRolePermissions(data.permissions || {}, roleId));
     } catch (error) {
       console.error(error);
       alert("Failed to load role.");
@@ -74,13 +75,18 @@ export default function RolesPage() {
   };
 
   const togglePermission = (moduleKey: string, action: string) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [moduleKey]: {
+    setPermissions((prev) => {
+      const enabled = !prev?.[moduleKey]?.[action];
+      const modulePermissions = {
         ...(prev[moduleKey] || {}),
-        [action]: !prev?.[moduleKey]?.[action],
-      },
-    }));
+        [action]: enabled,
+      };
+      if (moduleKey === "cad_cases_new" && enabled) {
+        if (action === "view_all") modulePermissions.view_assigned = false;
+        if (action === "view_assigned") modulePermissions.view_all = false;
+      }
+      return { ...prev, [moduleKey]: modulePermissions };
+    });
   };
 
   const setModulePermissions = (moduleKey: string, value: boolean) => {
@@ -89,7 +95,10 @@ export default function RolesPage() {
     setPermissions((prev) => ({
       ...prev,
       [moduleKey]: actions.reduce<Record<string, boolean>>((acc, action) => {
-        acc[action] = value;
+        acc[action] =
+          moduleKey === "cad_cases_new" && action === "view_assigned" && value
+            ? false
+            : value;
         return acc;
       }, {}),
     }));
@@ -177,6 +186,7 @@ export default function RolesPage() {
     setPermissionSafe(next, "cad", "view_timeline", true);
     setPermissionSafe(next, "cad", "internal_chat", true);
     setPermissionSafe(next, "cad_cases_new", "view", true);
+    setPermissionSafe(next, "cad_cases_new", "view_all", true);
     setPermissionSafe(next, "cad_cases_old", "view", true);
 
     // Missions
@@ -224,6 +234,8 @@ export default function RolesPage() {
     setPermissionSafe(next, "cases", "view", true);
     setPermissionSafe(next, "cases", "view_own", true);
     setPermissionSafe(next, "cases", "update_status", true);
+    setPermissionSafe(next, "cad_cases_new", "view", true);
+    setPermissionSafe(next, "cad_cases_new", "view_assigned", true);
 
     // ePCR
     setPermissionSafe(next, "epcr", "view", true);
