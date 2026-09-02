@@ -86,7 +86,15 @@ const sampleHeaders = [
   "Per Diem Source Remaining", "Per Diem Payment Marker", "Per Diem Employment",
   "Payment Date", "HR Notes",
 ];
-const monthlyHeaders = ["Employee ID", "Employee Name", "Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+const standardMonthHeaders = ["Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+const overtimeMonthHeaders = [
+  "Employee ID",
+  "Employee Name",
+  ...standardMonthHeaders.slice(0, 7),
+  "Dec MDL Beast",
+  ...standardMonthHeaders.slice(7),
+];
+const perDiemMonthHeaders = ["Employee ID", "Employee Name", ...standardMonthHeaders];
 
 function templateSheet(title: string, instructions: string, headers: string[]) {
   const worksheet = XLSX.utils.aoa_to_sheet([[title], [instructions], ["Use Employee ID to link this sheet to Final Import. Enter zero or leave blank when there is no activity."], [], headers]);
@@ -98,8 +106,8 @@ function templateSheet(title: string, instructions: string, headers: string[]) {
 function downloadSampleWorkbook() {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, templateSheet("HCAD Employee Entitlements Import Template", "Complete one row per employee. Payment Marker: blank or Paid. Employment: Active, Left Company, or Not in source.", sampleHeaders), "Final Import");
-  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Overtime Hours", "Enter the employee's overtime hours for each month. Do not enter an hourly rate.", monthlyHeaders), "Monthly OT Hours");
-  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Per Diem Days", "Enter the employee's Per Diem days for each month. Do not enter a daily rate.", monthlyHeaders), "Monthly Per Diem");
+  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Overtime Hours", "Enter the employee's overtime hours for each month. Use Dec MDL Beast for event-specific December hours. Do not enter an hourly rate.", overtimeMonthHeaders), "Monthly OT Hours");
+  XLSX.utils.book_append_sheet(workbook, templateSheet("Monthly Per Diem Days", "Enter the employee's Per Diem days for each month. Do not enter a daily rate.", perDiemMonthHeaders), "Monthly Per Diem");
   XLSX.writeFile(workbook, "HCAD-Employee-Entitlements-Import-Sample.xlsx");
 }
 
@@ -135,13 +143,13 @@ export default function EmployeeEntitlementsAdminPage() {
       Status: recordStatusLabel(item.status), Sent: item.sentAt || "", Responded: item.respondedAt || "",
       "Employee Response": item.employeeResponse?.comment || "", "HR Response": item.hrResolution?.comment || "",
     }));
-    const monthlyRows = (field: "monthlyOvertime" | "monthlyPerDiem") => items.map((item) => {
+    const monthlyRows = (field: "monthlyOvertime" | "monthlyPerDiem", headers: string[]) => items.map((item) => {
       const quantities = Object.fromEntries((item[field] || []).map((entry) => [entry.month, entry.quantity]));
-      return { "Employee ID": item.employeeId, "Employee Name": item.employeeName, ...Object.fromEntries(monthlyHeaders.slice(2).map((month) => [month, quantities[month] || 0])) };
+      return { "Employee ID": item.employeeId, "Employee Name": item.employeeName, ...Object.fromEntries(headers.slice(2).map((month) => [month, quantities[month] || 0])) };
     });
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Entitlements Summary");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyOvertime")), "Monthly OT Hours");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyPerDiem")), "Monthly Per Diem");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyOvertime", overtimeMonthHeaders)), "Monthly OT Hours");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(monthlyRows("monthlyPerDiem", perDiemMonthHeaders)), "Monthly Per Diem");
     XLSX.writeFile(workbook, `HCAD-Employee-Entitlements-${batchId}.xlsx`);
   }
 

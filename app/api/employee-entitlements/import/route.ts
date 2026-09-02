@@ -22,9 +22,27 @@ async function userIndex() {
   return index;
 }
 
-const monthColumns = ["Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+const standardMonthColumns = ["Jun 2025", "Jul 2025", "Aug 2025", "Sep 2025", "Oct 2025", "Nov 2025", "Dec 2025", "Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
+const overtimeMonthColumns = [
+  ...standardMonthColumns.slice(0, 7),
+  "Dec MDL Beast",
+  ...standardMonthColumns.slice(7),
+];
 
-function monthlyIndex(rows: EntitlementImportRow[], kind: string) {
+function monthlyValue(row: EntitlementImportRow, month: string) {
+  if (row[month] !== undefined) return row[month];
+  const normalizeHeader = (value: string) =>
+    value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const expected = normalizeHeader(month);
+  const matchingKey = Object.keys(row).find((key) => {
+    const normalizedKey = normalizeHeader(key);
+    if (normalizedKey === expected) return true;
+    return month === "Dec MDL Beast" && normalizedKey === "decmdlbeas1";
+  });
+  return matchingKey ? row[matchingKey] : undefined;
+}
+
+function monthlyIndex(rows: EntitlementImportRow[], kind: string, monthColumns: string[]) {
   const index = new Map<string, { entries: Array<{ month: string; quantity: number }>; issues: string[] }>();
   rows.forEach((row) => {
     const employeeId = String(row["Employee ID"] || "").trim();
@@ -32,7 +50,7 @@ function monthlyIndex(rows: EntitlementImportRow[], kind: string) {
     const issues: string[] = [];
     if (index.has(employeeId)) issues.push(`Employee ID appears more than once in ${kind}`);
     const entries = monthColumns.flatMap((month) => {
-      const raw = row[month];
+      const raw = monthlyValue(row, month);
       if (raw === "" || raw === null || raw === undefined || raw === "-") return [];
       const quantity = Number(String(raw).replace(/,/g, ""));
       if (!Number.isFinite(quantity) || quantity < 0) {
@@ -48,8 +66,8 @@ function monthlyIndex(rows: EntitlementImportRow[], kind: string) {
 
 async function prepareRows(rows: EntitlementImportRow[], monthlyOtRows: EntitlementImportRow[], monthlyPerDiemRows: EntitlementImportRow[]) {
   const index = await userIndex();
-  const overtimeIndex = monthlyIndex(monthlyOtRows, "Monthly OT Hours");
-  const perDiemIndex = monthlyIndex(monthlyPerDiemRows, "Monthly Per Diem");
+  const overtimeIndex = monthlyIndex(monthlyOtRows, "Monthly OT Hours", overtimeMonthColumns);
+  const perDiemIndex = monthlyIndex(monthlyPerDiemRows, "Monthly Per Diem", standardMonthColumns);
   const seenEmployeeIds = new Set<string>();
   return rows.map((input) => {
     const normalized = normalizeEntitlementRow(input);
