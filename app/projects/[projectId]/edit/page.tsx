@@ -3,6 +3,7 @@
 import {
   arrayRemove,
   arrayUnion,
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -98,8 +99,26 @@ type Hospital = {
   type?: string;
   lat?: number | null;
   lng?: number | null;
+  googleMapLink?: string;
   archived?: boolean;
 };
+
+function extractCoordinatesFromGoogleMapsLink(value: string) {
+  const decoded = decodeURIComponent(value.trim());
+  const patterns = [
+    /[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i,
+    /@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+  ];
+  for (const pattern of patterns) {
+    const match = decoded.match(pattern);
+    if (!match) continue;
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+  }
+  return null;
+}
 
 function ambulanceIsSelectableForProject(amb: Ambulance, projectId: string) {
   if (amb.archived) return false;
@@ -237,6 +256,9 @@ export default function EditProjectPage({
 
   const [hospitalDropdownOpen, setHospitalDropdownOpen] = useState(false);
   const [hospitalSearch, setHospitalSearch] = useState("");
+  const [newHospitalName, setNewHospitalName] = useState("");
+  const [newHospitalMapLink, setNewHospitalMapLink] = useState("");
+  const [addingHospital, setAddingHospital] = useState(false);
 
   const [ambulanceCrewAssignments, setAmbulanceCrewAssignments] =
     useState<AmbulanceCrewAssignment>({});
@@ -718,6 +740,43 @@ export default function EditProjectPage({
     setSelectedHospitalIds((prev) => prev.filter((id) => id !== hospitalId));
   };
 
+  const addAndSelectHospital = async () => {
+    const name = newHospitalName.trim();
+    const googleMapLink = newHospitalMapLink.trim();
+    if (!name || !googleMapLink) {
+      alert("Enter the hospital name and Google Maps link.");
+      return;
+    }
+    const coordinates = extractCoordinatesFromGoogleMapsLink(googleMapLink);
+    if (!coordinates) {
+      alert("The link does not contain readable coordinates. Open the shared link in Google Maps, then copy the full browser address and paste it here.");
+      return;
+    }
+    const existing = hospitals.find((hospital) => String(hospital.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setSelectedHospitalIds((current) => Array.from(new Set([...current, existing.id])));
+      setNewHospitalName("");
+      setNewHospitalMapLink("");
+      alert("An existing hospital with this name was selected.");
+      return;
+    }
+    setAddingHospital(true);
+    try {
+      const payload = { name, address: "", type: "hospital", lat: coordinates.lat, lng: coordinates.lng, googleMapLink, archived: false, createdFromProjectId: projectId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+      const reference = await addDoc(collection(db, "destinations"), payload);
+      const hospital = { id: reference.id, ...payload } as Hospital;
+      setHospitals((current) => current.some((item) => item.id === hospital.id) ? current : [...current, hospital]);
+      setSelectedHospitalIds((current) => Array.from(new Set([...current, hospital.id])));
+      setNewHospitalName("");
+      setNewHospitalMapLink("");
+    } catch (error) {
+      console.error("Failed to add project hospital", error);
+      alert("The hospital could not be added.");
+    } finally {
+      setAddingHospital(false);
+    }
+  };
+
   const saveProject = async () => {
     if (!projectName.trim()) {
       alert("Project name is required.");
@@ -812,6 +871,7 @@ export default function EditProjectPage({
         type: "hospital",
         lat: h.lat ?? null,
         lng: h.lng ?? null,
+        googleMapLink: h.googleMapLink || "",
       })),
 
       projectDetails: {
@@ -1763,6 +1823,16 @@ return (
 
               <div className="rounded-full bg-[#effbfc] px-3 py-1 text-xs font-semibold text-[#166575]">
                 {selectedHospitalIds.length} selected
+              </div>
+            </div>
+
+            <div className="mb-4 rounded-xl border border-[#b9d8df] bg-[#f7fbfc] p-3">
+              <p className="text-sm font-black text-[#123746]">Add a New Hospital</p>
+              <p className="mt-1 text-xs text-[#607482]">Enter the hospital name and a full Google Maps link. It will be created and selected for this project.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.4fr)_auto]">
+                <input value={newHospitalName} onChange={(event) => setNewHospitalName(event.target.value)} placeholder="Hospital name" className={inputClass} />
+                <input value={newHospitalMapLink} onChange={(event) => setNewHospitalMapLink(event.target.value)} placeholder="Full Google Maps link with coordinates" className={inputClass} />
+                <button type="button" disabled={addingHospital} onClick={() => void addAndSelectHospital()} className="h-11 rounded-xl bg-[#166575] px-4 text-sm font-black text-white transition hover:bg-[#0f5360] disabled:opacity-50">{addingHospital ? "Adding..." : "Add & Select"}</button>
               </div>
             </div>
 
