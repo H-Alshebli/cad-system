@@ -16,6 +16,19 @@ export async function POST(request: NextRequest, { params }: { params: { recordI
     return NextResponse.json({ error: "Response permission is required." }, { status: 403 });
   }
 
+  const userSnapshot = await adminDb.collection("users").doc(actor.uid).get();
+  const user = userSnapshot.data() || {};
+  const profileSubmitted = Boolean(user.crewProfileSubmittedAt) ||
+    new Set(["submitted", "verified", "changes_required", "update_requested", "reopened"]).has(
+      String(user.crewProfileReviewStatus || "")
+    );
+  if (!profileSubmitted) {
+    return NextResponse.json(
+      { error: "Complete and submit your Crew Profile before responding." },
+      { status: 409 }
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const action = String(body.action || "");
   const comment = String(body.comment || "").trim();
@@ -23,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: { recordI
     return NextResponse.json({ error: "Invalid response." }, { status: 400 });
   }
   if (action === "dispute" && !comment) {
-    return NextResponse.json({ error: "A dispute comment is required." }, { status: 400 });
+    return NextResponse.json({ error: "An adjustment request comment is required." }, { status: 400 });
   }
 
   const ref = adminDb.collection("employeeEntitlements").doc(params.recordId);
@@ -51,8 +64,8 @@ export async function POST(request: NextRequest, { params }: { params: { recordI
       batchId: record.batchId,
       recipientUserIds: [record.sentBy || record.createdBy],
       recipientEmails: [],
-      title: status === "agreed" ? "Entitlement statement agreed" : "Entitlement statement disputed",
-      message: `${record.employeeName || actor.name} ${status === "agreed" ? "agreed to" : "disputed"} the entitlement statement.`,
+      title: status === "agreed" ? "Entitlement statement agreed" : "Entitlement adjustment requested",
+      message: `${record.employeeName || actor.name} ${status === "agreed" ? "agreed to" : "requested an adjustment to"} the entitlement statement.`,
       link: "/admin/employee-entitlements",
       readByUserIds: [],
       createdAt: FieldValue.serverTimestamp(),

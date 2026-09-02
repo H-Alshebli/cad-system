@@ -54,7 +54,7 @@ function formatDate(value?: string) {
 }
 
 function recordStatusLabel(status?: string) {
-  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Disputed", dispute_rejected: "Dispute Rejected / Closed" } as Record<string, string>)[status || ""] || "Unknown";
+  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Adjustment Requested", dispute_rejected: "Adjustment Reviewed / Closed" } as Record<string, string>)[status || ""] || "Unknown";
 }
 
 function statusBadgeClass(status?: string) {
@@ -370,7 +370,7 @@ export default function EmployeeEntitlementsAdminPage() {
                     <div className="grid gap-3 md:grid-cols-[1fr_240px]">
                       <label className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={16} /><input className="input-field w-full pl-10" value={batchSearch} onChange={(event) => setBatchSearch(event.target.value)} placeholder="Search employee name, ID, or email" /></label>
                       <select className="input-field" value={batchStatus} onChange={(event) => setBatchStatus(event.target.value)}>
-                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Needs HR Review</option><option value="dispute_rejected">Dispute Rejected / Closed</option>
+                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Adjustment Requested</option><option value="dispute_rejected">Adjustment Reviewed / Closed</option>
                       </select>
                     </div>
                     <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -388,7 +388,7 @@ export default function EmployeeEntitlementsAdminPage() {
                               <td className="p-3 text-xs">
                                 {item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">Employee: {item.employeeResponse.comment}</div>}</> : "No response yet"}
                                 {item.hrResolution?.comment && <div className="mt-2 max-w-sm rounded-xl border border-blue-200 bg-blue-50 p-2 font-semibold text-blue-700">HR: {item.hrResolution.comment}</div>}
-                                {item.status === "disputed" && canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-primary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "correct_and_resend")}>Correct & Resend</button><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "reject_dispute")}>Reject Dispute</button></div>}
+                                {item.status === "disputed" && canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-primary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "correct_and_resend")}>Correct & Resend</button><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "reject_dispute")}>Close Without Adjustment</button></div>}
                               </td>
                             </tr>
                           ))}
