@@ -563,6 +563,11 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {can("missions", "create_project_case") && (
+              <Link className="btn-secondary" href="/missions/cases/new">
+                Create Case
+              </Link>
+            )}
             <Link className="btn-secondary" href="/epcr/manual">
               Manual ePCR
             </Link>

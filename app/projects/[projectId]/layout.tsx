@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useEffect, useState } from "react";
@@ -14,6 +14,9 @@ export default function ProjectLayout({
   params: { projectId: string };
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const responderCaseMode =
+    pathname.endsWith("/cases/new") && searchParams.get("responder") === "1";
   const [project, setProject] = useState<any>(null);
   const isUtilityChecklistProject =
     params.projectId === "_manual" || params.projectId === "_b2c" || params.projectId === "b2c";
@@ -66,7 +69,7 @@ export default function ProjectLayout({
         )}
       </div>
 
-      <div className="flex gap-2 border-b">
+      {!responderCaseMode && <div className="flex gap-2 border-b">
         {tabs.map((t) => {
           const active =
             t.href === `/projects/${params.projectId}`
@@ -90,7 +93,7 @@ export default function ProjectLayout({
             </Link>
           );
         })}
-      </div>
+      </div>}
 
       <div>{children}</div>
     </div>
