@@ -3,7 +3,6 @@
 import {
   arrayRemove,
   arrayUnion,
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -11,7 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -102,23 +101,6 @@ type Hospital = {
   googleMapLink?: string;
   archived?: boolean;
 };
-
-function extractCoordinatesFromGoogleMapsLink(value: string) {
-  const decoded = decodeURIComponent(value.trim());
-  const patterns = [
-    /[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i,
-    /@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
-    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
-  ];
-  for (const pattern of patterns) {
-    const match = decoded.match(pattern);
-    if (!match) continue;
-    const lat = Number(match[1]);
-    const lng = Number(match[2]);
-    if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
-  }
-  return null;
-}
 
 function ambulanceIsSelectableForProject(amb: Ambulance, projectId: string) {
   if (amb.archived) return false;
@@ -747,11 +729,6 @@ export default function EditProjectPage({
       alert("Enter the hospital name and Google Maps link.");
       return;
     }
-    const coordinates = extractCoordinatesFromGoogleMapsLink(googleMapLink);
-    if (!coordinates) {
-      alert("The link does not contain readable coordinates. Open the shared link in Google Maps, then copy the full browser address and paste it here.");
-      return;
-    }
     const existing = hospitals.find((hospital) => String(hospital.name || "").trim().toLowerCase() === name.toLowerCase());
     if (existing) {
       setSelectedHospitalIds((current) => Array.from(new Set([...current, existing.id])));
@@ -762,16 +739,20 @@ export default function EditProjectPage({
     }
     setAddingHospital(true);
     try {
-      const payload = { name, address: "", type: "hospital", lat: coordinates.lat, lng: coordinates.lng, googleMapLink, archived: false, createdFromProjectId: projectId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
-      const reference = await addDoc(collection(db, "destinations"), payload);
-      const hospital = { id: reference.id, ...payload } as Hospital;
+      await auth.authStateReady();
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Authentication is required.");
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/hospitals`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ name, googleMapLink }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "The hospital could not be added.");
+      const hospital = result.hospital as Hospital;
       setHospitals((current) => current.some((item) => item.id === hospital.id) ? current : [...current, hospital]);
       setSelectedHospitalIds((current) => Array.from(new Set([...current, hospital.id])));
       setNewHospitalName("");
       setNewHospitalMapLink("");
     } catch (error) {
       console.error("Failed to add project hospital", error);
-      alert("The hospital could not be added.");
+      alert(error instanceof Error ? error.message : "The hospital could not be added.");
     } finally {
       setAddingHospital(false);
     }
