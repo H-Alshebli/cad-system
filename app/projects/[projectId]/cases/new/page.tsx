@@ -231,6 +231,7 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       paymentStatus: "NotRequired",
       dispatchStatus: "Assigned",
       assignedUserIds,
+      participantUserIds: assignedUserIds,
       acknowledged: false,
       acknowledgedBy: null,
       acknowledgedAt: null,

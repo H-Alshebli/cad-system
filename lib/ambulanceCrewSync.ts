@@ -122,6 +122,9 @@ export async function syncAmbulanceCrewAssignments(params: {
         assignedAmbulanceCode: params.ambulanceCode,
         assignedTeamGroup: params.assignedTeamGroup,
         assignedUserIds,
+        ...(assignedUserIds.length
+          ? { participantUserIds: arrayUnion(...assignedUserIds) }
+          : {}),
         crewAssignmentHistory: arrayUnion(auditEntry),
         crewAssignmentUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -242,6 +245,9 @@ export async function syncB2CRequestCrewFromAmbulance(params: {
             assignedAmbulanceCode: ambulanceCode,
             assignedTeamGroup,
             assignedUserIds,
+            ...(assignedUserIds.length
+              ? { participantUserIds: arrayUnion(...assignedUserIds) }
+              : {}),
             crewAssignmentHistory: arrayUnion(finalAuditEntry),
             ...(operationalOverride
               ? { crewAssignmentOverrideAt: serverTimestamp() }

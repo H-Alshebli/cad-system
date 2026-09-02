@@ -11,6 +11,7 @@ import {
   PERMISSION_MATRIX,
   PermissionsMap,
   normalizePermissions,
+  normalizeRolePermissions,
 } from "@/lib/permissionsMatrix";
 
 export default function RolePermissionsPage({
@@ -30,7 +31,7 @@ export default function RolePermissionsPage({
       const snap = await getDoc(doc(db, "roles", roleId));
 
       if (snap.exists()) {
-        setPermissions(normalizePermissions(snap.data().permissions || {}));
+        setPermissions(normalizeRolePermissions(snap.data().permissions || {}, roleId));
       } else {
         setPermissions(normalizePermissions({}));
       }
@@ -42,13 +43,18 @@ export default function RolePermissionsPage({
   }, [roleId]);
 
   const togglePermission = (moduleKey: string, action: string) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [moduleKey]: {
+    setPermissions((prev) => {
+      const enabled = !prev?.[moduleKey]?.[action];
+      const modulePermissions = {
         ...(prev[moduleKey] || {}),
-        [action]: !prev?.[moduleKey]?.[action],
-      },
-    }));
+        [action]: enabled,
+      };
+      if (moduleKey === "cad_cases_new" && enabled) {
+        if (action === "view_all") modulePermissions.view_assigned = false;
+        if (action === "view_assigned") modulePermissions.view_all = false;
+      }
+      return { ...prev, [moduleKey]: modulePermissions };
+    });
   };
 
   const setModulePermissions = (moduleKey: string, value: boolean) => {
@@ -57,7 +63,10 @@ export default function RolePermissionsPage({
     setPermissions((prev) => ({
       ...prev,
       [moduleKey]: actions.reduce<Record<string, boolean>>((acc, action) => {
-        acc[action] = value;
+        acc[action] =
+          moduleKey === "cad_cases_new" && action === "view_assigned" && value
+            ? false
+            : value;
         return acc;
       }, {}),
     }));

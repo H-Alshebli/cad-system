@@ -846,6 +846,7 @@ export async function createCadCaseFromB2CRequest(
     assignedAmbulanceCode: plannedAssignment.unitCode || "",
     assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
     assignedUserIds: plannedAssignment.assignedUserIds || [],
+    participantUserIds: plannedAssignment.assignedUserIds || [],
 
     acknowledgement: {
       acknowledged: false,
@@ -1053,6 +1054,7 @@ export async function createReturnCadCaseFromB2CRequest(
     assignedAmbulanceCode: plannedAssignment.unitCode || "",
     assignedTeamGroup: plannedAssignment.assignedTeamGroup || "",
     assignedUserIds: plannedAssignment.assignedUserIds || [],
+    participantUserIds: plannedAssignment.assignedUserIds || [],
 
     acknowledgement: {
       acknowledged: false,

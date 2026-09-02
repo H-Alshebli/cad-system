@@ -36,7 +36,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   ],
 
   // Sidebar/page visibility controls for the parallel CAD experiences.
-  cad_cases_new: ["view"],
+  cad_cases_new: ["view", "view_all", "view_assigned"],
   cad_cases_old: ["view"],
 
   call_intake: ["view", "create", "project_case", "b2c_case"],
@@ -195,7 +195,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
     "Internal dispatch workspace, status control, timeline, and internal case chat.",
 
   cad_cases_new:
-    "Show the modern CAD Cases module and its modern case-details URLs.",
+    "Show the modern CAD Cases module. View All exposes every case; View Assigned limits users to cases where they are recorded as crew participants.",
 
   cad_cases_old:
     "Show the legacy CAD Cases module for compatibility and comparison.",
@@ -398,5 +398,16 @@ export function normalizePermissions(permissions: PermissionsMap = {}) {
     });
   });
 
+  return normalized;
+}
+
+export function normalizeRolePermissions(permissions: PermissionsMap = {}, role?: string | null) {
+  const normalized = normalizePermissions(permissions);
+  const source = permissions?.cad_cases_new || {};
+  const hasExplicitScope = typeof source.view_all === "boolean" || typeof source.view_assigned === "boolean";
+  if (source.view === true && !hasExplicitScope) {
+    const crewRole = /paramedic|ambulance|response.?team|medical.?team|driver|emt|crew/i.test(String(role || ""));
+    normalized.cad_cases_new[crewRole ? "view_assigned" : "view_all"] = true;
+  }
   return normalized;
 }

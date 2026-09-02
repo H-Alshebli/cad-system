@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import {
   Activity,
   BriefcaseMedical,
@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 import {
   getCaseDisplayCode,
   getCaseDisplayTitle,
@@ -75,25 +77,68 @@ function statusClasses(status: string) {
 }
 
 export default function ModernCadCasesPage() {
+  const { user, loading: userLoading } = useCurrentUser();
+  const { can, loading: permissionLoading } = usePermissions(user?.role);
   const [cases, setCases] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("current");
+  const canViewAll = can("cad_cases_new", "view_all");
+  const canViewAssigned = can("cad_cases_new", "view_assigned");
+  const assignedOnly = !canViewAll && canViewAssigned;
 
   useEffect(() => {
-    const unsubscribeCases = onSnapshot(
-      collection(db, "cases"),
-      (snapshot) => {
-        setCases(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    if (userLoading || permissionLoading) return;
+    if (!canViewAll && (!canViewAssigned || !user?.uid)) {
+      setCases([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const caseUnsubscribers: Array<() => void> = [];
+    const handleError = (error: unknown) => {
+      console.error("Modern CAD cases listener failed", error);
+      setLoading(false);
+    };
+
+    if (canViewAll) {
+      caseUnsubscribers.push(
+        onSnapshot(
+          collection(db, "cases"),
+          (snapshot) => {
+            setCases(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+            setLoading(false);
+          },
+          handleError
+        )
+      );
+    } else {
+      const snapshots = new Map<string, Map<string, any>>();
+      const publish = () => {
+        const merged = new Map<string, any>();
+        snapshots.forEach((items) => items.forEach((item, id) => merged.set(id, item)));
+        setCases(Array.from(merged.values()));
         setLoading(false);
-      },
-      (error) => {
-        console.error("Modern CAD cases listener failed", error);
-        setLoading(false);
-      }
-    );
+      };
+      (["participantUserIds", "assignedUserIds"] as const).forEach((field) => {
+        caseUnsubscribers.push(
+          onSnapshot(
+            query(collection(db, "cases"), where(field, "array-contains", user!.uid)),
+            (snapshot) => {
+              snapshots.set(
+                field,
+                new Map(snapshot.docs.map((item) => [item.id, { id: item.id, ...item.data() }]))
+              );
+              publish();
+            },
+            handleError
+          )
+        );
+      });
+    }
 
     const unsubscribeProjects = onSnapshot(
       collection(db, "projects"),
@@ -106,10 +151,10 @@ export default function ModernCadCasesPage() {
     );
 
     return () => {
-      unsubscribeCases();
+      caseUnsubscribers.forEach((unsubscribe) => unsubscribe());
       unsubscribeProjects();
     };
-  }, []);
+  }, [canViewAll, canViewAssigned, permissionLoading, user?.uid, userLoading]);
 
   const projectMap = useMemo(
     () => new Map(projects.map((project) => [project.id, project])),
@@ -200,9 +245,11 @@ export default function ModernCadCasesPage() {
       <div className="page-header">
         <div>
           <span className="badge">Modern CAD Workspace</span>
-          <h1 className="page-title mt-3">CAD Cases</h1>
+          <h1 className="page-title mt-3">{assignedOnly ? "My CAD Cases" : "CAD Cases"}</h1>
           <p className="page-subtitle">
-            All project and B2C cases in one modern operational workspace.
+            {assignedOnly
+              ? "Cases currently or previously assigned to you."
+              : "All project and B2C cases in one modern operational workspace."}
           </p>
         </div>
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#274C5A] text-white shadow-lg shadow-[#274C5A]/15">
@@ -273,7 +320,9 @@ export default function ModernCadCasesPage() {
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black text-[#274C5A]">All Cases</h2>
+          <h2 className="text-xl font-black text-[#274C5A]">
+            {assignedOnly ? "My Assigned Cases" : "All Cases"}
+          </h2>
           <p className="text-sm font-semibold text-[#607482]">
             Showing {visibleCases.length} of {cases.length} cases
           </p>

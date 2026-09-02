@@ -7,6 +7,7 @@ import {
   PERMISSION_MATRIX,
   PermissionsMap,
   normalizePermissions,
+  normalizeRolePermissions,
 } from "@/lib/permissionsMatrix";
 
 export type PermissionCheck = (
@@ -96,7 +97,7 @@ export function usePermissions(role?: string | null) {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          setPermissions(normalizePermissions(data.permissions || {}));
+          setPermissions(normalizeRolePermissions(data.permissions || {}, roleId));
         } else {
           console.warn(`Role permissions not found for role: ${roleId}`);
           setPermissions(normalizePermissions({}));
