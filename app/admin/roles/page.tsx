@@ -236,6 +236,7 @@ export default function RolesPage() {
     setPermissionSafe(next, "cases", "update_status", true);
     setPermissionSafe(next, "cad_cases_new", "view", true);
     setPermissionSafe(next, "cad_cases_new", "view_assigned", true);
+    setPermissionSafe(next, "missions", "create_project_case", true);
 
     // ePCR
     setPermissionSafe(next, "epcr", "view", true);

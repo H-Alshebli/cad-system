@@ -4,12 +4,14 @@ import { useState, useEffect, useMemo } from "react";
 import { addDoc, collection, serverTimestamp, Timestamp, onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/lib/firebase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import ProjectLocationSelector from "@/app/components/ProjectLocationSelector";
 import LocationSearch from "@/app/components/LocationSearch";
 import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 import { reserveOperationalNumber } from "@/lib/operationalNumbers";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -70,6 +72,12 @@ function getProjectAmbulanceIds(projectData: any) {
 
 export default function NewProjectCasePage({ params }: { params: { projectId: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const responderMode = searchParams.get("responder") === "1";
+  const { user, loading: userLoading } = useCurrentUser();
+  const { can, isAdmin, loading: permissionLoading } = usePermissions(user?.role);
+  const canCreateFromCallIntake =
+    can("call_intake", "project_case") || can("cases", "create");
   const [receivedAt, setReceivedAt] = useState<Timestamp | null>(null);
   const [projectData, setProjectData] = useState<any>(null);
 
@@ -90,8 +98,37 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
   const [unitType, setUnitType] = useState<"ambulance" | "clinic" | "roaming" | "">("ambulance");
   const [units, setUnits] = useState<any[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState("");
+  const [responderProjectAllowed, setResponderProjectAllowed] = useState(false);
+  const [responderAccessChecked, setResponderAccessChecked] = useState(false);
 
   useEffect(() => setReceivedAt(Timestamp.now()), []);
+
+  useEffect(() => {
+    if (!responderMode || userLoading || permissionLoading || !user?.uid) return;
+    if (!can("missions", "create_project_case")) {
+      setResponderProjectAllowed(false);
+      setResponderAccessChecked(true);
+      return;
+    }
+    const unsubscribe = onSnapshot(collection(db, "ambulances"), (snapshot) => {
+      const allowed = snapshot.docs.some((entry) => {
+        const ambulance = entry.data();
+        const projectId = ambulance.assignedProjectId || ambulance.projectId || "";
+        const assignedIds = [
+          ...(Array.isArray(ambulance.assignedUserIds) ? ambulance.assignedUserIds : []),
+          ...(Array.isArray(ambulance.crewUserIds) ? ambulance.crewUserIds : []),
+        ];
+        const crewMemberAssigned = Array.isArray(ambulance.crewMembers)
+          ? ambulance.crewMembers.some((member: any) => member?.userId === user.uid)
+          : false;
+        return projectId === params.projectId &&
+          (assignedIds.includes(user.uid) || crewMemberAssigned);
+      });
+      setResponderProjectAllowed(isAdmin || allowed);
+      setResponderAccessChecked(true);
+    });
+    return () => unsubscribe();
+  }, [can, isAdmin, params.projectId, permissionLoading, responderMode, user?.uid, userLoading]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "projects", params.projectId), (snap) => {
@@ -184,6 +221,14 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
   const selectedAmbulanceBusy = unitType === "ambulance" && selectedUnit ? isAmbulanceBusy(selectedUnit) : false;
 
   const createCase = async () => {
+    if (!responderMode && !canCreateFromCallIntake) {
+      alert("You do not have permission to create a project case.");
+      return;
+    }
+    if (responderMode && (!can("missions", "create_project_case") || !responderProjectAllowed)) {
+      alert("You are not assigned to this project or do not have permission to create a case.");
+      return;
+    }
     if (!chiefComplaint || !triageLevel || !locationText || !selectedUnitId) {
       alert("Please complete chief complaint, triage, location, and unit.");
       return;
@@ -209,6 +254,9 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
     }
 
     const operationalNumber = await reserveOperationalNumber("case");
+    const participantUserIds = Array.from(
+      new Set([...assignedUserIds, ...(responderMode && user?.uid ? [user.uid] : [])])
+    );
     const caseRef = await addDoc(collection(db, "cases"), {
       caseNumber: operationalNumber.number,
       caseSequence: operationalNumber.sequence,
@@ -231,7 +279,10 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       paymentStatus: "NotRequired",
       dispatchStatus: "Assigned",
       assignedUserIds,
-      participantUserIds: assignedUserIds,
+      participantUserIds,
+      createdByUserId: user?.uid || null,
+      createdByName: user?.name || user?.displayName || user?.email || "",
+      creationSource: responderMode ? "responder_missions" : "call_intake",
       acknowledged: false,
       acknowledgedBy: null,
       acknowledgedAt: null,
@@ -291,7 +342,18 @@ if (unitType === "ambulance") {
 
   return (
     <div className="page-shell">
-      <div className="page-header"><div><h1 className="page-title">New Case (Project)</h1><p className="page-subtitle">Project case form launched from Call Intake. The case will open directly after creation.</p></div></div>
+      {userLoading || permissionLoading || (responderMode && !responderAccessChecked) ? (
+        <div className="card-modern text-sm font-semibold text-[#607482]">Checking project access...</div>
+      ) :
+      ((!responderMode && !canCreateFromCallIntake) ||
+        (responderMode && !responderProjectAllowed)) ? (
+        <div className="card-modern text-sm font-bold text-rose-700">
+          {responderMode
+            ? "You are not assigned to this project or do not have permission to create a case."
+            : "You do not have permission to create a project case."}
+        </div>
+      ) : <>
+      <div className="page-header"><div><h1 className="page-title">New Case (Project)</h1><p className="page-subtitle">{responderMode ? "Create a case for your assigned project." : "Project case form launched from Call Intake. The case will open directly after creation."}</p></div></div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card-modern space-y-5">
@@ -416,6 +478,7 @@ if (unitType === "ambulance") {
           />
         </div>
       </div>
+      </>}
     </div>
   );
 }

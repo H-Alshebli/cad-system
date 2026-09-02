@@ -63,6 +63,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   missions: [
     "view",
     "view_assigned",
+    "create_project_case",
     "acknowledge",
     "update_status",
     "report",
@@ -317,6 +318,7 @@ export const ACTION_LABELS: Record<string, string> = {
 
   acknowledge: "Acknowledge",
   report: "Report",
+  create_project_case: "Create Project Case",
   edit_own: "Edit Own",
   edit_all: "Edit All",
 
@@ -402,11 +404,18 @@ export function normalizePermissions(permissions: PermissionsMap = {}) {
 
 export function normalizeRolePermissions(permissions: PermissionsMap = {}, role?: string | null) {
   const normalized = normalizePermissions(permissions);
+  const crewRole = /paramedic|ambulance|response.?team|medical.?team|driver|emt|crew/i.test(String(role || ""));
   const source = permissions?.cad_cases_new || {};
   const hasExplicitScope = typeof source.view_all === "boolean" || typeof source.view_assigned === "boolean";
   if (source.view === true && !hasExplicitScope) {
-    const crewRole = /paramedic|ambulance|response.?team|medical.?team|driver|emt|crew/i.test(String(role || ""));
     normalized.cad_cases_new[crewRole ? "view_assigned" : "view_all"] = true;
+  }
+  if (
+    crewRole &&
+    permissions?.missions?.view === true &&
+    typeof permissions?.missions?.create_project_case !== "boolean"
+  ) {
+    normalized.missions.create_project_case = true;
   }
   return normalized;
 }

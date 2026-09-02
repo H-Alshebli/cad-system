@@ -155,6 +155,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       visible: isAdmin || can(permissions, "missions", "view"),
     },
     {
+      href: "/missions/cases/new",
+      label: "Create Case",
+      icon: <ClipboardPlus size={18} />,
+      visible: isAdmin || can(permissions, "missions", "create_project_case"),
+    },
+    {
       href: "/missions-plus",
       label: "My Missions+",
       icon: <Activity size={18} />,
