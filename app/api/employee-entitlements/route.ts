@@ -37,6 +37,20 @@ export async function GET(request: NextRequest) {
     .map((document) => ({ id: document.id, ...serialize(document.data()) }))
     .filter((record: any) => wantsAll || record.status !== "draft")
     .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (!wantsAll && records.length > 0) {
+    const userSnapshot = await adminDb.collection("users").doc(actor.uid).get();
+    const user = userSnapshot.data() || {};
+    const reviewStatus = String(user.crewProfileReviewStatus || "");
+    const profileSubmitted = Boolean(user.crewProfileSubmittedAt) ||
+      new Set(["submitted", "verified", "changes_required", "update_requested", "reopened"]).has(reviewStatus);
+    if (!profileSubmitted) {
+      return NextResponse.json({
+        records: [],
+        entitlementAvailable: true,
+        profileRequired: true,
+      });
+    }
+  }
   return NextResponse.json({ records });
 }
 
@@ -116,7 +130,7 @@ export async function POST(request: NextRequest) {
       recipientUserIds: [data.userId],
       recipientEmails: data.employeeEmail ? [data.employeeEmail] : [],
       title: action === "correct_and_resend" ? "Entitlement statement corrected" : "Entitlement dispute reviewed",
-      message: action === "correct_and_resend" ? "HR corrected and resent your entitlement statement for review." : "HR reviewed your dispute. Open your profile to view the response.",
+      message: action === "correct_and_resend" ? "HR corrected and resent your entitlement statement for review." : "HR reviewed your adjustment request. Open your profile to view the response.",
       link: "/crew-profile#employee-entitlements",
       readByUserIds: [],
       createdAt: FieldValue.serverTimestamp(),
