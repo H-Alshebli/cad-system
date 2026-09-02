@@ -6,6 +6,7 @@ import { signOut } from "firebase/auth";
 import {
   Activity,
   Ambulance,
+  Bell,
   BriefcaseMedical,
   ClipboardPlus,
   ClipboardList,
@@ -382,6 +383,16 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       <div className="border-t border-[#86A7B2]/25 p-4">
+        {!clientAccount && (
+          <Link
+            href="/settings/notifications"
+            onClick={onClose}
+            className={`mb-2 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-black transition ${isActive("/settings/notifications") ? "border-[#274C5A] bg-[#274C5A] text-white" : "border-[#86A7B2]/35 bg-white text-[#274C5A] hover:bg-[#f5f9fa]"}`}
+          >
+            <Bell size={16} />
+            Notification Settings
+          </Link>
+        )}
         {clientAccount && (
           <button
             type="button"

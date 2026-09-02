@@ -56,6 +56,8 @@ type AmbulanceDoc = {
 };
 
 const ALERT_AUDIO_PATH = "/sounds/alert.mp3";
+const ALERT_AUDIO_STORAGE_KEY = "hcad-alert-audio-enabled";
+const ALERT_AUDIO_EVENT = "hcad-alert-audio-setting";
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -165,13 +167,13 @@ export default function CaseAlertListener() {
     []
   );
 
-  const [audioReady, setAudioReady] = useState(false);
   const [alertCase, setAlertCase] = useState<AlertCase | null>(null);
   const [alertAudience, setAlertAudience] = useState<
     "dispatch" | "client" | "team"
   >("dispatch");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioEnabledRef = useRef(false);
   const alarmIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenCaseIdsRef = useRef<Set<string>>(new Set());
   const listenersReadyRef = useRef<Record<string, boolean>>({});
@@ -301,19 +303,6 @@ export default function CaseAlertListener() {
     return audioRef.current;
   }
 
-  async function enableAudio() {
-    try {
-      const audio = ensureAudio();
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
-      setAudioReady(true);
-    } catch (error) {
-      console.warn("Audio permission not ready yet:", error);
-      setAudioReady(false);
-    }
-  }
-
   function stopAlarm() {
     if (alarmIntervalRef.current) {
       clearInterval(alarmIntervalRef.current);
@@ -327,19 +316,22 @@ export default function CaseAlertListener() {
   }
 
   function startAlarm() {
+    if (!audioEnabledRef.current) return;
     const audio = ensureAudio();
     stopAlarm();
 
     audio.currentTime = 0;
     audio.play().catch(() => {
-      setAudioReady(false);
+      audioEnabledRef.current = false;
+      window.localStorage.setItem(ALERT_AUDIO_STORAGE_KEY, "false");
     });
 
     alarmIntervalRef.current = setInterval(() => {
       const replay = ensureAudio();
       replay.currentTime = 0;
       replay.play().catch(() => {
-        setAudioReady(false);
+        audioEnabledRef.current = false;
+        window.localStorage.setItem(ALERT_AUDIO_STORAGE_KEY, "false");
       });
     }, 1600);
   }
@@ -353,12 +345,31 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
   setAlertCase(c);
   setAlertAudience(audience);
   startAlarm();
+  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+    try {
+      const notification = new Notification(buildCaseTitle(c, audience), { body: buildCaseMessage(c), tag: `hcad-case-${c.id}` });
+      notification.onclick = () => { window.focus(); window.location.assign(getCaseDetailsHref(c)); notification.close(); };
+    } catch (error) {
+      console.warn("Browser notification could not be displayed", error);
+    }
+  }
 }
 
   function dismissAlert() {
     stopAlarm();
     setAlertCase(null);
   }
+
+  useEffect(() => {
+    audioEnabledRef.current = window.localStorage.getItem(ALERT_AUDIO_STORAGE_KEY) === "true";
+    const handleSetting = (event: Event) => {
+      const enabled = Boolean((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled);
+      audioEnabledRef.current = enabled;
+      if (!enabled) stopAlarm();
+    };
+    window.addEventListener(ALERT_AUDIO_EVENT, handleSetting);
+    return () => window.removeEventListener(ALERT_AUDIO_EVENT, handleSetting);
+  }, []);
 
   useEffect(() => {
     return () => stopAlarm();
@@ -621,15 +632,6 @@ function openAlert(c: AlertCase, audience: "dispatch" | "client" | "team") {
 
   return (
     <>
-      {!audioReady && (
-        <button
-          onClick={enableAudio}
-          className="fixed bottom-4 right-4 z-[70] rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-red-700"
-        >
-          Enable Alerts
-        </button>
-      )}
-
       {alertCase && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-slate-950 p-6 text-white shadow-2xl">
