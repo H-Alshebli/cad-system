@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import CaseChat from "@/app/components/CaseChat";
@@ -168,6 +168,7 @@ export default function CaseDetailsPage({
   const [loading, setLoading] = useState(true);
   const [epcr, setEpcr] = useState<any | null>(null);
   const [creatingReturnCad, setCreatingReturnCad] = useState(false);
+  const [currentProjectHospitals, setCurrentProjectHospitals] = useState<any[] | null>(null);
 
   const [editPatient, setEditPatient] = useState(false);
   const [editCaseInfo, setEditCaseInfo] = useState(false);
@@ -213,6 +214,42 @@ export default function CaseDetailsPage({
       .catch(() => setEpcr(null));
   }, [caseId]);
 
+  const linkedProjectId = String(caseData?.projectId || "").trim();
+
+  useEffect(() => {
+    setCurrentProjectHospitals(null);
+    if (!linkedProjectId) return;
+
+    return onSnapshot(
+      doc(db, "projects", linkedProjectId),
+      async (snapshot) => {
+        if (!snapshot.exists()) {
+          setCurrentProjectHospitals(null);
+          return;
+        }
+        const project = snapshot.data() as any;
+        const savedDestinations = Array.isArray(project.projectHospitals) ? project.projectHospitals : [];
+        if (savedDestinations.length > 0) {
+          setCurrentProjectHospitals(savedDestinations);
+          return;
+        }
+
+        const destinationIds = Array.isArray(project.projectHospitalIds) ? project.projectHospitalIds.filter(Boolean) : [];
+        if (destinationIds.length === 0) {
+          setCurrentProjectHospitals([]);
+          return;
+        }
+
+        const destinationSnapshots = await Promise.all(destinationIds.map((id: string) => getDoc(doc(db, "destinations", id))));
+        setCurrentProjectHospitals(destinationSnapshots.filter((item) => item.exists()).map((item) => ({ id: item.id, ...(item.data() as any) })));
+      },
+      (error) => {
+        console.warn("Could not load current project destinations", error);
+        setCurrentProjectHospitals(null);
+      }
+    );
+  }, [linkedProjectId]);
+
   if (loading) {
     return (
       <div className="page-shell">
@@ -238,6 +275,7 @@ export default function CaseDetailsPage({
   const pickupLocation = caseData.pickupLocation;
   const destinationLocation = caseData.destinationLocation;
   const projectId = String(caseData.projectId || "").trim();
+  const availableProjectHospitals = currentProjectHospitals ?? (Array.isArray(caseData.projectHospitals) ? caseData.projectHospitals : []);
 
   const canCreateReturnCad =
     sourceType === "B2C" &&
@@ -416,7 +454,7 @@ export default function CaseDetailsPage({
                   : caseData.ambulanceId || undefined
               }
               caseLocation={pickupLocation}
-              projectHospitals={caseData.projectHospitals || []}
+              projectHospitals={availableProjectHospitals}
               sourceType={sourceType}
               caseType={caseData.caseType}
               b2cDestination={caseData.destination}
