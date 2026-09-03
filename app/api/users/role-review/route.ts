@@ -27,13 +27,6 @@ function fullProfileSummary(user: Record<string, any>) {
     crewProfileComplianceStatus: completion.complianceStatus,
     crewProfileIsComplete: completion.isComplete,
     crewProfileIsCompliant: completion.isCompliant,
-    ...(!completion.isComplete && user.crewProfileReviewStatus === "verified"
-      ? {
-          crewProfileReviewStatus: "changes_required",
-          crewProfileReviewNotes:
-            "Complete the remaining Full profile requirements after account activation.",
-        }
-      : {}),
   };
 }
 
@@ -110,16 +103,6 @@ export async function POST(request: NextRequest) {
   const userSnapshot = await userRef.get();
   if (!userSnapshot.exists) return NextResponse.json({ error: "User not found." }, { status: 404 });
   const target = userSnapshot.data() || {};
-  if (
-    action === "approve" &&
-    ["pending", "resubmitted"].includes(String(target.roleRequestStatus || "")) &&
-    String(target.crewProfileReviewStatus || "") !== "verified"
-  ) {
-    return NextResponse.json(
-      { error: "Verify the Crew Profile before approving the requested role." },
-      { status: 409 }
-    );
-  }
   const reviewerName =
     authenticated.reviewer.name ||
     authenticated.reviewer.displayName ||
@@ -154,12 +137,7 @@ export async function POST(request: NextRequest) {
       ...fullProfileSummary(target),
     });
   } else if (action === "request_changes") {
-    await userRef.update({
-      ...common,
-      roleRequestStatus: "changes_requested",
-      crewProfileReviewStatus: "changes_required",
-      crewProfileReviewNotes: note,
-    });
+    await userRef.update({ ...common, roleRequestStatus: "changes_requested" });
   } else if (action === "reject") {
     await userRef.update({ ...common, roleRequestStatus: "rejected", active: false, accountStatus: "pending" });
   } else if (action === "suspend") {
