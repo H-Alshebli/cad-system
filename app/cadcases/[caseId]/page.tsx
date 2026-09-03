@@ -52,17 +52,17 @@ export default function ModernCadCaseDetailsPage({
 
     setAuthorized(false);
     setAccessDenied(false);
+    if (can("cad_cases_new", "view_all")) {
+      setAuthorized(true);
+      return;
+    }
+
     getDoc(doc(db, "cases", resolvedId))
       .then((snapshot) => {
         if (!snapshot.exists()) {
           setNotFound(true);
           return;
         }
-        if (can("cad_cases_new", "view_all")) {
-          setAuthorized(true);
-          return;
-        }
-
         const data = snapshot.data();
         const userId = user?.uid || "";
         const assigned = [
