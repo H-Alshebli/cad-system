@@ -50,15 +50,19 @@ export default function ModernCadCaseDetailsPage({
   useEffect(() => {
     if (!resolvedId || userLoading || permissionLoading) return;
 
+    let cancelled = false;
     setAuthorized(false);
     setAccessDenied(false);
     if (can("cad_cases_new", "view_all")) {
       setAuthorized(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     getDoc(doc(db, "cases", resolvedId))
       .then((snapshot) => {
+        if (cancelled) return;
         if (!snapshot.exists()) {
           setNotFound(true);
           return;
@@ -76,9 +80,14 @@ export default function ModernCadCaseDetailsPage({
         }
       })
       .catch((error) => {
+        if (cancelled) return;
         console.error("Could not authorize case access", error);
         setAccessDenied(true);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [can, permissionLoading, resolvedId, user?.uid, userLoading]);
 
   if (notFound) {
