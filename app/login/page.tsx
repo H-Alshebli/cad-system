@@ -66,6 +66,7 @@ export default function LoginPage() {
             active: false,
             accountStatus: "pending",
             accountType: "employee",
+            crewProfileRequirementMode: "full",
             role: "none",
             createdAt: serverTimestamp(),
           },
