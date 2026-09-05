@@ -158,8 +158,22 @@ export default function UsersPage() {
   async function updateAccountType(userId: string, accountType: UserAccountType) { if (canEdit) await updateDoc(doc(db, "users", userId), { accountType }); }
   async function updateProfileRequirementMode(target: EnrichedUser, mode: CrewProfileRequirementMode) {
     if (!canEdit) return;
-    const completion = getCrewProfileCompletion(getCrewProfileValues(target), target.crewProfileAttachments || {}, mode);
-    await updateDoc(doc(db, "users", target.id), { crewProfileRequirementMode: mode, crewProfileCompletion: completion.percent, crewProfileMissingFields: completion.missing.map((field) => field.key), crewProfilePendingVerificationFields: completion.pendingVerification.map((field) => field.key), crewProfileRejectedFields: completion.rejected.map((field) => field.key), crewProfileExpiredFields: completion.expired.map((field) => field.key), crewProfileExpiringSoonFields: completion.expiringSoon.map((field) => field.key), crewProfileStatus: completion.status, crewProfileComplianceStatus: completion.complianceStatus, crewProfileIsComplete: completion.isComplete, crewProfileIsCompliant: completion.isCompliant });
+    setBusyUserId(target.id);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/users/role-review", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_profile_requirement_mode", userId: target.id, mode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update the profile requirements.");
+      if (result.reopened) window.alert("The profile is now Full and has been reopened. The employee must complete the additional required fields and submit it again.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not update the profile requirements.");
+    } finally {
+      setBusyUserId("");
+    }
   }
   function exportToExcel() {
     const data = visibleUsers.map((entry) => ({ Name: entry.name || entry.fullNameEn || entry.fullNameAr || "", Email: entry.email || "", "Employee ID": entry.employeeId || "", "Job Title": entry.jobTitle, "Current Role": entry.role || "", "Requested Role": entry.requestedRole || entry.requestedJobTitle || "", "Role Request": entry.roleRequestStatus || "", "Profile Review": entry.crewProfileReviewStatus || "draft", Completion: `${entry.completion}%`, Status: entry.accountStatus || (entry.active ? "active" : "pending"), "Attention Reason": entry.attentionReason }));
@@ -194,7 +208,7 @@ export default function UsersPage() {
         <td className="p-3 font-bold text-[#274C5A]">{entry.role || "none"}</td>
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
-        <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || entry.active} title={entry.active ? "Active employee profiles are always Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary">Temporary</option><option value="full">Full</option></select></td>
+        <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || busyUserId === entry.id} title={entry.active ? "Active employee profiles can only be upgraded to Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary" disabled={entry.active}>Temporary</option><option value="full">Full</option></select></td>
         <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{showActivation && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}</div></td>
       </tr>;
     })}</tbody></table></div>

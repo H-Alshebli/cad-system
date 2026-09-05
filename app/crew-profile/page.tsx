@@ -522,6 +522,19 @@ export default function CrewProfilePage() {
         </div>
       )}
 
+      {requirementMode === "full" && reviewStatus === "reopened" && (
+        <div className="notice-warning mb-4">
+          <div className="font-black">Additional Full Profile Requirements</div>
+          <p className="mt-1 text-sm">
+            Your existing information has been kept. Complete the additional required
+            fields shown below, then submit your profile again.
+          </p>
+          <p className="mt-2 text-sm font-bold" dir="rtl">
+            تم الاحتفاظ ببياناتك السابقة. أكمل الحقول الإضافية المطلوبة أدناه ثم أرسل الملف مرة أخرى.
+          </p>
+        </div>
+      )}
+
       {!isEditable && (
         <div className="notice-warning mb-4">
           <div className="font-black">
