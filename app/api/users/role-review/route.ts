@@ -9,14 +9,17 @@ import {
 
 export const runtime = "nodejs";
 
-function fullProfileSummary(user: Record<string, any>) {
+function profileSummary(
+  user: Record<string, any>,
+  mode: "temporary" | "full"
+) {
   const completion = getCrewProfileCompletion(
     getCrewProfileValues(user),
     user.crewProfileAttachments || {},
-    "full"
+    mode
   );
   return {
-    crewProfileRequirementMode: "full",
+    crewProfileRequirementMode: mode,
     crewProfileCompletion: completion.percent,
     crewProfileMissingFields: completion.missing.map((field) => field.key),
     crewProfilePendingVerificationFields: completion.pendingVerification.map((field) => field.key),
@@ -27,6 +30,34 @@ function fullProfileSummary(user: Record<string, any>) {
     crewProfileComplianceStatus: completion.complianceStatus,
     crewProfileIsComplete: completion.isComplete,
     crewProfileIsCompliant: completion.isCompliant,
+  };
+}
+
+function fullProfileUpgrade(user: Record<string, any>, actorId: string) {
+  const summary = profileSummary(user, "full");
+  const reviewStatus = String(user.crewProfileReviewStatus || "draft");
+  const needsResubmission = !summary.crewProfileIsComplete;
+  const shouldReopen =
+    needsResubmission &&
+    new Set(["submitted", "verified", "update_requested"]).has(reviewStatus);
+
+  return {
+    ...summary,
+    ...(shouldReopen ? { crewProfileReviewStatus: "reopened" } : {}),
+    profileRequirementNeedsResubmission: needsResubmission,
+    profileRequirementUpgradedAt: FieldValue.serverTimestamp(),
+    profileRequirementUpgradedBy: actorId,
+    ...(shouldReopen
+      ? {
+          crewProfileReviewNotes:
+            "Profile upgraded to Full. Complete the additional required fields and submit again.",
+          crewProfileReviewHistory: FieldValue.arrayUnion({
+            action: "upgraded_to_full_and_reopened",
+            actorId,
+            at: new Date().toISOString(),
+          }),
+        }
+      : {}),
   };
 }
 
@@ -74,15 +105,47 @@ export async function POST(request: NextRequest) {
       eligible.slice(index, index + 400).forEach((entry) => {
         const data = entry.data();
         batch.update(entry.ref, {
-          ...fullProfileSummary(data),
+          ...fullProfileUpgrade(data, authenticated.token.uid),
           profileUpdatedAt: FieldValue.serverTimestamp(),
-          profileRequirementUpgradedAt: FieldValue.serverTimestamp(),
-          profileRequirementUpgradedBy: authenticated.token.uid,
         });
       });
       await batch.commit();
     }
     return NextResponse.json({ ok: true, updated: eligible.length });
+  }
+
+  if (action === "update_profile_requirement_mode") {
+    const mode = String(body.mode || "").trim();
+    if (!userId || !new Set(["temporary", "full"]).has(mode)) {
+      return NextResponse.json({ error: "Invalid profile requirement mode." }, { status: 400 });
+    }
+    const userRef = adminDb.collection("users").doc(userId);
+    const userSnapshot = await userRef.get();
+    if (!userSnapshot.exists) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+    const target = userSnapshot.data() || {};
+    if (mode === "temporary" && target.active === true) {
+      return NextResponse.json(
+        { error: "Active employee profiles must remain Full." },
+        { status: 409 }
+      );
+    }
+    const update =
+      mode === "full"
+        ? fullProfileUpgrade(target, authenticated.token.uid)
+        : profileSummary(target, "temporary");
+    await userRef.update({
+      ...update,
+      profileUpdatedAt: FieldValue.serverTimestamp(),
+    });
+    return NextResponse.json({
+      ok: true,
+      reopened:
+        mode === "full" &&
+        "crewProfileReviewStatus" in update &&
+        update.crewProfileReviewStatus === "reopened",
+    });
   }
 
   if (!userId || !new Set(["approve", "request_changes", "reject", "suspend", "activate"]).has(action)) {
@@ -134,7 +197,7 @@ export async function POST(request: NextRequest) {
       roleRequestStatus: "approved",
       active: true,
       accountStatus: "active",
-      ...fullProfileSummary(target),
+      ...profileSummary(target, "full"),
     });
   } else if (action === "request_changes") {
     await userRef.update({ ...common, roleRequestStatus: "changes_requested" });
@@ -147,7 +210,7 @@ export async function POST(request: NextRequest) {
       ...common,
       active: true,
       accountStatus: "active",
-      ...(target.accountType !== "client" ? fullProfileSummary(target) : {}),
+      ...(target.accountType !== "client" ? profileSummary(target, "full") : {}),
     });
   }
 

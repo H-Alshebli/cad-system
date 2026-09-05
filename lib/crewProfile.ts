@@ -345,7 +345,7 @@ export type CrewProfileValues = Record<string, string>;
 export type CrewProfileRequirementMode = "temporary" | "full";
 
 export function getCrewProfileRequirementMode(user: any): CrewProfileRequirementMode {
-  return user?.crewProfileRequirementMode === "full" ? "full" : "temporary";
+  return user?.crewProfileRequirementMode === "temporary" ? "temporary" : "full";
 }
 
 export type CrewAttachmentStatus = "uploaded" | "verified" | "rejected";
@@ -621,7 +621,7 @@ export function isSaudiNationality(value: string) {
 
 export function getCrewProfileRequirements(
   values: CrewProfileValues,
-  mode: CrewProfileRequirementMode = "temporary"
+  mode: CrewProfileRequirementMode = "full"
 ) {
   const titleGroup = normalizeCrewJobTitle(values.jobTitle);
   const availableFieldKeys = new Set(CREW_PROFILE_FIELDS.map((field) => field.key));
@@ -732,7 +732,7 @@ const credentialFieldKeys = new Set(
 export function isCrewProfileFieldVisible(
   fieldKey: string,
   values: CrewProfileValues,
-  mode: CrewProfileRequirementMode = "temporary"
+  mode: CrewProfileRequirementMode = "full"
 ) {
   const titleGroup = normalizeCrewJobTitle(values.jobTitle);
   const hasJobTitle = Boolean(String(values.jobTitle || "").trim());
@@ -876,7 +876,7 @@ export function parseCrewExpiryValue(
 export function getCrewProfileCompletion(
   values: CrewProfileValues,
   attachments: CrewProfileAttachments = {},
-  mode: CrewProfileRequirementMode = "temporary"
+  mode: CrewProfileRequirementMode = "full"
 ) {
   const { titleGroup, requirements, plannedRequirements } =
     getCrewProfileRequirements(values, mode);

@@ -25,9 +25,17 @@ export function isSandboxEnvironment() {
   return getHcadEnvironment() === "sandbox";
 }
 
+export function isProductionPreviewEnvironment() {
+  return (
+    getHcadEnvironment() === "production" &&
+    process.env.NEXT_PUBLIC_HCAD_PRODUCTION_PREVIEW === "true"
+  );
+}
+
 export function getEnvironmentLabel() {
   const env = getHcadEnvironment();
 
+  if (isProductionPreviewEnvironment()) return "Production Data Preview";
   if (env === "production") return "Production";
   if (env === "sandbox") return "Sandbox";
 

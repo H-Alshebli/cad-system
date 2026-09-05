@@ -36,7 +36,7 @@ export default function RegisterPage() {
           active: false,
           accountStatus: "pending",
           accountType,
-          crewProfileRequirementMode: "temporary",
+          crewProfileRequirementMode: "full",
           role: "none",
           createdAt: serverTimestamp(),
         },
