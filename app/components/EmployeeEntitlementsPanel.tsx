@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, WalletCards } from "lucide-react";
 
 import { auth } from "@/lib/firebase";
@@ -52,6 +52,7 @@ export default function EmployeeEntitlementsPanel() {
   const [error, setError] = useState("");
   const [entitlementAvailable, setEntitlementAvailable] = useState(false);
   const [profileRequired, setProfileRequired] = useState(false);
+  const viewedRecordIds = useRef(new Set<string>());
   const canView = isAdmin || can("employee_entitlements", "view_own");
   const canRespond = isAdmin || can("employee_entitlements", "respond");
 
@@ -63,9 +64,18 @@ export default function EmployeeEntitlementsPanel() {
       const response = await fetch("/api/employee-entitlements?scope=mine", { headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not load entitlements.");
-      setRecords(result.records || []);
+      const nextRecords = result.records || [];
+      setRecords(nextRecords);
       setEntitlementAvailable(Boolean(result.entitlementAvailable || result.records?.length));
       setProfileRequired(Boolean(result.profileRequired));
+      await Promise.allSettled(nextRecords.map(async (record: RecordItem) => {
+        if (viewedRecordIds.current.has(record.id)) return;
+        viewedRecordIds.current.add(record.id);
+        await fetch(`/api/employee-entitlements/${record.id}/view`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load entitlements.");
     } finally { setLoading(false); }

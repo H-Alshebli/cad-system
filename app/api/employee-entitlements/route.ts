@@ -18,6 +18,12 @@ function serialize(value: any): any {
   return value;
 }
 
+function hasSubmittedCrewProfile(user: Record<string, any>) {
+  const reviewStatus = String(user.crewProfileReviewStatus || "");
+  return Boolean(user.crewProfileSubmittedAt) ||
+    new Set(["submitted", "verified", "changes_required", "update_requested", "reopened"]).has(reviewStatus);
+}
+
 export async function GET(request: NextRequest) {
   const actor = await authenticateEntitlementsActor(request);
   if (!actor) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -33,17 +39,25 @@ export async function GET(request: NextRequest) {
     ? adminDb.collection("employeeEntitlements")
     : adminDb.collection("employeeEntitlements").where("userId", "==", actor.uid);
   const snapshot = await query.get();
-  const records = snapshot.docs
+  let records = snapshot.docs
     .map((document) => ({ id: document.id, ...serialize(document.data()) }))
     .filter((record: any) => wantsAll || record.status !== "draft")
     .sort((a: any, b: any) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (wantsAll) {
+    const userIds = Array.from(new Set(records.map((record: any) => String(record.userId || "")).filter(Boolean)));
+    const userSnapshots = userIds.length
+      ? await adminDb.getAll(...userIds.map((userId) => adminDb.collection("users").doc(userId)))
+      : [];
+    const usersById = new Map(userSnapshots.map((entry) => [entry.id, entry.data() || {}]));
+    records = records.map((record: any) => ({
+      ...record,
+      profileAccessPending:
+        record.status !== "draft" &&
+        !hasSubmittedCrewProfile(usersById.get(String(record.userId || "")) || {}),
+    }));
+  }
   if (!wantsAll && records.length > 0) {
-    const userSnapshot = await adminDb.collection("users").doc(actor.uid).get();
-    const user = userSnapshot.data() || {};
-    const reviewStatus = String(user.crewProfileReviewStatus || "");
-    const profileSubmitted = Boolean(user.crewProfileSubmittedAt) ||
-      new Set(["submitted", "verified", "changes_required", "update_requested", "reopened"]).has(reviewStatus);
-    if (!profileSubmitted) {
+    if (!hasSubmittedCrewProfile(actor.user)) {
       return NextResponse.json({
         records: [],
         entitlementAvailable: true,

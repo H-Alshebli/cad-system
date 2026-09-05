@@ -40,6 +40,9 @@ type EntitlementRecord = {
   respondedAt?: string;
   employeeResponse?: { action?: string; comment?: string; userName?: string; at?: string };
   hrResolution?: { action?: string; comment?: string; actorName?: string; at?: string };
+  profileAccessPending?: boolean;
+  firstViewedAt?: string;
+  lastViewedAt?: string;
   monthlyOvertime?: MonthlyEntry[];
   monthlyPerDiem?: MonthlyEntry[];
 };
@@ -53,15 +56,19 @@ function formatDate(value?: string) {
   return date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function recordStatusLabel(status?: string) {
-  return ({ draft: "Draft", sent: "Awaiting Response", agreed: "Agreed", disputed: "Adjustment Requested", dispute_rejected: "Adjustment Reviewed / Closed" } as Record<string, string>)[status || ""] || "Unknown";
+function recordStatusLabel(record: EntitlementRecord) {
+  if (record.status === "sent" && record.profileAccessPending) return "Profile Incomplete — Access Pending";
+  if (record.status === "sent" && record.firstViewedAt) return "Viewed — Awaiting Response";
+  return ({ draft: "Draft", sent: "Sent — Not Viewed", agreed: "Agreed", disputed: "Adjustment Requested", dispute_rejected: "Adjustment Reviewed / Closed" } as Record<string, string>)[record.status || ""] || "Unknown";
 }
 
-function statusBadgeClass(status?: string) {
-  if (status === "agreed") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
-  if (status === "disputed") return "border-red-500/25 bg-red-500/10 text-red-700";
-  if (status === "dispute_rejected") return "border-slate-500/25 bg-slate-500/10 text-slate-700";
-  if (status === "sent") return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+function statusBadgeClass(record: EntitlementRecord) {
+  if (record.status === "agreed") return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+  if (record.status === "disputed") return "border-red-500/25 bg-red-500/10 text-red-700";
+  if (record.status === "dispute_rejected") return "border-slate-500/25 bg-slate-500/10 text-slate-700";
+  if (record.status === "sent" && record.profileAccessPending) return "border-orange-500/25 bg-orange-500/10 text-orange-800";
+  if (record.status === "sent" && record.firstViewedAt) return "border-blue-500/25 bg-blue-500/10 text-blue-700";
+  if (record.status === "sent") return "border-amber-500/25 bg-amber-500/10 text-amber-700";
   return "border-slate-500/25 bg-slate-500/10 text-slate-700";
 }
 
@@ -140,7 +147,7 @@ export default function EmployeeEntitlementsAdminPage() {
       "OT Entitlement": item.overtime?.entitlement || 0, "OT Paid": item.overtime?.operationalPaid || 0, "OT Remaining": item.overtime?.operationalRemaining || 0,
       "Per Diem Entitlement": item.perDiem?.entitlement || 0, "Per Diem Paid": item.perDiem?.operationalPaid || 0, "Per Diem Remaining": item.perDiem?.operationalRemaining || 0,
       "Combined Entitlement": item.combined?.entitlement || 0, Paid: item.combined?.paid || 0, Remaining: item.combined?.remaining || 0,
-      Status: recordStatusLabel(item.status), Sent: item.sentAt || "", Responded: item.respondedAt || "",
+      Status: recordStatusLabel(item), Sent: item.sentAt || "", "First Viewed": item.firstViewedAt || "", "Last Viewed": item.lastViewedAt || "", Responded: item.respondedAt || "",
       "Employee Response": item.employeeResponse?.comment || "", "HR Response": item.hrResolution?.comment || "",
     }));
     const monthlyRows = (field: "monthlyOvertime" | "monthlyPerDiem", headers: string[]) => items.map((item) => {
@@ -312,7 +319,9 @@ export default function EmployeeEntitlementsAdminPage() {
           {!batches.length && <div className="card-modern text-slate-500">No entitlement batches imported yet.</div>}
           {batches.map(([batchId, items]) => {
             const draftCount = items.filter((item) => item.status === "draft").length;
-            const sentCount = items.filter((item) => item.status === "sent").length;
+            const accessPendingCount = items.filter((item) => item.status === "sent" && item.profileAccessPending).length;
+            const viewedCount = items.filter((item) => item.status === "sent" && !item.profileAccessPending && item.firstViewedAt).length;
+            const notViewedCount = items.filter((item) => item.status === "sent" && !item.profileAccessPending && !item.firstViewedAt).length;
             const agreedCount = items.filter((item) => item.status === "agreed").length;
             const disputedCount = items.filter((item) => item.status === "disputed").length;
             const resolvedCount = items.filter((item) => item.status === "dispute_rejected").length;
@@ -325,13 +334,28 @@ export default function EmployeeEntitlementsAdminPage() {
               ? "Completed"
               : responseCount > 0
               ? "Partially Responded"
+              : accessPendingCount === items.length
+              ? "Profile Completion Pending"
+              : accessPendingCount > 0
+              ? "Partially Access Pending"
+              : viewedCount > 0
+              ? "Viewed — Awaiting Responses"
               : "Sent — Awaiting Responses";
             const isExpanded = expandedBatchId === batchId;
             const search = batchSearch.trim().toLowerCase();
             const filteredItems = items.filter((item) => {
               const matchesSearch = !search || [item.employeeId, item.employeeName, item.employeeEmail]
                 .filter(Boolean).join(" ").toLowerCase().includes(search);
-              return matchesSearch && (batchStatus === "all" || item.status === batchStatus);
+              const matchesStatus = batchStatus === "all"
+                ? true
+                : batchStatus === "access_pending"
+                ? item.status === "sent" && Boolean(item.profileAccessPending)
+                : batchStatus === "viewed"
+                ? item.status === "sent" && !item.profileAccessPending && Boolean(item.firstViewedAt)
+                : batchStatus === "sent"
+                ? item.status === "sent" && !item.profileAccessPending && !item.firstViewedAt
+                : item.status === batchStatus;
+              return matchesSearch && matchesStatus;
             });
             const firstItem = items[0];
             return (
@@ -367,8 +391,8 @@ export default function EmployeeEntitlementsAdminPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  {[["Employees", items.length], ["Draft", draftCount], ["Awaiting", sentCount], ["Agreed", agreedCount], ["Needs Review", disputedCount], ["Closed", resolvedCount]].map(([label, value]) => (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-7">
+                  {[["Employees", items.length], ["Access Pending", accessPendingCount], ["Not Viewed", notViewedCount], ["Viewed", viewedCount], ["Agreed", agreedCount], ["Needs Review", disputedCount], ["Closed", resolvedCount]].map(([label, value]) => (
                     <div key={String(label)} className="card-soft py-3"><div className="text-xs font-bold text-slate-500">{label}</div><div className="mt-1 text-xl font-black">{value}</div></div>
                   ))}
                 </div>
@@ -378,7 +402,7 @@ export default function EmployeeEntitlementsAdminPage() {
                     <div className="grid gap-3 md:grid-cols-[1fr_240px]">
                       <label className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={16} /><input className="input-field w-full pl-10" value={batchSearch} onChange={(event) => setBatchSearch(event.target.value)} placeholder="Search employee name, ID, or email" /></label>
                       <select className="input-field" value={batchStatus} onChange={(event) => setBatchStatus(event.target.value)}>
-                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="sent">Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Adjustment Requested</option><option value="dispute_rejected">Adjustment Reviewed / Closed</option>
+                        <option value="all">All statuses</option><option value="draft">Draft</option><option value="access_pending">Profile Incomplete — Access Pending</option><option value="sent">Sent — Not Viewed</option><option value="viewed">Viewed — Awaiting Response</option><option value="agreed">Agreed</option><option value="disputed">Adjustment Requested</option><option value="dispute_rejected">Adjustment Reviewed / Closed</option>
                       </select>
                     </div>
                     <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -391,7 +415,7 @@ export default function EmployeeEntitlementsAdminPage() {
                               <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div>{Boolean(item.monthlyOvertime?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyOvertime?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyOvertime?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} hrs</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div>{Boolean(item.monthlyPerDiem?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyPerDiem?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyPerDiem?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} days</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
-                              <td className="p-3"><span className={`badge ${statusBadgeClass(item.status)}`}>{recordStatusLabel(item.status)}</span></td>
+                              <td className="p-3"><span className={`badge ${statusBadgeClass(item)}`}>{recordStatusLabel(item)}</span>{item.firstViewedAt && <div className="mt-2 text-xs text-slate-500">First viewed: {formatDate(item.firstViewedAt)}{item.lastViewedAt && <><br />Last viewed: {formatDate(item.lastViewedAt)}</>}</div>}</td>
                               <td className="p-3 text-xs">{formatDate(item.sentAt)}{item.sentByName && <div className="mt-1 text-slate-500">By {item.sentByName}</div>}</td>
                               <td className="p-3 text-xs">
                                 {item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">Employee: {item.employeeResponse.comment}</div>}</> : "No response yet"}
