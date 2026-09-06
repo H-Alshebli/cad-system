@@ -6,6 +6,7 @@ import {
   getCrewProfileCompletion,
   getCrewProfileValues,
 } from "@/lib/crewProfile";
+import { findCrewOrganizationRole } from "@/lib/crewOrganization";
 
 export const runtime = "nodejs";
 
@@ -154,6 +155,38 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "").trim();
   const selectedRole = String(body.role || "").trim();
   const note = String(body.note || "").trim();
+  if (action === "update_job_title") {
+    if (!userId || !selectedRole) {
+      return NextResponse.json({ error: "User and job title are required." }, { status: 400 });
+    }
+    const userRef = adminDb.collection("users").doc(userId);
+    const userSnapshot = await userRef.get();
+    if (!userSnapshot.exists) return NextResponse.json({ error: "User not found." }, { status: 404 });
+    const target = userSnapshot.data() || {};
+    const matchedTitle = findCrewOrganizationRole(selectedRole);
+    const crewProfile = {
+      ...(target.crewProfile || {}),
+      jobTitle: matchedTitle?.title || "Other",
+      otherJobTitle: matchedTitle ? "" : selectedRole,
+      department: matchedTitle
+        ? `${matchedTitle.department} / ${matchedTitle.team}`
+        : "Pending Admin Mapping / Pending Admin Mapping",
+    };
+    const summary = profileSummary(
+      { ...target, crewProfile },
+      target.crewProfileRequirementMode === "temporary" ? "temporary" : "full"
+    );
+    await userRef.update({
+      crewProfile,
+      requestedRole: selectedRole,
+      requestedJobTitle: selectedRole,
+      ...summary,
+      jobTitleUpdatedAt: FieldValue.serverTimestamp(),
+      jobTitleUpdatedBy: authenticated.token.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return NextResponse.json({ ok: true, jobTitle: selectedRole });
+  }
   if (action === "upgrade_active_profiles_to_full") {
     const snapshot = await adminDb.collection("users").where("active", "==", true).get();
     const eligible = snapshot.docs.filter((entry) => {

@@ -197,7 +197,11 @@ export async function POST(request: NextRequest) {
   const fullNameAr = String(body.fullNameAr || "").trim();
   const nextStatus = action === "submit" ? "submitted" : currentStatus || "draft";
   const nowIso = new Date().toISOString();
-  const requestedRole = String(crewProfile.jobTitle || "").trim();
+  const requestedRole = String(
+    crewProfile.jobTitle === "Other"
+      ? crewProfile.otherJobTitle || "Other"
+      : crewProfile.jobTitle || ""
+  ).trim();
   const previousRoleRequestStatus = String(user.roleRequestStatus || "");
 
   await userRef.update({

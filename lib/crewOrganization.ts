@@ -136,6 +136,22 @@ export const CREW_ORGANIZATION_ROLES: CrewOrganizationRole[] = [
     supervisorName: "Raed Alharbi (Supervisor)",
     managerName: "Abdulrahman Alrubayia (Acting Control Command Centre Manager)",
   },
+  {
+    title: "Quality Manager",
+    category: "non_medical",
+    department: "Quality Management",
+    team: "Quality",
+    supervisorName: "To be assigned",
+    managerName: "To be assigned",
+  },
+  {
+    title: "Other",
+    category: "non_medical",
+    department: "Pending Admin Mapping",
+    team: "Pending Admin Mapping",
+    supervisorName: "To be assigned",
+    managerName: "To be assigned",
+  },
 ];
 
 export function findCrewOrganizationRole(title: string) {

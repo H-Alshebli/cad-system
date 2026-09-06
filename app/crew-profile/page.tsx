@@ -257,13 +257,17 @@ export default function CrewProfilePage() {
 
       if (field.key === "roleCategory") {
         next.jobTitle = "";
+        next.otherJobTitle = "";
         next.department = "";
       }
 
       if (field.key === "jobTitle") {
         const organizationRole = findCrewOrganizationRole(value);
+        next.otherJobTitle = "";
         if (organizationRole) {
           next.department = `${organizationRole.department} / ${organizationRole.team}`;
+        } else {
+          next.department = "";
         }
       }
 

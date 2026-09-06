@@ -67,7 +67,7 @@ function enrichUser(user: UserType): EnrichedUser {
   } else if (accountStatus === "suspended") {
     priority = 90; attentionReason = "Account suspended";
   }
-  return { ...user, jobTitle: String(values.jobTitle || user.requestedJobTitle || ""), completion: completion.percent, missingCount: completion.missing.length + completion.rejected.length, attentionReason, priority };
+  return { ...user, jobTitle: String(values.jobTitle === "Other" ? values.otherJobTitle || "Other" : values.jobTitle || user.requestedJobTitle || ""), completion: completion.percent, missingCount: completion.missing.length + completion.rejected.length, attentionReason, priority };
 }
 
 export default function UsersPage() {
@@ -202,6 +202,22 @@ export default function UsersPage() {
   }
 
   async function updateAccountType(userId: string, accountType: UserAccountType) { if (canEdit) await updateDoc(doc(db, "users", userId), { accountType }); }
+  async function updateJobTitle(target: EnrichedUser) {
+    if (!canEdit) return;
+    const jobTitle = window.prompt("Enter the employee's correct job title:", target.jobTitle || "") || "";
+    if (!jobTitle.trim() || jobTitle.trim() === target.jobTitle) return;
+    setBusyUserId(target.id);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/users/role-review", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_job_title", userId: target.id, role: jobTitle.trim() }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not update the job title.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not update the job title.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
   async function deleteDuplicateAccount(target: EnrichedUser) {
     if (!isAdmin) return;
     const reason = window.prompt("Enter the reason for permanently deleting this duplicate account:") || "";
@@ -271,7 +287,7 @@ export default function UsersPage() {
       return <tr key={entry.id} className={`border-t border-[#e1ebef] align-top ${needsAttention ? "bg-amber-50/45" : "hover:bg-[#f7fbfc]"}`}>
         <td className="p-3"><div className="font-black text-[#123746]">{entry.name || entry.fullNameEn || entry.fullNameAr || "Unnamed user"}</div><div className="text-xs font-semibold text-[#607482]">{entry.email || "—"}</div><div className="mt-1 text-xs text-[#7F7F7F]">ID: {entry.employeeId || "Missing"}</div></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${needsAttention ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.attentionReason}</span>{duplicateIdentityUserIds.has(entry.id) ? <div className="mt-2 text-xs font-black text-rose-700">Duplicate National ID / Iqama</div> : possibleDuplicateNameUserIds.has(entry.id) && <div className="mt-2 text-xs font-black text-amber-700">Possible duplicate name — review identity</div>}{entry.roleReviewNote && <div className="mt-2 max-w-[240px] text-xs text-rose-700">{entry.roleReviewNote}</div>}</td>
-        <td className="p-3"><div className="font-bold text-[#123746]">{entry.jobTitle || "Not selected"}</div><div className="mt-1 text-xs text-[#607482]">{entry.completion}% • {(entry.crewProfileReviewStatus || "draft").replaceAll("_", " ")}</div><div className="mt-1 text-xs font-semibold text-[#166575]">Project: {entry.approvedPrimaryProjectName || projects[String(entry.crewProfile?.primaryProjectId || "")] || (entry.crewProfile?.primaryProjectId === "lazem_hq" ? "Lazem HQ" : "Not selected")}</div>{entry.projectAssignmentStatus === "transfer_review_required" && <div className="mt-1 text-xs font-bold text-amber-700">Project transfer needs coordination</div>}{entry.missingCount > 0 && <div className="mt-1 text-xs font-bold text-rose-700">{entry.missingCount} item(s) missing/rejected</div>}</td>
+        <td className="p-3"><div className="font-bold text-[#123746]">{entry.jobTitle || "Not selected"}</div>{canEdit && <button type="button" disabled={busyUserId === entry.id} onClick={() => updateJobTitle(entry)} className="mt-1 text-xs font-bold text-[#166575] underline underline-offset-2">Edit Job Title</button>}<div className="mt-1 text-xs text-[#607482]">{entry.completion}% • {(entry.crewProfileReviewStatus || "draft").replaceAll("_", " ")}</div><div className="mt-1 text-xs font-semibold text-[#166575]">Project: {entry.approvedPrimaryProjectName || projects[String(entry.crewProfile?.primaryProjectId || "")] || (entry.crewProfile?.primaryProjectId === "lazem_hq" ? "Lazem HQ" : "Not selected")}</div>{entry.projectAssignmentStatus === "transfer_review_required" && <div className="mt-1 text-xs font-bold text-amber-700">Project transfer needs coordination</div>}{entry.missingCount > 0 && <div className="mt-1 text-xs font-bold text-rose-700">{entry.missingCount} item(s) missing/rejected</div>}</td>
         <td className="p-3 font-bold text-[#274C5A]">{entry.role || "none"}</td>
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>

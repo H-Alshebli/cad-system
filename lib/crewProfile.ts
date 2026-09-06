@@ -160,6 +160,7 @@ export const CREW_PROFILE_SECTIONS: CrewProfileSection[] = [
         options: ["Medical Role", "Non-Medical Role"],
       },
       { key: "jobTitle", label: "Job Title", type: "select", optionsSource: "roles" },
+      { key: "otherJobTitle", label: "Other Job Title", type: "text", placeholder: "Enter your actual job title" },
       { key: "department", label: "Department", type: "text" },
       { key: "supervisorName", label: "Supervisor Name", type: "text" },
       {
@@ -464,6 +465,7 @@ export const CREW_PROFILE_TEMPORARY_VISIBLE_KEYS = new Set([
   "mobileHasWhatsapp",
   "roleCategory",
   "jobTitle",
+  "otherJobTitle",
   "department",
   "employmentType",
   "bankName",
@@ -639,6 +641,9 @@ export function getCrewProfileRequirements(
     if (values.bankName === "Other") {
       temporaryRequirements.push(credential("otherBankName", "Other Bank Name"));
     }
+    if (values.jobTitle === "Other") {
+      temporaryRequirements.push(credential("otherJobTitle", "Other Job Title"));
+    }
     return {
       titleGroup,
       requirements: temporaryRequirements,
@@ -680,6 +685,9 @@ export function getCrewProfileRequirements(
       : []),
     ...(values.outsideCityMaxDuration === "Other"
       ? [credential("outsideCityMaxDurationOther", "Other Duration (Days)")]
+      : []),
+    ...(values.jobTitle === "Other"
+      ? [credential("otherJobTitle", "Other Job Title")]
       : []),
   ];
 
@@ -756,6 +764,7 @@ export function isCrewProfileFieldVisible(
   if (fieldKey === "outsideCityMaxDurationOther") {
     return values.outsideCityMaxDuration === "Other";
   }
+  if (fieldKey === "otherJobTitle") return values.jobTitle === "Other";
   if (fieldKey === "drivesAmbulance") return titleGroup === "paramedic";
   if (!credentialFieldKeys.has(fieldKey)) return true;
   if (!hasJobTitle) return false;
@@ -938,7 +947,9 @@ export function getCrewProfileCompletion(
   });
   const isMappedJobTitle = Boolean(
     String(values.jobTitle || "").trim() &&
-      (titleGroup !== "other" || findCrewOrganizationRole(values.jobTitle))
+      (values.jobTitle === "Other"
+        ? String(values.otherJobTitle || "").trim()
+        : titleGroup !== "other" || findCrewOrganizationRole(values.jobTitle))
   );
   const isComplete =
     missing.length === 0 &&
