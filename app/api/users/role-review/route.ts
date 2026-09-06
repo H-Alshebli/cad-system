@@ -83,6 +83,66 @@ async function authenticate(request: NextRequest) {
   }
 }
 
+async function assignEmployeeToRequestedProject(
+  userId: string,
+  target: Record<string, any>,
+  actorId: string,
+  actorName: string
+) {
+  const requestedProjectId = String(target?.crewProfile?.primaryProjectId || "").trim();
+  if (!requestedProjectId || new Set(["none", "lazem_hq"]).has(requestedProjectId)) {
+    return { assigned: false, reason: "no_project_selected" };
+  }
+
+  const previouslyApprovedProjectId = String(target.approvedPrimaryProjectId || "").trim();
+  if (previouslyApprovedProjectId && previouslyApprovedProjectId !== requestedProjectId) {
+    await adminDb.collection("users").doc(userId).update({
+      requestedPrimaryProjectId: requestedProjectId,
+      projectAssignmentStatus: "transfer_review_required",
+      projectAssignmentUpdatedAt: FieldValue.serverTimestamp(),
+    });
+    return { assigned: false, reason: "transfer_review_required" };
+  }
+
+  return adminDb.runTransaction(async (transaction) => {
+    const projectRef = adminDb.collection("projects").doc(requestedProjectId);
+    const userRef = adminDb.collection("users").doc(userId);
+    const projectSnapshot = await transaction.get(projectRef);
+    if (!projectSnapshot.exists || projectSnapshot.data()?.isArchived === true) {
+      transaction.update(userRef, {
+        requestedPrimaryProjectId: requestedProjectId,
+        projectAssignmentStatus: "project_unavailable",
+        projectAssignmentUpdatedAt: FieldValue.serverTimestamp(),
+      });
+      return { assigned: false, reason: "project_unavailable" };
+    }
+
+    const project = projectSnapshot.data() || {};
+    transaction.update(projectRef, {
+      assignedUsers: { ...(project.assignedUsers || {}), [userId]: true },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(userRef, {
+      approvedPrimaryProjectId: requestedProjectId,
+      approvedPrimaryProjectName:
+        project.projectName || project.name || project.title || requestedProjectId,
+      requestedPrimaryProjectId: requestedProjectId,
+      projectAssignmentStatus: "assigned",
+      projectAssignedAt: FieldValue.serverTimestamp(),
+      projectAssignedBy: actorId,
+      projectAssignedByName: actorName,
+      projectAssignmentHistory: FieldValue.arrayUnion({
+        action: "assigned_from_crew_profile_approval",
+        projectId: requestedProjectId,
+        actorId,
+        actorName,
+        at: new Date().toISOString(),
+      }),
+    });
+    return { assigned: true, projectId: requestedProjectId };
+  });
+}
+
 export async function POST(request: NextRequest) {
   const authenticated = await authenticate(request);
   if (!authenticated) {
@@ -189,6 +249,7 @@ export async function POST(request: NextRequest) {
     }),
   };
 
+  let projectAssignment: Record<string, any> | null = null;
   if (action === "approve") {
     await userRef.update({
       ...common,
@@ -199,6 +260,12 @@ export async function POST(request: NextRequest) {
       accountStatus: "active",
       ...profileSummary(target, "full"),
     });
+    projectAssignment = await assignEmployeeToRequestedProject(
+      userId,
+      target,
+      authenticated.token.uid,
+      reviewerName
+    );
   } else if (action === "request_changes") {
     await userRef.update({ ...common, roleRequestStatus: "changes_requested" });
   } else if (action === "reject") {
@@ -212,7 +279,15 @@ export async function POST(request: NextRequest) {
       accountStatus: "active",
       ...(target.accountType !== "client" ? profileSummary(target, "full") : {}),
     });
+    if (target.accountType !== "client" && !target.approvedPrimaryProjectId) {
+      projectAssignment = await assignEmployeeToRequestedProject(
+        userId,
+        target,
+        authenticated.token.uid,
+        reviewerName
+      );
+    }
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, projectAssignment });
 }

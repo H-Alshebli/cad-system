@@ -19,6 +19,8 @@ type UserType = {
   crewProfileAttachments?: Record<string, any>; crewProfileReviewStatus?: string;
   requestedRole?: string; requestedJobTitle?: string; roleRequestStatus?: string;
   roleRequestedAt?: any; roleReviewNote?: string;
+  approvedPrimaryProjectId?: string; approvedPrimaryProjectName?: string;
+  requestedPrimaryProjectId?: string; projectAssignmentStatus?: string;
 };
 type EnrichedUser = UserType & { jobTitle: string; completion: number; missingCount: number; attentionReason: string; priority: number };
 
@@ -68,6 +70,7 @@ export default function UsersPage() {
   const { can, isAdmin } = usePermissions(reviewer?.role);
   const [users, setUsers] = useState<UserType[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
+  const [projects, setProjects] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyUserId, setBusyUserId] = useState("");
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({});
@@ -87,6 +90,10 @@ export default function UsersPage() {
     setLoading(false);
   }), []);
   useEffect(() => onSnapshot(collection(db, "roles"), (snapshot) => setRoles(snapshot.docs.map((entry) => entry.id).sort((a, b) => a.localeCompare(b)))), []);
+  useEffect(() => onSnapshot(collection(db, "projects"), (snapshot) => setProjects(Object.fromEntries(snapshot.docs.map((entry) => {
+    const data = entry.data();
+    return [entry.id, String(data.projectName || data.name || data.title || entry.id)];
+  })))), []);
 
   const enrichedUsers = useMemo(() => users.map(enrichUser).sort((a, b) => a.priority - b.priority || dateMillis(b.roleRequestedAt) - dateMillis(a.roleRequestedAt) || String(a.name || a.email).localeCompare(String(b.name || b.email))), [users]);
   const activeTemporaryCount = enrichedUsers.filter(
@@ -131,6 +138,11 @@ export default function UsersPage() {
       const response = await fetch("/api/users/role-review", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: target.id, action, role, note }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not update the account.");
+      if (result.projectAssignment?.reason === "transfer_review_required") {
+        window.alert("The account was approved. The requested project is a transfer, so the existing assignment was kept for safe handover.");
+      } else if (result.projectAssignment?.reason === "project_unavailable") {
+        window.alert("The account was approved, but the selected project is unavailable. Review the project selection.");
+      }
     } catch (error) { window.alert(error instanceof Error ? error.message : "Could not update the account."); } finally { setBusyUserId(""); }
   }
 
@@ -204,7 +216,7 @@ export default function UsersPage() {
       return <tr key={entry.id} className={`border-t border-[#e1ebef] align-top ${needsAttention ? "bg-amber-50/45" : "hover:bg-[#f7fbfc]"}`}>
         <td className="p-3"><div className="font-black text-[#123746]">{entry.name || entry.fullNameEn || entry.fullNameAr || "Unnamed user"}</div><div className="text-xs font-semibold text-[#607482]">{entry.email || "—"}</div><div className="mt-1 text-xs text-[#7F7F7F]">ID: {entry.employeeId || "Missing"}</div></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${needsAttention ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.attentionReason}</span>{entry.roleReviewNote && <div className="mt-2 max-w-[240px] text-xs text-rose-700">{entry.roleReviewNote}</div>}</td>
-        <td className="p-3"><div className="font-bold text-[#123746]">{entry.jobTitle || "Not selected"}</div><div className="mt-1 text-xs text-[#607482]">{entry.completion}% • {(entry.crewProfileReviewStatus || "draft").replaceAll("_", " ")}</div>{entry.missingCount > 0 && <div className="mt-1 text-xs font-bold text-rose-700">{entry.missingCount} item(s) missing/rejected</div>}</td>
+        <td className="p-3"><div className="font-bold text-[#123746]">{entry.jobTitle || "Not selected"}</div><div className="mt-1 text-xs text-[#607482]">{entry.completion}% • {(entry.crewProfileReviewStatus || "draft").replaceAll("_", " ")}</div><div className="mt-1 text-xs font-semibold text-[#166575]">Project: {entry.approvedPrimaryProjectName || projects[String(entry.crewProfile?.primaryProjectId || "")] || (entry.crewProfile?.primaryProjectId === "lazem_hq" ? "Lazem HQ" : "Not selected")}</div>{entry.projectAssignmentStatus === "transfer_review_required" && <div className="mt-1 text-xs font-bold text-amber-700">Project transfer needs coordination</div>}{entry.missingCount > 0 && <div className="mt-1 text-xs font-bold text-rose-700">{entry.missingCount} item(s) missing/rejected</div>}</td>
         <td className="p-3 font-bold text-[#274C5A]">{entry.role || "none"}</td>
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
