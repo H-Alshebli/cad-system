@@ -8,12 +8,19 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Mail, Lock, User, ShieldCheck, Activity } from "lucide-react";
 import type { UserAccountType } from "@/lib/userAccounts";
 
+const normalizeIdentityInput = (value: string) => value
+  .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+  .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+  .replace(/\D/g, "")
+  .slice(0, 10);
+
 export default function RegisterPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nationalId, setNationalId] = useState("");
   const [accountType, setAccountType] = useState<UserAccountType>("employee");
 
   const [error, setError] = useState("");
@@ -25,6 +32,15 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     try {
+      if (accountType === "employee") {
+        const identityResponse = await fetch("/api/register/identity-check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identity: nationalId }),
+        });
+        const identityResult = await identityResponse.json().catch(() => ({}));
+        if (!identityResponse.ok) throw new Error(identityResult.error || "Could not verify National ID / Iqama.");
+      }
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const fbUser = cred.user;
 
@@ -38,6 +54,9 @@ export default function RegisterPage() {
           accountType,
           crewProfileRequirementMode: "full",
           role: "none",
+          ...(accountType === "employee"
+            ? { crewProfile: { nationalId: normalizeIdentityInput(nationalId) } }
+            : {}),
           createdAt: serverTimestamp(),
         },
         { merge: true }
@@ -173,6 +192,16 @@ export default function RegisterPage() {
                       required
                     />
                   </div>
+                </div>
+
+                <div>
+                  {accountType === "employee" && <>
+                    <label className="mb-2 block text-sm font-bold text-[#274C5A]">National ID / Iqama</label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#86A7B2]" />
+                      <input type="text" inputMode="numeric" maxLength={10} placeholder="Enter 10 digits" value={nationalId} onChange={(event) => setNationalId(normalizeIdentityInput(event.target.value))} className="h-14 w-full rounded-xl border border-[#86A7B2]/45 bg-white pl-12 pr-4 text-base font-semibold text-[#2B2B2B] outline-none transition placeholder:text-[#7F7F7F]/70 focus:border-[#274C5A] focus:ring-4 focus:ring-[#86A7B2]/25" required />
+                    </div>
+                  </>}
                 </div>
 
                 <div>

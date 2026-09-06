@@ -21,11 +21,13 @@ type UserType = {
   roleRequestedAt?: any; roleReviewNote?: string;
   approvedPrimaryProjectId?: string; approvedPrimaryProjectName?: string;
   requestedPrimaryProjectId?: string; projectAssignmentStatus?: string;
+  identityHash?: string; identityMasked?: string;
 };
 type EnrichedUser = UserType & { jobTitle: string; completion: number; missingCount: number; attentionReason: string; priority: number };
 
 const normalized = (value: unknown) => String(value || "").trim().toLowerCase();
 const dateMillis = (value: any) => value?.toMillis?.() || value?.toDate?.()?.getTime?.() || 0;
+const normalizedIdentity = (value: unknown) => String(value || "").replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))).replace(/\D/g, "");
 
 function resolveRequestedRole(user: UserType, roles: string[]) {
   const requested = String(user.requestedRole || user.requestedJobTitle || "").trim();
@@ -99,6 +101,28 @@ export default function UsersPage() {
   })))), []);
 
   const enrichedUsers = useMemo(() => users.map(enrichUser).sort((a, b) => a.priority - b.priority || dateMillis(b.roleRequestedAt) - dateMillis(a.roleRequestedAt) || String(a.name || a.email).localeCompare(String(b.name || b.email))), [users]);
+  const duplicateIdentityUserIds = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    users.forEach((entry) => {
+      const identity = entry.identityHash || normalizedIdentity(entry.crewProfile?.nationalId);
+      if (!identity || (!entry.identityHash && identity.length !== 10)) return;
+      grouped.set(identity, [...(grouped.get(identity) || []), entry.id]);
+    });
+    return new Set(Array.from(grouped.values()).filter((ids) => ids.length > 1).flat());
+  }, [users]);
+  const possibleDuplicateNameUserIds = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    users.forEach((entry) => {
+      const name = normalized(entry.fullNameEn || entry.name || entry.fullNameAr);
+      if (name.length < 5) return;
+      grouped.set(name, [...(grouped.get(name) || []), entry.id]);
+    });
+    return new Set(Array.from(grouped.values()).filter((ids) => ids.length > 1).flat());
+  }, [users]);
+  const duplicateReviewUserIds = useMemo(
+    () => new Set([...duplicateIdentityUserIds, ...possibleDuplicateNameUserIds]),
+    [duplicateIdentityUserIds, possibleDuplicateNameUserIds]
+  );
   const activeTemporaryCount = enrichedUsers.filter(
     (entry) =>
       entry.active &&
@@ -111,7 +135,8 @@ export default function UsersPage() {
     inactive: enrichedUsers.filter((entry) => !entry.active && normalized(entry.accountStatus) !== "suspended").length,
     profileIssues: enrichedUsers.filter((entry) => entry.missingCount > 0 || ["submitted", "update_requested"].includes(normalized(entry.crewProfileReviewStatus))).length,
     active: enrichedUsers.filter((entry) => entry.active).length,
-  }), [enrichedUsers]);
+    duplicates: duplicateReviewUserIds.size,
+  }), [duplicateReviewUserIds, enrichedUsers]);
   const filterOptions = useMemo(() => ({
     jobTitles: Array.from(new Set(enrichedUsers.map((entry) => entry.jobTitle).filter(Boolean))).sort(),
     requestedRoles: Array.from(new Set(enrichedUsers.map((entry) => entry.requestedRole || entry.requestedJobTitle || "").filter(Boolean))).sort(),
@@ -121,12 +146,12 @@ export default function UsersPage() {
     const needle = normalized(search);
     return enrichedUsers.filter((entry) => {
       const account = entry.accountStatus || (entry.active ? "active" : "pending");
-      const attentionMatches = attentionFilter === "all" || (attentionFilter === "needs_attention" && entry.priority < 10) || (attentionFilter === "role_approval" && ["pending", "resubmitted"].includes(normalized(entry.roleRequestStatus))) || (attentionFilter === "inactive" && !entry.active) || (attentionFilter === "profile_issues" && (entry.missingCount > 0 || normalized(entry.crewProfileReviewStatus) === "submitted")) || (attentionFilter === "active" && entry.active);
+      const attentionMatches = attentionFilter === "all" || (attentionFilter === "duplicates" && duplicateReviewUserIds.has(entry.id)) || (attentionFilter === "needs_attention" && entry.priority < 10) || (attentionFilter === "role_approval" && ["pending", "resubmitted"].includes(normalized(entry.roleRequestStatus))) || (attentionFilter === "inactive" && !entry.active) || (attentionFilter === "profile_issues" && (entry.missingCount > 0 || normalized(entry.crewProfileReviewStatus) === "submitted")) || (attentionFilter === "active" && entry.active);
       const requested = String(entry.requestedRole || entry.requestedJobTitle || "");
       const textMatches = !needle || [entry.name, entry.fullNameEn, entry.fullNameAr, entry.email, entry.mobile, entry.employeeId, entry.role, requested, entry.jobTitle].some((value) => normalized(value).includes(needle));
       return attentionMatches && (accountFilter === "all" || account === accountFilter) && (profileFilter === "all" || normalized(entry.crewProfileReviewStatus || "draft") === profileFilter) && (roleFilter === "all" || entry.role === roleFilter) && (requestedRoleFilter === "all" || requested === requestedRoleFilter) && (jobTitleFilter === "all" || entry.jobTitle === jobTitleFilter) && (roleRequestFilter === "all" || normalized(entry.roleRequestStatus || "none") === roleRequestFilter) && (accountTypeFilter === "all" || getUserAccountType(entry) === accountTypeFilter) && textMatches;
     });
-  }, [accountFilter, accountTypeFilter, attentionFilter, enrichedUsers, jobTitleFilter, profileFilter, requestedRoleFilter, roleFilter, roleRequestFilter, search]);
+  }, [accountFilter, accountTypeFilter, attentionFilter, duplicateReviewUserIds, enrichedUsers, jobTitleFilter, profileFilter, requestedRoleFilter, roleFilter, roleRequestFilter, search]);
 
   async function reviewRole(target: EnrichedUser, action: "approve" | "request_changes" | "reject" | "suspend" | "activate") {
     if (!canEdit) return;
@@ -177,6 +202,26 @@ export default function UsersPage() {
   }
 
   async function updateAccountType(userId: string, accountType: UserAccountType) { if (canEdit) await updateDoc(doc(db, "users", userId), { accountType }); }
+  async function deleteDuplicateAccount(target: EnrichedUser) {
+    if (!isAdmin) return;
+    const reason = window.prompt("Enter the reason for permanently deleting this duplicate account:") || "";
+    if (!reason.trim()) return;
+    const expected = target.email || target.id;
+    const confirmation = window.prompt(`Type the account email exactly to confirm permanent deletion:\n${expected}`) || "";
+    if (normalized(confirmation) !== normalized(expected)) return;
+    setBusyUserId(target.id);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/users/delete-duplicate", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: target.id, reason, confirmation }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not delete the duplicate account.");
+      window.alert("Duplicate account deleted. Historical operational and medical records were preserved.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not delete the duplicate account.");
+    } finally {
+      setBusyUserId("");
+    }
+  }
   async function updateProfileRequirementMode(target: EnrichedUser, mode: CrewProfileRequirementMode) {
     if (!canEdit) return;
     setBusyUserId(target.id);
@@ -204,11 +249,11 @@ export default function UsersPage() {
   const clearFilters = () => { setSearch(""); setAttentionFilter("all"); setAccountFilter("all"); setProfileFilter("all"); setRoleFilter("all"); setRequestedRoleFilter("all"); setJobTitleFilter("all"); setRoleRequestFilter("all"); setAccountTypeFilter("all"); };
 
   if (loading) return <div className="p-6"><div className="card-modern">Loading users...</div></div>;
-  const statsCards: Array<[string, number, string, any]> = [["Needs Attention", stats.attention, "needs_attention", AlertTriangle], ["Role Approval", stats.roleApproval, "role_approval", ShieldCheck], ["Inactive", stats.inactive, "inactive", Users], ["Profile Issues", stats.profileIssues, "profile_issues", AlertTriangle], ["Active", stats.active, "active", CheckCircle2]];
+  const statsCards: Array<[string, number, string, any]> = [["Duplicates", stats.duplicates, "duplicates", AlertTriangle], ["Needs Attention", stats.attention, "needs_attention", AlertTriangle], ["Role Approval", stats.roleApproval, "role_approval", ShieldCheck], ["Inactive", stats.inactive, "inactive", Users], ["Profile Issues", stats.profileIssues, "profile_issues", AlertTriangle], ["Active", stats.active, "active", CheckCircle2]];
 
   return <PermissionGuard module="users" action="view" showMessage><div className="page-shell space-y-5">
     <div className="page-header"><div><span className="badge">Administration</span><h1 className="page-title mt-3">Users Management</h1><p className="page-subtitle">Attention-first role approval, profile review, and account access.</p></div><div className="flex flex-wrap gap-2">{activeTemporaryCount > 0 && <button disabled={!canEdit || busyUserId === "bulk-full"} onClick={upgradeActiveProfilesToFull} className="btn-secondary">{busyUserId === "bulk-full" ? "Upgrading..." : `Move Active to Full (${activeTemporaryCount})`}</button>}<button onClick={exportToExcel} className="btn-primary">Export Filtered Excel</button></div></div>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{statsCards.map(([label, value, filter, Icon]) => <button key={label} onClick={() => setAttentionFilter(filter)} className={`card-modern text-left transition hover:border-[#74cdda] ${attentionFilter === filter ? "border-[#274C5A] ring-2 ring-[#274C5A]/10" : ""}`}><Icon size={17} className="text-[#274C5A]"/><div className="mt-2 text-xs font-bold text-[#607482]">{label}</div><div className="text-2xl font-black text-[#123746]">{value}</div></button>)}</div>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{statsCards.map(([label, value, filter, Icon]) => <button key={label} onClick={() => setAttentionFilter(filter)} className={`card-modern text-left transition hover:border-[#74cdda] ${attentionFilter === filter ? "border-[#274C5A] ring-2 ring-[#274C5A]/10" : ""}`}><Icon size={17} className="text-[#274C5A]"/><div className="mt-2 text-xs font-bold text-[#607482]">{label}</div><div className="text-2xl font-black text-[#123746]">{value}</div></button>)}</div>
     <div className="card-modern space-y-3"><div className="relative"><Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#607482]"/><input className="input w-full pl-11" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, Arabic name, email, employee ID, mobile, job title, or role"/></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <select className="select" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}><option value="all">All Accounts</option><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
       <select className="select" value={profileFilter} onChange={(e) => setProfileFilter(e.target.value)}><option value="all">All Profile Statuses</option><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="verified">Verified</option><option value="changes_required">Changes Required</option><option value="update_requested">Update Requested</option></select>
@@ -225,13 +270,13 @@ export default function UsersPage() {
       const hasManualRoleChange = entry.active && Boolean(approvalRole) && normalized(approvalRole) !== normalized(entry.role);
       return <tr key={entry.id} className={`border-t border-[#e1ebef] align-top ${needsAttention ? "bg-amber-50/45" : "hover:bg-[#f7fbfc]"}`}>
         <td className="p-3"><div className="font-black text-[#123746]">{entry.name || entry.fullNameEn || entry.fullNameAr || "Unnamed user"}</div><div className="text-xs font-semibold text-[#607482]">{entry.email || "—"}</div><div className="mt-1 text-xs text-[#7F7F7F]">ID: {entry.employeeId || "Missing"}</div></td>
-        <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${needsAttention ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.attentionReason}</span>{entry.roleReviewNote && <div className="mt-2 max-w-[240px] text-xs text-rose-700">{entry.roleReviewNote}</div>}</td>
+        <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${needsAttention ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.attentionReason}</span>{duplicateIdentityUserIds.has(entry.id) ? <div className="mt-2 text-xs font-black text-rose-700">Duplicate National ID / Iqama</div> : possibleDuplicateNameUserIds.has(entry.id) && <div className="mt-2 text-xs font-black text-amber-700">Possible duplicate name — review identity</div>}{entry.roleReviewNote && <div className="mt-2 max-w-[240px] text-xs text-rose-700">{entry.roleReviewNote}</div>}</td>
         <td className="p-3"><div className="font-bold text-[#123746]">{entry.jobTitle || "Not selected"}</div><div className="mt-1 text-xs text-[#607482]">{entry.completion}% • {(entry.crewProfileReviewStatus || "draft").replaceAll("_", " ")}</div><div className="mt-1 text-xs font-semibold text-[#166575]">Project: {entry.approvedPrimaryProjectName || projects[String(entry.crewProfile?.primaryProjectId || "")] || (entry.crewProfile?.primaryProjectId === "lazem_hq" ? "Lazem HQ" : "Not selected")}</div>{entry.projectAssignmentStatus === "transfer_review_required" && <div className="mt-1 text-xs font-bold text-amber-700">Project transfer needs coordination</div>}{entry.missingCount > 0 && <div className="mt-1 text-xs font-bold text-rose-700">{entry.missingCount} item(s) missing/rejected</div>}</td>
         <td className="p-3 font-bold text-[#274C5A]">{entry.role || "none"}</td>
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
         <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || busyUserId === entry.id} title={entry.active ? "Active employee profiles can only be upgraded to Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary" disabled={entry.active}>Temporary</option><option value="full">Full</option></select></td>
-        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{(showActivation || hasManualRoleChange) && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{hasManualRoleChange ? "Update Role" : entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}</div></td>
+        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{(showActivation || hasManualRoleChange) && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{hasManualRoleChange ? "Update Role" : entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}{isAdmin && duplicateReviewUserIds.has(entry.id) && <button disabled={busyUserId === entry.id} onClick={() => deleteDuplicateAccount(entry)} className="btn-secondary px-3 py-2 text-xs text-rose-700">Delete Duplicate</button>}</div></td>
       </tr>;
     })}</tbody></table></div>
   </div></PermissionGuard>;
