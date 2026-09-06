@@ -29,6 +29,9 @@ const dateMillis = (value: any) => value?.toMillis?.() || value?.toDate?.()?.get
 
 function resolveRequestedRole(user: UserType, roles: string[]) {
   const requested = String(user.requestedRole || user.requestedJobTitle || "").trim();
+  if (!["pending", "resubmitted", "changes_requested"].includes(normalized(user.roleRequestStatus))) {
+    return user.role || "";
+  }
   if (!requested) return user.role || "";
   const exact = roles.find((role) => normalized(role) === normalized(requested));
   if (exact) return exact;
@@ -127,17 +130,23 @@ export default function UsersPage() {
 
   async function reviewRole(target: EnrichedUser, action: "approve" | "request_changes" | "reject" | "suspend" | "activate") {
     if (!canEdit) return;
+    const role = selectedRoles[target.id] || resolveRequestedRole(target, roles);
     let note = "";
     if (action === "request_changes") { note = window.prompt("Enter the changes required from the employee:") || ""; if (!note.trim()) return; }
     if (action === "reject" && !window.confirm("Reject this role request and keep the account inactive?")) return;
     if (action === "suspend" && !window.confirm("Suspend this user's access?")) return;
-    const role = selectedRoles[target.id] || resolveRequestedRole(target, roles);
+    if (action === "approve" && target.active && normalized(role) !== normalized(target.role) && !window.confirm(`Change this user's system role from ${target.role || "none"} to ${role}?`)) return;
     setBusyUserId(target.id);
     try {
       const token = await auth.currentUser?.getIdToken();
       const response = await fetch("/api/users/role-review", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: target.id, action, role, note }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not update the account.");
+      setSelectedRoles((current) => {
+        const next = { ...current };
+        delete next[target.id];
+        return next;
+      });
       if (result.projectAssignment?.reason === "transfer_review_required") {
         window.alert("The account was approved. The requested project is a transfer, so the existing assignment was kept for safe handover.");
       } else if (result.projectAssignment?.reason === "project_unavailable") {
@@ -213,6 +222,7 @@ export default function UsersPage() {
       const requested = entry.requestedRole || entry.requestedJobTitle || "—"; const approvalRole = selectedRoles[entry.id] ?? resolveRequestedRole(entry, roles); const needsAttention = entry.priority < 10;
       const hasRoleRequest = ["pending", "resubmitted", "changes_requested"].includes(normalized(entry.roleRequestStatus));
       const showActivation = hasRoleRequest || (!entry.active && normalized(entry.accountStatus) !== "suspended");
+      const hasManualRoleChange = entry.active && Boolean(approvalRole) && normalized(approvalRole) !== normalized(entry.role);
       return <tr key={entry.id} className={`border-t border-[#e1ebef] align-top ${needsAttention ? "bg-amber-50/45" : "hover:bg-[#f7fbfc]"}`}>
         <td className="p-3"><div className="font-black text-[#123746]">{entry.name || entry.fullNameEn || entry.fullNameAr || "Unnamed user"}</div><div className="text-xs font-semibold text-[#607482]">{entry.email || "—"}</div><div className="mt-1 text-xs text-[#7F7F7F]">ID: {entry.employeeId || "Missing"}</div></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${needsAttention ? "border-amber-300 bg-amber-100 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{entry.attentionReason}</span>{entry.roleReviewNote && <div className="mt-2 max-w-[240px] text-xs text-rose-700">{entry.roleReviewNote}</div>}</td>
@@ -221,7 +231,7 @@ export default function UsersPage() {
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
         <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || busyUserId === entry.id} title={entry.active ? "Active employee profiles can only be upgraded to Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary" disabled={entry.active}>Temporary</option><option value="full">Full</option></select></td>
-        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{showActivation && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}</div></td>
+        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{(showActivation || hasManualRoleChange) && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{hasManualRoleChange ? "Update Role" : entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}</div></td>
       </tr>;
     })}</tbody></table></div>
   </div></PermissionGuard>;
