@@ -7,12 +7,19 @@ import { useRouter } from "next/navigation";
 
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 import { isClientAccount } from "@/lib/userAccounts";
 
 export default function WelcomePage() {
   const router = useRouter();
   const { user, loading } = useCurrentUser();
+  const { can, isAdmin, loading: permissionsLoading } = usePermissions(user?.role);
   const clientAccount = isClientAccount(user);
+  const hasDashboardAccess =
+    isAdmin ||
+    can("dashboards", "timeline") ||
+    can("dashboards", "epcr") ||
+    can("checklist_review_global", "view");
 
   const [projects, setProjects] = useState(0);
   const [ambulances, setAmbulances] = useState(0);
@@ -20,7 +27,7 @@ export default function WelcomePage() {
   const [roles, setRoles] = useState(0);
 
   useEffect(() => {
-    if (loading || !user || clientAccount) return;
+    if (loading || permissionsLoading || !user || clientAccount || !hasDashboardAccess) return;
 
     async function loadStats() {
       const projectsSnap = await getDocs(collection(db, "projects"));
@@ -35,16 +42,19 @@ export default function WelcomePage() {
     }
 
     loadStats();
-  }, [clientAccount, loading, user]);
+  }, [clientAccount, hasDashboardAccess, loading, permissionsLoading, user]);
 
   useEffect(() => {
-    if (!loading && user && clientAccount) {
+    if (loading || permissionsLoading || !user) return;
+    if (clientAccount) {
       router.replace("/client");
+    } else if (!hasDashboardAccess) {
+      router.replace("/dashboards");
     }
-  }, [clientAccount, loading, router, user]);
+  }, [clientAccount, hasDashboardAccess, loading, permissionsLoading, router, user]);
 
-  if (loading || clientAccount) {
-    return <div className="p-6 text-[#274C5A]">Loading...</div>;
+  if (loading || permissionsLoading || clientAccount || !hasDashboardAccess) {
+    return <div className="p-6 text-sm font-semibold text-[#607482]">Opening your workspace...</div>;
   }
 
   const stats = [
