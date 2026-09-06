@@ -29,6 +29,7 @@ import {
   SERVICE_TYPES as READINESS_SERVICE_TYPES,
   ServiceType,
   DeploymentType,
+  resolveCurrentProjectShift,
 } from "@/lib/readinessChecklist";
 
 const REQUEST_TYPES = [
@@ -99,6 +100,7 @@ type Hospital = {
 };
 
 type AmbulanceCrewAssignments = Record<string, string[]>;
+type AmbulanceShiftCrewAssignments = Record<string, Record<string, string[]>>;
 type CrewComplianceOverrides = Record<
   string,
   {
@@ -188,6 +190,8 @@ export default function NewProjectPage() {
 
   const [ambulanceCrewAssignments, setAmbulanceCrewAssignments] =
     useState<AmbulanceCrewAssignments>({});
+  const [ambulanceShiftCrewAssignments, setAmbulanceShiftCrewAssignments] =
+    useState<AmbulanceShiftCrewAssignments>({});
 
   const [selectedHospitalIds, setSelectedHospitalIds] = useState<string[]>([]);
 
@@ -612,9 +616,43 @@ export default function NewProjectPage() {
     );
   };
 
+  const updateShiftCrewMember = (ambulanceId: string, shiftId: string, index: number, userId: string) => {
+    const selectedUser = users.find((item) => item.id === userId);
+    if (selectedUser && !requestComplianceOverride(selectedUser)) return;
+    setAmbulanceShiftCrewAssignments((previous) => {
+      const current = [...(previous[ambulanceId]?.[shiftId] || ["", ""])];
+      if (userId && current.some((id, slot) => id === userId && slot !== index)) {
+        alert("This team member is already assigned to this shift.");
+        return previous;
+      }
+      current[index] = userId;
+      return { ...previous, [ambulanceId]: { ...(previous[ambulanceId] || {}), [shiftId]: current.slice(0, 2) } };
+    });
+  };
+
+  const getShiftCrewPayload = (ambulanceId: string) => Object.fromEntries(
+    selectedShiftSchedule.map((shift) => {
+      const crewUserIds = Array.from(new Set((ambulanceShiftCrewAssignments[ambulanceId]?.[shift.id] || []).filter((id) => id && selectedUserIds.includes(id)))).slice(0, 2);
+      const crewMembers = crewUserIds.flatMap((userId) => {
+        const member = users.find((item) => item.id === userId);
+        return member ? [{ userId, name: getUserName(member), email: member.email || "", role: member.role || "team" }] : [];
+      });
+      return [shift.id, { shiftId: shift.id, shiftName: shift.name, crewUserIds, crewMembers }];
+    })
+  );
+
   const createProject = async () => {
     if (!projectName.trim()) {
       alert("Project name is required.");
+      return;
+    }
+    const incompleteCrew = selectedAmbulances.find((ambulance) =>
+      selectedShiftSchedule.some((shift) =>
+        new Set((ambulanceShiftCrewAssignments[ambulance.id]?.[shift.id] || []).filter((id) => id && selectedUserIds.includes(id))).size !== 2
+      )
+    );
+    if (incompleteCrew) {
+      alert(`Assign exactly two crew members to every shift for ${getAmbulanceLabel(incompleteCrew)}.`);
       return;
     }
 
@@ -624,11 +662,9 @@ export default function NewProjectPage() {
         !getCrewDeploymentReadiness(user).ready &&
         !crewComplianceOverrides[user.id]
     );
-    const ambulanceCrewIds = unique(
-      selectedAmbulances.flatMap((ambulance) =>
-        getCrewUserIdsForAmbulance(ambulance.id)
-      )
-    );
+    const ambulanceCrewIds = unique(selectedAmbulances.flatMap((ambulance) =>
+      Object.values(ambulanceShiftCrewAssignments[ambulance.id] || {}).flat().filter((id) => id && selectedUserIds.includes(id))
+    ));
     const blockedAmbulanceCrew = users.filter(
       (user) =>
         ambulanceCrewIds.includes(user.id) &&
@@ -652,15 +688,18 @@ export default function NewProjectPage() {
     );
 
     const assignedAmbulancesPayload = selectedAmbulances.map((a) => {
-      const crewMembers = getCrewMembersForAmbulance(a.id);
+      const shiftCrewAssignments = getShiftCrewPayload(a.id);
+      const activeShift = resolveCurrentProjectShift(selectedShiftSchedule);
+      const crewMembers = (shiftCrewAssignments as any)[activeShift.shiftId]?.crewMembers || [];
 
       return {
         id: a.id,
         code: a.code || "",
         location: a.location || "",
         status: a.status || "",
-        crewUserIds: crewMembers.map((member) => member.userId),
+        crewUserIds: crewMembers.map((member: CrewMember) => member.userId),
         crewMembers,
+        shiftCrewAssignments,
         readinessOverride:
           readinessUnitOverrides[a.id]?.useProjectDefault === false
             ? {
@@ -739,7 +778,9 @@ export default function NewProjectPage() {
     }
 
     const ambulanceUpdates = selectedAmbulances.map((amb) => {
-      const crewMembers = getCrewMembersForAmbulance(amb.id);
+      const shiftCrewAssignments = getShiftCrewPayload(amb.id);
+      const activeShift = resolveCurrentProjectShift(selectedShiftSchedule);
+      const crewMembers = (shiftCrewAssignments as any)[activeShift.shiftId]?.crewMembers || [];
 
       return updateDoc(doc(db, "ambulances", amb.id), {
         assignedProjectId: docRef.id,
@@ -751,11 +792,14 @@ export default function NewProjectPage() {
 
         // ambulance-specific crew assignment
         crewMembers,
-        crewUserIds: crewMembers.map((member) => member.userId),
-        crew: crewMembers.map((member) => member.name),
+        crewUserIds: crewMembers.map((member: CrewMember) => member.userId),
+        assignedUserIds: crewMembers.map((member: CrewMember) => member.userId),
+        crew: crewMembers.map((member: CrewMember) => member.name),
+        shiftCrewAssignments,
+        crewAssignmentMode: "shift",
         crewComplianceOverrides: Object.fromEntries(
           Object.entries(crewComplianceOverrides).filter(([userId]) =>
-            crewMembers.some((member) => member.userId === userId)
+            crewMembers.some((member: CrewMember) => member.userId === userId)
           )
         ),
 
@@ -764,10 +808,9 @@ export default function NewProjectPage() {
     });
 
     const crewUserUpdates = selectedAmbulances.flatMap((amb) => {
-      const crewMembers = getCrewMembersForAmbulance(amb.id);
-
-      return crewMembers.map((member) =>
-        updateDoc(doc(db, "users", member.userId), {
+      const crewUserIds = Array.from(new Set(Object.values(getShiftCrewPayload(amb.id)).flatMap((assignment: any) => assignment.crewUserIds))) as string[];
+      return crewUserIds.map((userId) =>
+        updateDoc(doc(db, "users", userId), {
           ambulanceIds: arrayUnion(amb.id),
           updatedAt: serverTimestamp(),
         })
@@ -1317,8 +1360,8 @@ export default function NewProjectPage() {
                   Ambulance Crew Assignment
                 </h2>
                 <p className="mt-1 text-xs font-semibold text-[#607482]">
-                  Assign crew members under each selected ambulance. The crew
-                  list comes from the Assigned Team selected above.
+                  Assign exactly two crew members per shift. Cases, alerts, and
+                  readiness checklists use the crew of the current shift automatically.
                 </p>
               </div>
 
@@ -1330,7 +1373,6 @@ export default function NewProjectPage() {
               ) : (
                 <div className="space-y-3">
                   {selectedAmbulances.map((amb) => {
-                    const crewRows = ambulanceCrewAssignments[amb.id] || [""];
                     const readinessOverride = getReadinessOverrideForAmbulance(amb.id);
                     const usesProjectDefault = readinessOverride.useProjectDefault !== false;
 
@@ -1350,68 +1392,37 @@ export default function NewProjectPage() {
                           </div>
 
                           <div className="rounded-full border border-[#b9ecf2] bg-[#effbfc] px-3 py-1 text-xs font-black text-[#166575]">
-                            {getCrewUserIdsForAmbulance(amb.id).length} crew
+                            2 crew per shift
                           </div>
                         </div>
 
                         <div className="space-y-2">
-                          {crewRows.map((userId, index) => (
-                            <div
-                              key={`${amb.id}-${index}`}
-                              className="flex flex-col gap-2 md:flex-row"
-                            >
-                              <select
-                                className={selectClass}
-                                value={userId}
-                                onChange={(e) =>
-                                  updateAmbulanceCrewMember(
-                                    amb.id,
-                                    index,
-                                    e.target.value
-                                  )
-                                }
-                              >
-                                <option value="">
-                                  Select crew member {index + 1}
-                                </option>
-
-                                {getSelectableCrewUsers(amb.id, userId).map(
-                                  (user) => (
-                                    <option key={user.id} value={user.id}>
-                                      {getUserName(user)}
-                                      {user.email ? ` - ${user.email}` : ""}
-                                      {getCrewDeploymentReadiness(user).ready
-                                        ? " - Compliant"
-                                        : crewComplianceOverrides[user.id]
-                                        ? " - Override approved"
-                                        : CREW_COMPLIANCE_ENFORCEMENT_ENABLED
-                                        ? " - Blocked"
-                                        : " - Profile pending"}
-                                    </option>
-                                  )
-                                )}
-                              </select>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeCrewMemberRow(amb.id, index)
-                                }
-                                className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-3 py-2 text-xs font-black text-[#b42318] hover:bg-[#ffe3e3]"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ))}
+                          {selectedShiftSchedule.map((shift) => {
+                            const crewIds = ambulanceShiftCrewAssignments[amb.id]?.[shift.id] || ["", ""];
+                            return (
+                              <div key={`${amb.id}-${shift.id}`} className="rounded-xl border border-[#d8e6ea] bg-white p-3">
+                                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                  <strong className="text-sm text-[#123746]">{shift.name}</strong>
+                                  <span className="text-xs text-[#607482]">{shift.startTime} – {shift.endTime}</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                  {[0, 1].map((index) => {
+                                    const currentId = crewIds[index] || "";
+                                    const usedByOtherSlot = crewIds.find((id, slot) => id && slot !== index);
+                                    return (
+                                      <select key={`${shift.id}-${index}`} className={selectClass} value={currentId} onChange={(event) => updateShiftCrewMember(amb.id, shift.id, index, event.target.value)}>
+                                        <option value="">Select crew member {index + 1}</option>
+                                        {selectedUsers.filter((member) => member.id !== usedByOtherSlot).map((member) => (
+                                          <option key={member.id} value={member.id}>{getUserName(member)}{member.email ? ` - ${member.email}` : ""}</option>
+                                        ))}
+                                      </select>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => addCrewMemberRow(amb.id)}
-                          className="mt-3 rounded-xl border border-[#c8dce2] bg-white px-3 py-2 text-xs font-black text-[#274C5A] hover:border-[#74cdda] hover:bg-[#f7fbfc]"
-                        >
-                          + Add Crew Member
-                        </button>
 
                         <div className="mt-4 rounded-xl border border-[#c8dce2] bg-white p-3">
                           <div className="flex flex-wrap items-center justify-between gap-3">

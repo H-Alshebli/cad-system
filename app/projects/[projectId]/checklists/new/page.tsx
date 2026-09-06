@@ -36,6 +36,7 @@ import {
   resolveCurrentProjectShift,
 } from "@/lib/readinessChecklist";
 import { getProjectDisplayName, getUnitDisplayName } from "@/lib/displayLabels";
+import { normalizeShiftCrewAssignments, resolveAmbulanceCrewForShift } from "@/lib/projectShiftCrew";
 
 const STATUS_OPTIONS = [
   { value: "unchecked", label: "Select" },
@@ -259,23 +260,8 @@ function getProjectAssignedUnitIds(project: any) {
   return ids;
 }
 
-function getUnitAssignedUserIds(unit: any) {
-  const ids = new Set<string>();
-
-  [
-    ...(Array.isArray(unit?.assignedUserIds) ? unit.assignedUserIds : []),
-    ...(Array.isArray(unit?.crewUserIds) ? unit.crewUserIds : []),
-  ].forEach((id) => {
-    if (id) ids.add(String(id).trim());
-  });
-
-  if (Array.isArray(unit?.crewMembers)) {
-    unit.crewMembers.forEach((member: any) => {
-      if (member?.userId) ids.add(String(member.userId).trim());
-    });
-  }
-
-  return ids;
+function getUnitAssignedUserIds(unit: any, shiftId?: string) {
+  return new Set(resolveAmbulanceCrewForShift(unit, shiftId).crewUserIds);
 }
 
 function getUserUnitIds(user: any) {
@@ -743,13 +729,16 @@ export default function NewProjectChecklistPage({
     const userUnitIds = getUserUnitIds(user);
     const userUnit = unitOptions.find((unit) => {
       const unitId = getUnitIdFromRecord(unit);
-      if (userUnitIds.has(unitId)) return true;
-      return user?.uid && getUnitAssignedUserIds(unit).has(user.uid);
+      const hasShiftSchedule = Object.keys(normalizeShiftCrewAssignments(unit?.shiftCrewAssignments)).length > 0;
+      if (hasShiftSchedule) {
+        return user?.uid && getUnitAssignedUserIds(unit, resolvedShift.shiftId).has(user.uid);
+      }
+      return userUnitIds.has(unitId) || Boolean(user?.uid && getUnitAssignedUserIds(unit).has(user.uid));
     });
 
     const automaticUnit = userUnit || (unitOptions.length === 1 ? unitOptions[0] : null);
     if (automaticUnit) setSelectedUnitId(getUnitIdFromRecord(automaticUnit));
-  }, [isManualMode, selectedUnitId, unitIdFromUrl, unitOptions, user]);
+  }, [isManualMode, resolvedShift.shiftId, selectedUnitId, unitIdFromUrl, unitOptions, user]);
 
   useEffect(() => {
     if (!isManualMode || !selectedProjectId || unitOptions.length === 0) return;
@@ -758,8 +747,11 @@ export default function NewProjectChecklistPage({
     const userUnitIds = getUserUnitIds(user);
     const userUnit = unitOptions.find((unit) => {
       const unitId = getUnitIdFromRecord(unit);
-      if (userUnitIds.has(unitId)) return true;
-      return user?.uid && getUnitAssignedUserIds(unit).has(user.uid);
+      const hasShiftSchedule = Object.keys(normalizeShiftCrewAssignments(unit?.shiftCrewAssignments)).length > 0;
+      if (hasShiftSchedule) {
+        return user?.uid && getUnitAssignedUserIds(unit, resolvedShift.shiftId).has(user.uid);
+      }
+      return userUnitIds.has(unitId) || Boolean(user?.uid && getUnitAssignedUserIds(unit).has(user.uid));
     });
     const automaticUnit = userUnit || (unitOptions.length === 1 ? unitOptions[0] : null);
     if (!automaticUnit) return;
@@ -769,7 +761,7 @@ export default function NewProjectChecklistPage({
     setSelectedUnitId(unitId);
     setManualUnitId(unitId);
     setManualUnitCode(unitCode);
-  }, [isManualMode, selectedProjectId, unitIdFromUrl, unitOptions, user]);
+  }, [isManualMode, resolvedShift.shiftId, selectedProjectId, unitIdFromUrl, unitOptions, user]);
 
   useEffect(() => {
     setItems((current) => {
@@ -1128,6 +1120,7 @@ export default function NewProjectChecklistPage({
     }
     setSaving(true);
     try {
+      const checklistCrew = resolveAmbulanceCrewForShift(selectedUnit, resolvedShift.shiftId);
       const nowMs = Date.now();
       const durationSeconds = Math.max(1, Math.round((nowMs - startedAtMs) / 1000));
       const ref = await createReadinessChecklist(
@@ -1145,6 +1138,8 @@ export default function NewProjectChecklistPage({
           shiftDate: resolvedShift.shiftDate,
           shiftStartTime: resolvedShift.shiftStartTime,
           shiftEndTime: resolvedShift.shiftEndTime,
+          crewUserIds: checklistCrew.crewUserIds,
+          crewAssignmentSource: checklistCrew.source,
           serviceType,
           deploymentType,
           checklistCategory: deploymentType,
