@@ -12,6 +12,7 @@ import { ProjectLocation, readProjectLocations } from "@/lib/projectLocations";
 import { reserveOperationalNumber } from "@/lib/operationalNumbers";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import { resolveCurrentAmbulanceCrew } from "@/lib/projectShiftCrew";
 
 const Map = dynamic(() => import("@/app/components/Map"), { ssr: false });
 
@@ -114,21 +115,18 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       const allowed = snapshot.docs.some((entry) => {
         const ambulance = entry.data();
         const projectId = ambulance.assignedProjectId || ambulance.projectId || "";
-        const assignedIds = [
-          ...(Array.isArray(ambulance.assignedUserIds) ? ambulance.assignedUserIds : []),
-          ...(Array.isArray(ambulance.crewUserIds) ? ambulance.crewUserIds : []),
-        ];
-        const crewMemberAssigned = Array.isArray(ambulance.crewMembers)
-          ? ambulance.crewMembers.some((member: any) => member?.userId === user.uid)
-          : false;
+        const assignedIds = resolveCurrentAmbulanceCrew(
+          ambulance,
+          projectData?.shiftSchedule
+        ).assignment.crewUserIds;
         return projectId === params.projectId &&
-          (assignedIds.includes(user.uid) || crewMemberAssigned);
+          assignedIds.includes(user.uid);
       });
       setResponderProjectAllowed(isAdmin || allowed);
       setResponderAccessChecked(true);
     });
     return () => unsubscribe();
-  }, [can, isAdmin, params.projectId, permissionLoading, responderMode, user?.uid, userLoading]);
+  }, [can, isAdmin, params.projectId, permissionLoading, projectData?.shiftSchedule, responderMode, user?.uid, userLoading]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "projects", params.projectId), (snap) => {
@@ -237,16 +235,11 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
     const projectRef = doc(db, "projects", params.projectId);
     const projectSnap = await getDoc(projectRef);
     const project = projectSnap.exists() ? projectSnap.data() : projectData;
-    const assignedUserIds =
-      unitType === "ambulance" && Array.isArray(selectedUnit?.assignedUserIds)
-        ? Array.from(
-            new Set(
-              selectedUnit.assignedUserIds
-                .map((userId: unknown) => String(userId || "").trim())
-                .filter(Boolean)
-            )
-          )
-        : [];
+    const activeCrew =
+      unitType === "ambulance"
+        ? resolveCurrentAmbulanceCrew(selectedUnit, project?.shiftSchedule)
+        : null;
+    const assignedUserIds = activeCrew?.assignment.crewUserIds || [];
 
     if (unitType === "ambulance" && assignedUserIds.length === 0) {
       alert("The selected ambulance has no assigned team. Assign the team to the ambulance first.");
@@ -280,6 +273,10 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       dispatchStatus: "Assigned",
       assignedUserIds,
       participantUserIds,
+      crewAssignmentSource: activeCrew?.assignment.source || null,
+      assignedShiftId: activeCrew?.shift.shiftId || null,
+      assignedShiftName: activeCrew?.shift.shiftName || null,
+      assignedShiftDate: activeCrew?.shift.shiftDate || null,
       createdByUserId: user?.uid || null,
       createdByName: user?.name || user?.displayName || user?.email || "",
       creationSource: responderMode ? "responder_missions" : "call_intake",

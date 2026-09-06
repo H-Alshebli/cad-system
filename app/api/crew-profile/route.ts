@@ -8,6 +8,12 @@ import {
   getCrewProfileRequirementMode,
 } from "@/lib/crewProfile";
 import { adminAuth, adminDb } from "@/lib/server/firebaseAdmin";
+import {
+  hashEmployeeIdentity,
+  isValidEmployeeIdentity,
+  maskEmployeeIdentity,
+  normalizeEmployeeIdentity,
+} from "@/lib/server/employeeIdentity";
 
 export const runtime = "nodejs";
 
@@ -125,15 +131,87 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const normalizedIdentity = normalizeEmployeeIdentity(crewProfile.nationalId);
+  const identityHash = normalizedIdentity ? hashEmployeeIdentity(normalizedIdentity) : "";
+  if (action === "submit") {
+    if (!isValidEmployeeIdentity(normalizedIdentity)) {
+      return NextResponse.json(
+        { error: "National ID / Iqama must contain exactly 10 digits." },
+        { status: 400 }
+      );
+    }
+
+    const usersSnapshot = await adminDb.collection("users").get();
+    const duplicate = usersSnapshot.docs.find((entry) => {
+      if (entry.id === authUser.uid) return false;
+      const data = entry.data();
+      if (String(data.identityHash || "") === identityHash) return true;
+      return normalizeEmployeeIdentity(data?.crewProfile?.nationalId) === normalizedIdentity;
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error:
+            "This National ID / Iqama is already linked to another account. Contact an administrator to recover the existing account.",
+          code: "DUPLICATE_EMPLOYEE_IDENTITY",
+        },
+        { status: 409 }
+      );
+    }
+
+    try {
+      await adminDb.runTransaction(async (transaction) => {
+        const registryRef = adminDb.collection("employeeIdentityRegistry").doc(identityHash);
+        const registrySnapshot = await transaction.get(registryRef);
+        const ownerUserId = String(registrySnapshot.data()?.userId || "");
+        if (registrySnapshot.exists && ownerUserId !== authUser.uid) {
+          throw new Error("DUPLICATE_EMPLOYEE_IDENTITY");
+        }
+        const previousHash = String(user.identityHash || "");
+        let previousRef = null;
+        let previousOwned = false;
+        if (previousHash && previousHash !== identityHash) {
+          previousRef = adminDb.collection("employeeIdentityRegistry").doc(previousHash);
+          const previousSnapshot = await transaction.get(previousRef);
+          previousOwned = previousSnapshot.data()?.userId === authUser.uid;
+        }
+        if (previousRef && previousOwned) transaction.delete(previousRef);
+        transaction.set(registryRef, {
+          userId: authUser.uid,
+          identityLast4: normalizedIdentity.slice(-4),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "DUPLICATE_EMPLOYEE_IDENTITY") {
+        return NextResponse.json(
+          { error: "This National ID / Iqama is already linked to another account.", code: error.message },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
+  }
+
   const fullNameEn = String(body.fullNameEn || "").trim();
   const fullNameAr = String(body.fullNameAr || "").trim();
   const nextStatus = action === "submit" ? "submitted" : currentStatus || "draft";
   const nowIso = new Date().toISOString();
-  const requestedRole = String(crewProfile.jobTitle || "").trim();
+  const requestedRole = String(
+    crewProfile.jobTitle === "Other"
+      ? crewProfile.otherJobTitle || "Other"
+      : crewProfile.jobTitle || ""
+  ).trim();
   const previousRoleRequestStatus = String(user.roleRequestStatus || "");
 
   await userRef.update({
     crewProfile,
+    ...(identityHash
+      ? {
+          identityHash,
+          identityMasked: maskEmployeeIdentity(normalizedIdentity),
+        }
+      : {}),
     ...summary,
     crewProfileReviewStatus: nextStatus,
     crewProfileUpdatedAt: FieldValue.serverTimestamp(),
