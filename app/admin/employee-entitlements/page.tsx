@@ -2,7 +2,7 @@
 
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, Search, Send, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, FileSpreadsheet, Search, Send, Upload, X } from "lucide-react";
 
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { auth } from "@/lib/firebase";
@@ -45,7 +45,10 @@ type EntitlementRecord = {
   lastViewedAt?: string;
   monthlyOvertime?: MonthlyEntry[];
   monthlyPerDiem?: MonthlyEntry[];
+  version?: number;
 };
+
+type CorrectionMode = "edit_statement" | "correct_and_resend";
 
 const money = new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -136,6 +139,13 @@ export default function EmployeeEntitlementsAdminPage() {
   const [expandedBatchId, setExpandedBatchId] = useState("");
   const [batchSearch, setBatchSearch] = useState("");
   const [batchStatus, setBatchStatus] = useState("all");
+  const [correctionRecord, setCorrectionRecord] = useState<EntitlementRecord | null>(null);
+  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>("edit_statement");
+  const [correctionOtMonths, setCorrectionOtMonths] = useState<MonthlyEntry[]>([]);
+  const [correctionPerDiemMonths, setCorrectionPerDiemMonths] = useState<MonthlyEntry[]>([]);
+  const [correctionAmounts, setCorrectionAmounts] = useState({ otEntitlement: "", otPaid: "", perDiemEntitlement: "", perDiemPaid: "" });
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionError, setCorrectionError] = useState("");
   const canImport = isAdmin || can("employee_entitlements", "import");
   const canSend = isAdmin || can("employee_entitlements", "send");
   const canExport = isAdmin || can("employee_entitlements", "export");
@@ -229,29 +239,83 @@ export default function EmployeeEntitlementsAdminPage() {
     } finally { setBusy(""); }
   }
 
-  async function reviewDispute(record: EntitlementRecord, action: "correct_and_resend" | "reject_dispute") {
-    const comment = window.prompt(action === "correct_and_resend" ? "Explain the correction to the employee:" : "Explain why the dispute is rejected:")?.trim();
+  function allMonthEntries(headers: string[], current: MonthlyEntry[] = []) {
+    const currentByMonth = new Map(current.map((entry) => [entry.month, Number(entry.quantity || 0)]));
+    return Array.from(new Set([...headers, ...current.map((entry) => entry.month)]))
+      .map((month) => ({ month, quantity: currentByMonth.get(month) || 0 }));
+  }
+
+  function openCorrection(record: EntitlementRecord, mode: CorrectionMode) {
+    setCorrectionRecord(record);
+    setCorrectionMode(mode);
+    setCorrectionOtMonths(allMonthEntries(overtimeMonthHeaders.slice(2), record.monthlyOvertime));
+    setCorrectionPerDiemMonths(allMonthEntries(perDiemMonthHeaders.slice(2), record.monthlyPerDiem));
+    setCorrectionAmounts({
+      otEntitlement: String(record.overtime?.entitlement || 0),
+      otPaid: String(record.overtime?.operationalPaid || 0),
+      perDiemEntitlement: String(record.perDiem?.entitlement || 0),
+      perDiemPaid: String(record.perDiem?.operationalPaid || 0),
+    });
+    setCorrectionReason("");
+    setCorrectionError("");
+  }
+
+  function updateMonth(setter: typeof setCorrectionOtMonths, month: string, value: string) {
+    const quantity = value === "" ? 0 : Number(value);
+    setter((current) => current.map((entry) => entry.month === month ? { ...entry, quantity } : entry));
+  }
+
+  async function submitCorrection() {
+    if (!correctionRecord) return;
+    if (!correctionReason.trim()) {
+      setCorrectionError("A correction reason is required.");
+      return;
+    }
+    const numericAmounts = Object.fromEntries(Object.entries(correctionAmounts).map(([key, value]) => [key, Number(value)]));
+    if (Object.values(numericAmounts).some((value) => !Number.isFinite(value) || value < 0)) {
+      setCorrectionError("All financial amounts must be valid positive numbers or zero.");
+      return;
+    }
+    if ([...correctionOtMonths, ...correctionPerDiemMonths].some((entry) => !Number.isFinite(entry.quantity) || entry.quantity < 0)) {
+      setCorrectionError("Monthly hours and days must be valid positive numbers or zero.");
+      return;
+    }
+    if (numericAmounts.otPaid > numericAmounts.otEntitlement || numericAmounts.perDiemPaid > numericAmounts.perDiemEntitlement) {
+      setCorrectionError("Paid amounts cannot exceed entitlement amounts.");
+      return;
+    }
+
+    setBusy(`review:${correctionRecord.id}`); setCorrectionError(""); setError(""); setMessage("");
+    try {
+      const result = await apiRequest("/api/employee-entitlements", {
+        method: "POST",
+        body: JSON.stringify({
+          action: correctionMode,
+          recordId: correctionRecord.id,
+          comment: correctionReason.trim(),
+          ...numericAmounts,
+          monthlyOvertime: correctionOtMonths,
+          monthlyPerDiem: correctionPerDiemMonths,
+        }),
+      });
+      setCorrectionRecord(null);
+      setMessage(result.status === "draft" ? "Draft statement updated." : "Corrected statement saved and sent to the employee for a new review.");
+      await loadRecords();
+    } catch (submitError) {
+      setCorrectionError(submitError instanceof Error ? submitError.message : "Could not save the correction.");
+    } finally { setBusy(""); }
+  }
+
+  async function reviewDispute(record: EntitlementRecord, action: "reject_dispute") {
+    const comment = window.prompt("Explain why the adjustment request is being closed:")?.trim();
     if (!comment) return;
     const payload: Record<string, any> = { action, recordId: record.id, comment };
-    if (action === "correct_and_resend") {
-      const prompts: Array<[string, string, number]> = [
-        ["otEntitlement", "Correct Overtime entitlement:", Number(record.overtime?.entitlement || 0)],
-        ["otPaid", "Correct Overtime paid amount:", Number(record.overtime?.operationalPaid || 0)],
-        ["perDiemEntitlement", "Correct Per Diem entitlement:", Number(record.perDiem?.entitlement || 0)],
-        ["perDiemPaid", "Correct Per Diem paid amount:", Number(record.perDiem?.operationalPaid || 0)],
-      ];
-      for (const [key, label, current] of prompts) {
-        const entered = window.prompt(label, String(current));
-        if (entered === null) return;
-        payload[key] = Number(entered.replace(/,/g, ""));
-      }
-      if (!window.confirm("Save the corrected amounts and resend this statement to the employee?")) return;
-    } else if (!window.confirm("Reject this dispute and close the statement with your HR response?")) return;
+    if (!window.confirm("Close this adjustment request without changing the statement?")) return;
 
     setBusy(`review:${record.id}`); setError(""); setMessage("");
     try {
       const result = await apiRequest("/api/employee-entitlements", { method: "POST", body: JSON.stringify(payload) });
-      setMessage(result.status === "sent" ? "Statement corrected and resent to the employee." : "Dispute reviewed and closed.");
+      setMessage("Adjustment request reviewed and closed.");
       await loadRecords();
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : "Could not review the dispute.");
@@ -285,6 +349,14 @@ export default function EmployeeEntitlementsAdminPage() {
     records.forEach((record) => map.set(record.batchId, [...(map.get(record.batchId) || []), record]));
     return [...map.entries()];
   }, [records]);
+  const correctionOtHours = correctionOtMonths.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+  const correctionPerDiemDays = correctionPerDiemMonths.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+  const correctedOtEntitlement = Number(correctionAmounts.otEntitlement) || 0;
+  const correctedOtPaid = Number(correctionAmounts.otPaid) || 0;
+  const correctedPerDiemEntitlement = Number(correctionAmounts.perDiemEntitlement) || 0;
+  const correctedPerDiemPaid = Number(correctionAmounts.perDiemPaid) || 0;
+  const correctedCombined = correctedOtEntitlement + correctedPerDiemEntitlement;
+  const correctedRemaining = Math.max(0, correctedOtEntitlement - correctedOtPaid) + Math.max(0, correctedPerDiemEntitlement - correctedPerDiemPaid);
 
   return (
     <PermissionGuard module="employee_entitlements" action="view_all" showMessage>
@@ -432,7 +504,7 @@ export default function EmployeeEntitlementsAdminPage() {
                         <tbody>
                           {filteredItems.map((item) => (
                             <tr key={item.id} className="border-b align-top last:border-0">
-                              <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div>{canSend && <button className="btn-secondary mt-2 px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => relinkAccount(item)}>{busy === `relink:${item.id}` ? "Linking..." : "Change Linked Account"}</button>}</td>
+                              <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div>{canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => relinkAccount(item)}>{busy === `relink:${item.id}` ? "Linking..." : "Change Linked Account"}</button>{item.status !== "disputed" && <button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => openCorrection(item, "edit_statement")}>Edit Statement</button>}</div>}</td>
                               <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div>{Boolean(item.monthlyOvertime?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyOvertime?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyOvertime?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} hrs</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div>{Boolean(item.monthlyPerDiem?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyPerDiem?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyPerDiem?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} days</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
@@ -441,7 +513,7 @@ export default function EmployeeEntitlementsAdminPage() {
                               <td className="p-3 text-xs">
                                 {item.respondedAt ? <><div className="font-bold">{formatDate(item.respondedAt)}</div>{item.employeeResponse?.comment && <div className="mt-2 max-w-sm rounded-xl border border-red-200 bg-red-50 p-2 font-semibold text-red-700">Employee: {item.employeeResponse.comment}</div>}</> : "No response yet"}
                                 {item.hrResolution?.comment && <div className="mt-2 max-w-sm rounded-xl border border-blue-200 bg-blue-50 p-2 font-semibold text-blue-700">HR: {item.hrResolution.comment}</div>}
-                                {item.status === "disputed" && canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-primary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "correct_and_resend")}>Correct & Resend</button><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "reject_dispute")}>Close Without Adjustment</button></div>}
+                                {item.status === "disputed" && canSend && <div className="mt-2 flex flex-wrap gap-2"><button className="btn-primary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => openCorrection(item, "correct_and_resend")}>Correct & Resend</button><button className="btn-secondary px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => reviewDispute(item, "reject_dispute")}>Close Without Adjustment</button></div>}
                               </td>
                             </tr>
                           ))}
@@ -455,6 +527,64 @@ export default function EmployeeEntitlementsAdminPage() {
             );
           })}
         </section>
+
+        {correctionRecord && (
+          <div className="fixed inset-0 z-[100] flex justify-end bg-slate-950/45" role="dialog" aria-modal="true" aria-labelledby="correction-title">
+            <button className="absolute inset-0 cursor-default" aria-label="Close correction form" onClick={() => !busy && setCorrectionRecord(null)} />
+            <section className="relative z-10 h-full w-full overflow-y-auto bg-[#f4f9fb] shadow-2xl md:max-w-3xl">
+              <div className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+                <div>
+                  <div className="badge mb-2">HR Correction</div>
+                  <h2 id="correction-title" className="text-xl font-black text-[#123746]">{correctionMode === "correct_and_resend" ? "Correct & Resend Statement" : "Edit Entitlement Statement"}</h2>
+                  <p className="mt-1 text-sm text-slate-500">{correctionRecord.employeeId} — {correctionRecord.employeeName} • Version {correctionRecord.version || 1}</p>
+                </div>
+                <button type="button" className="btn-secondary !p-2" aria-label="Close" disabled={Boolean(busy)} onClick={() => setCorrectionRecord(null)}><X size={20} /></button>
+              </div>
+
+              <div className="space-y-5 p-4 md:p-6">
+                {correctionMode === "correct_and_resend" && correctionRecord.employeeResponse?.comment && (
+                  <div className="notice-danger"><div className="mb-1 text-xs font-black uppercase">Employee adjustment request</div>{correctionRecord.employeeResponse.comment}</div>
+                )}
+
+                <div className="card-modern space-y-4">
+                  <div className="flex items-center justify-between gap-3"><div><h3 className="font-black">Overtime</h3><p className="text-xs text-slate-500">Enter the number of hours for each month.</p></div><span className="badge">{correctionOtHours} total hours</span></div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {correctionOtMonths.map((entry) => <label key={entry.month} className="text-xs font-bold text-slate-600">{entry.month}<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={entry.quantity} onChange={(event) => updateMonth(setCorrectionOtMonths, entry.month, event.target.value)} /></label>)}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-bold">Total Overtime Amount (SAR)<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={correctionAmounts.otEntitlement} onChange={(event) => setCorrectionAmounts((current) => ({ ...current, otEntitlement: event.target.value }))} /></label>
+                    <label className="text-sm font-bold">Overtime Paid (SAR)<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={correctionAmounts.otPaid} onChange={(event) => setCorrectionAmounts((current) => ({ ...current, otPaid: event.target.value }))} /></label>
+                  </div>
+                </div>
+
+                <div className="card-modern space-y-4">
+                  <div className="flex items-center justify-between gap-3"><div><h3 className="font-black">Per Diem</h3><p className="text-xs text-slate-500">Enter the number of days for each month.</p></div><span className="badge">{correctionPerDiemDays} total days</span></div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {correctionPerDiemMonths.map((entry) => <label key={entry.month} className="text-xs font-bold text-slate-600">{entry.month}<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={entry.quantity} onChange={(event) => updateMonth(setCorrectionPerDiemMonths, entry.month, event.target.value)} /></label>)}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-bold">Total Per Diem Amount (SAR)<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={correctionAmounts.perDiemEntitlement} onChange={(event) => setCorrectionAmounts((current) => ({ ...current, perDiemEntitlement: event.target.value }))} /></label>
+                    <label className="text-sm font-bold">Per Diem Paid (SAR)<input type="number" min="0" step="0.01" className="input-field mt-1 w-full" value={correctionAmounts.perDiemPaid} onChange={(event) => setCorrectionAmounts((current) => ({ ...current, perDiemPaid: event.target.value }))} /></label>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="card-soft"><div className="text-xs font-bold text-slate-500">Combined Entitlement</div><div className="mt-1 text-xl font-black">{money.format(correctedCombined)} SAR</div></div>
+                  <div className="card-soft"><div className="text-xs font-bold text-slate-500">Combined Paid</div><div className="mt-1 text-xl font-black">{money.format(correctedOtPaid + correctedPerDiemPaid)} SAR</div></div>
+                  <div className="card-soft"><div className="text-xs font-bold text-slate-500">Combined Remaining</div><div className="mt-1 text-xl font-black">{money.format(correctedRemaining)} SAR</div></div>
+                </div>
+
+                <label className="block text-sm font-black">Correction Reason *<textarea className="input-field mt-2 min-h-28 w-full resize-y" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Explain what was changed and why. This note will be shown to the employee." /></label>
+                {correctionError && <div className="notice-danger">{correctionError}</div>}
+              </div>
+
+              <div className="sticky bottom-0 flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-white p-4">
+                <button type="button" className="btn-secondary" disabled={Boolean(busy)} onClick={() => setCorrectionRecord(null)}>Cancel</button>
+                <button type="button" className="btn-primary" disabled={Boolean(busy)} onClick={submitCorrection}>{busy === `review:${correctionRecord.id}` ? "Saving..." : correctionRecord.status === "draft" ? "Save Draft Changes" : "Save & Resend"}</button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </PermissionGuard>
   );
