@@ -79,8 +79,86 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "");
   const batchId = String(body.batchId || "").trim();
   const recordId = String(body.recordId || "").trim();
-  if (!new Set(["send_batch", "send_record", "correct_and_resend", "reject_dispute"]).has(action)) {
+  if (!new Set(["send_batch", "send_record", "correct_and_resend", "reject_dispute", "relink_account"]).has(action)) {
     return NextResponse.json({ error: "Invalid send action." }, { status: 400 });
+  }
+
+  if (action === "relink_account") {
+    const targetEmail = String(body.targetEmail || "").trim().toLowerCase();
+    if (!recordId || !targetEmail) {
+      return NextResponse.json({ error: "The entitlement record and target account email are required." }, { status: 400 });
+    }
+
+    const recordSnapshot = await adminDb.collection("employeeEntitlements").doc(recordId).get();
+    if (!recordSnapshot.exists) {
+      return NextResponse.json({ error: "Entitlement record not found." }, { status: 404 });
+    }
+
+    const usersSnapshot = await adminDb.collection("users").get();
+    const matchingUsers = usersSnapshot.docs.filter((entry) =>
+      String(entry.data()?.email || "").trim().toLowerCase() === targetEmail
+    );
+    if (matchingUsers.length !== 1) {
+      return NextResponse.json(
+        { error: matchingUsers.length ? "More than one account uses this email. Resolve the duplicate accounts first." : "No HCAD account was found for this email." },
+        { status: 409 }
+      );
+    }
+
+    const targetUserSnapshot = matchingUsers[0];
+    const targetUser = targetUserSnapshot.data() || {};
+    if (targetUser.active !== true || String(targetUser.accountStatus || "").toLowerCase() !== "active") {
+      return NextResponse.json({ error: "The target account must be active before entitlements can be linked to it." }, { status: 409 });
+    }
+
+    const record = recordSnapshot.data() || {};
+    const recordEmployeeId = String(record.employeeId || "").trim();
+    const targetEmployeeId = String(targetUser.employeeId || targetUser.crewProfile?.employeeId || "").trim();
+    if (!recordEmployeeId || recordEmployeeId !== targetEmployeeId) {
+      return NextResponse.json(
+        { error: `Employee ID mismatch. This statement belongs to ${recordEmployeeId || "an unknown ID"}, while the target account uses ${targetEmployeeId || "no employee ID"}.` },
+        { status: 409 }
+      );
+    }
+
+    if (targetUserSnapshot.id === String(record.userId || "")) {
+      return NextResponse.json({ error: "This entitlement statement is already linked to that account." }, { status: 409 });
+    }
+
+    const notificationSnapshots = await adminDb.collection("notifications").where("entitlementId", "==", recordId).get();
+    const writer = adminDb.batch();
+    writer.update(recordSnapshot.ref, {
+      userId: targetUserSnapshot.id,
+      employeeEmail: String(targetUser.email || targetEmail).trim(),
+      linkedAccountName: String(targetUser.name || targetUser.displayName || ""),
+      relinkedAt: FieldValue.serverTimestamp(),
+      relinkedBy: actor.uid,
+      relinkedByName: actor.name,
+      updatedAt: FieldValue.serverTimestamp(),
+      auditHistory: FieldValue.arrayUnion({
+        action: "account_relinked",
+        actorId: actor.uid,
+        actorName: actor.name,
+        previousUserId: String(record.userId || ""),
+        previousEmail: String(record.employeeEmail || ""),
+        targetUserId: targetUserSnapshot.id,
+        targetEmail: String(targetUser.email || targetEmail).trim(),
+        at: new Date().toISOString(),
+      }),
+    });
+    notificationSnapshots.docs.forEach((notification) => {
+      writer.update(notification.ref, {
+        recipientUserIds: [targetUserSnapshot.id],
+        recipientEmails: [String(targetUser.email || targetEmail).trim()],
+      });
+    });
+    await writer.commit();
+
+    return NextResponse.json({
+      status: "relinked",
+      userId: targetUserSnapshot.id,
+      email: String(targetUser.email || targetEmail).trim(),
+    });
   }
 
   if (action === "correct_and_resend" || action === "reject_dispute") {
