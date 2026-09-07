@@ -3,7 +3,7 @@
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { AlertTriangle, CheckCircle2, Search, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Search, ShieldCheck, Users, X } from "lucide-react";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import { auth, db } from "@/lib/firebase";
 import { getCrewProfileCompletion, getCrewProfileRequirementMode, getCrewProfileValues, type CrewProfileRequirementMode } from "@/lib/crewProfile";
@@ -88,6 +88,11 @@ export default function UsersPage() {
   const [jobTitleFilter, setJobTitleFilter] = useState("all");
   const [roleRequestFilter, setRoleRequestFilter] = useState("all");
   const [accountTypeFilter, setAccountTypeFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<EnrichedUser | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const canEdit = isAdmin || can("users", "edit");
 
   useEffect(() => onSnapshot(collection(db, "users"), (snapshot) => {
@@ -218,22 +223,36 @@ export default function UsersPage() {
       setBusyUserId("");
     }
   }
-  async function deleteDuplicateAccount(target: EnrichedUser) {
-    if (!isAdmin) return;
-    const reason = window.prompt("Enter the reason for permanently deleting this suspended account:") || "";
-    if (!reason.trim()) return;
-    const expected = target.email || target.id;
-    const confirmation = window.prompt(`Type the account email exactly to confirm permanent deletion:\n${expected}`) || "";
-    if (normalized(confirmation) !== normalized(expected)) return;
-    setBusyUserId(target.id);
+  function openDeleteAccount(target: EnrichedUser) {
+    setDeleteTarget(target);
+    setDeleteReason("");
+    setDeleteConfirmation("");
+    setDeleteError("");
+  }
+
+  async function deleteSuspendedAccount() {
+    if (!isAdmin || !deleteTarget) return;
+    const expected = deleteTarget.email || deleteTarget.id;
+    if (!deleteReason.trim()) {
+      setDeleteError("Deletion reason is required.");
+      return;
+    }
+    if (normalized(deleteConfirmation) !== normalized(expected)) {
+      setDeleteError("Enter the account email exactly as shown to confirm deletion.");
+      return;
+    }
+    setBusyUserId(deleteTarget.id);
+    setDeleteError("");
+    setActionMessage("");
     try {
       const token = await auth.currentUser?.getIdToken();
-      const response = await fetch("/api/users/delete-duplicate", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: target.id, reason, confirmation }) });
+      const response = await fetch("/api/users/delete-duplicate", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: deleteTarget.id, reason: deleteReason.trim(), confirmation: deleteConfirmation.trim() }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not delete the suspended account.");
-      window.alert("Account deleted. Historical operational and medical records were preserved.");
+      setDeleteTarget(null);
+      setActionMessage(result.warning || "Account deleted successfully. Historical operational and medical records were preserved.");
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not delete the suspended account.");
+      setDeleteError(error instanceof Error ? error.message : "Could not delete the suspended account.");
     } finally {
       setBusyUserId("");
     }
@@ -269,6 +288,7 @@ export default function UsersPage() {
 
   return <PermissionGuard module="users" action="view" showMessage><div className="page-shell space-y-5">
     <div className="page-header"><div><span className="badge">Administration</span><h1 className="page-title mt-3">Users Management</h1><p className="page-subtitle">Attention-first role approval, profile review, and account access.</p></div><div className="flex flex-wrap gap-2">{activeTemporaryCount > 0 && <button disabled={!canEdit || busyUserId === "bulk-full"} onClick={upgradeActiveProfilesToFull} className="btn-secondary">{busyUserId === "bulk-full" ? "Upgrading..." : `Move Active to Full (${activeTemporaryCount})`}</button>}<button onClick={exportToExcel} className="btn-primary">Export Filtered Excel</button></div></div>
+    {actionMessage && <div className="notice-success">{actionMessage}</div>}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">{statsCards.map(([label, value, filter, Icon]) => <button key={label} onClick={() => setAttentionFilter(filter)} className={`card-modern text-left transition hover:border-[#74cdda] ${attentionFilter === filter ? "border-[#274C5A] ring-2 ring-[#274C5A]/10" : ""}`}><Icon size={17} className="text-[#274C5A]"/><div className="mt-2 text-xs font-bold text-[#607482]">{label}</div><div className="text-2xl font-black text-[#123746]">{value}</div></button>)}</div>
     <div className="card-modern space-y-3"><div className="relative"><Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#607482]"/><input className="input w-full pl-11" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, Arabic name, email, employee ID, mobile, job title, or role"/></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <select className="select" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}><option value="all">All Accounts</option><option value="pending">Pending</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
@@ -292,8 +312,9 @@ export default function UsersPage() {
         <td className="p-3"><div className="mb-2 text-xs font-bold text-[#607482]">Requested: {requested}</div><select disabled={!canEdit} className="select min-w-[190px]" value={approvalRole} onChange={(e) => setSelectedRoles((current) => ({ ...current, [entry.id]: e.target.value }))}><option value="">Select role</option>{roles.map((role) => <option key={role}>{role}</option>)}</select></td>
         <td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-black ${entry.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : normalized(entry.accountStatus) === "suspended" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-700"}`}>{entry.accountStatus || (entry.active ? "active" : "pending")}</span><div className="mt-2 text-xs font-semibold capitalize text-[#607482]">Role: {(entry.roleRequestStatus || "not requested").replaceAll("_", " ")}</div></td>
         <td className="p-3 space-y-2"><select disabled={!canEdit} value={getUserAccountType(entry)} onChange={(e) => updateAccountType(entry.id, e.target.value as UserAccountType)} className="select min-w-[130px]"><option value="employee">Employee</option><option value="client">Client</option></select><select disabled={!canEdit || busyUserId === entry.id} title={entry.active ? "Active employee profiles can only be upgraded to Full" : undefined} value={getCrewProfileRequirementMode(entry)} onChange={(e) => updateProfileRequirementMode(entry, e.target.value as CrewProfileRequirementMode)} className="select min-w-[130px]"><option value="temporary" disabled={entry.active}>Temporary</option><option value="full">Full</option></select></td>
-        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{(showActivation || hasManualRoleChange) && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{hasManualRoleChange ? "Update Role" : entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}{isAdmin && !entry.active && normalized(entry.accountStatus) === "suspended" && <button disabled={busyUserId === entry.id} onClick={() => deleteDuplicateAccount(entry)} className="btn-secondary px-3 py-2 text-xs text-rose-700">Delete Account</button>}</div></td>
+        <td className="p-3"><div className="flex min-w-[250px] flex-wrap gap-2">{(showActivation || hasManualRoleChange) && <button disabled={!canEdit || busyUserId === entry.id || !approvalRole} onClick={() => reviewRole(entry, "approve")} className="btn-primary px-3 py-2 text-xs">{hasManualRoleChange ? "Update Role" : entry.active ? "Approve Role" : hasRoleRequest ? "Approve & Activate" : "Activate Account"}</button>}{hasRoleRequest && <><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "request_changes")} className="btn-secondary px-3 py-2 text-xs">Request Role Change</button><button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "reject")} className="btn-secondary px-3 py-2 text-xs text-rose-700">Reject</button></>}{entry.active ? <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "suspend")} className="btn-secondary px-3 py-2 text-xs">Suspend</button> : normalized(entry.accountStatus) === "suspended" && <button disabled={!canEdit || busyUserId === entry.id} onClick={() => reviewRole(entry, "activate")} className="btn-secondary px-3 py-2 text-xs">Reactivate</button>}{isAdmin && !entry.active && normalized(entry.accountStatus) === "suspended" && <button disabled={busyUserId === entry.id} onClick={() => openDeleteAccount(entry)} className="btn-secondary px-3 py-2 text-xs text-rose-700">Delete Account</button>}</div></td>
       </tr>;
     })}</tbody></table></div>
+    {deleteTarget && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-account-title"><button className="absolute inset-0 cursor-default" aria-label="Close deletion form" onClick={() => !busyUserId && setDeleteTarget(null)} /><div className="relative z-10 w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><span className="badge border-rose-200 bg-rose-50 text-rose-700">Permanent Action</span><h2 id="delete-account-title" className="mt-3 text-xl font-black text-[#123746]">Delete Suspended Account</h2><p className="mt-1 text-sm text-slate-500">Historical operational and medical records will be preserved.</p></div><button type="button" className="btn-secondary !p-2" disabled={Boolean(busyUserId)} onClick={() => setDeleteTarget(null)} aria-label="Close"><X size={19} /></button></div><div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="font-black">{deleteTarget.name || deleteTarget.fullNameEn || deleteTarget.fullNameAr}</div><div className="text-sm text-slate-600">{deleteTarget.email}</div></div><label className="mt-4 block text-sm font-black">Deletion reason *<textarea className="input-field mt-2 min-h-24 w-full resize-y" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} placeholder="Example: Duplicate account" /></label><label className="mt-4 block text-sm font-black">Type the account email to confirm *<div className="mt-1 text-xs font-semibold text-slate-500">{deleteTarget.email || deleteTarget.id}</div><input className="input-field mt-2 w-full" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" /></label>{deleteError && <div className="notice-danger mt-4">{deleteError}</div>}<div className="mt-5 flex justify-end gap-3"><button type="button" className="btn-secondary" disabled={Boolean(busyUserId)} onClick={() => setDeleteTarget(null)}>Cancel</button><button type="button" className="btn-primary !bg-rose-700 hover:!bg-rose-800" disabled={Boolean(busyUserId)} onClick={deleteSuspendedAccount}>{busyUserId === deleteTarget.id ? "Deleting..." : "Delete Account Permanently"}</button></div></div></div>}
   </div></PermissionGuard>;
 }
