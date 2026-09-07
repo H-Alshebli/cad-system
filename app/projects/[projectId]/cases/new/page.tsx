@@ -227,17 +227,55 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       alert("You are not assigned to this project or do not have permission to create a case.");
       return;
     }
-    if (!chiefComplaint || !triageLevel || !locationText || !selectedUnitId) {
-      alert("Please complete chief complaint, triage, location, and unit.");
+    const missingFields = [
+      !chiefComplaint ? "chief complaint" : null,
+      !triageLevel ? "triage" : null,
+      !locationText ? "location" : null,
+    ].filter(Boolean);
+
+    if (missingFields.length > 0) {
+      alert(`Please complete: ${missingFields.join(", ")}.`);
       return;
     }
+
+    let resolvedUnitId = selectedUnitId;
+    let resolvedUnit = selectedUnit;
+
+    if (!resolvedUnitId) {
+      if (units.length !== 1) {
+        alert(
+          units.length === 0
+            ? "No unit is assigned to this project. Please assign a unit before creating the case."
+            : "Please select an ambulance or response unit before creating the case."
+        );
+        return;
+      }
+
+      const onlyUnit = units[0];
+      const unitName = onlyUnit.code || onlyUnit.name || "the only assigned unit";
+      const isBusy = unitType === "ambulance" && isAmbulanceBusy(onlyUnit);
+      const confirmed = window.confirm(
+        isBusy
+          ? `${unitName} is the only ambulance assigned to this project and is currently busy. Do you want to assign this case to it anyway?`
+          : `${unitName} is the only unit assigned to this project. Do you want to direct this case to it?`
+      );
+
+      if (!confirmed) return;
+
+      resolvedUnitId = onlyUnit.id;
+      resolvedUnit = onlyUnit;
+      setSelectedUnitId(onlyUnit.id);
+    }
+
+    const resolvedAmbulanceBusy =
+      unitType === "ambulance" && resolvedUnit ? isAmbulanceBusy(resolvedUnit) : false;
 
     const projectRef = doc(db, "projects", params.projectId);
     const projectSnap = await getDoc(projectRef);
     const project = projectSnap.exists() ? projectSnap.data() : projectData;
     const activeCrew =
       unitType === "ambulance"
-        ? resolveCurrentAmbulanceCrew(selectedUnit, project?.shiftSchedule)
+        ? resolveCurrentAmbulanceCrew(resolvedUnit, project?.shiftSchedule)
         : null;
     const assignedUserIds = activeCrew?.assignment.crewUserIds || [];
 
@@ -285,9 +323,9 @@ export default function NewProjectCasePage({ params }: { params: { projectId: st
       acknowledgedAt: null,
       assignedUnit: {
         type: unitType,
-        id: selectedUnitId,
-        code: selectedUnit?.code || selectedUnit?.name || null,
-        wasBusyWhenSelected: selectedAmbulanceBusy,
+        id: resolvedUnitId,
+        code: resolvedUnit?.code || resolvedUnit?.name || null,
+        wasBusyWhenSelected: resolvedAmbulanceBusy,
       },
       status: "Assigned",
       timeline: {
@@ -318,7 +356,7 @@ if (unitType === "ambulance") {
     project?.client ??
     "Unknown Project";
 
-  await updateDoc(doc(db, "ambulances", selectedUnitId), {
+  await updateDoc(doc(db, "ambulances", resolvedUnitId), {
     currentCase: caseRef.id,
     currentCaseId: caseRef.id,
 
