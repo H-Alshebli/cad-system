@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
   const userSnapshot = await userRef.get();
   if (!userSnapshot.exists) return NextResponse.json({ error: "User not found." }, { status: 404 });
   const user = userSnapshot.data() || {};
+  if (user.active !== false || String(user.accountStatus || "").trim().toLowerCase() !== "suspended") {
+    return NextResponse.json({ error: "Suspend the account before permanently deleting it." }, { status: 409 });
+  }
   const expectedConfirmation = String(user.email || userId).trim().toLowerCase();
   if (confirmation !== expectedConfirmation) {
     return NextResponse.json({ error: "The confirmation value does not match the account email." }, { status: 400 });
