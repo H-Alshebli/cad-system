@@ -104,10 +104,34 @@ export async function POST(request: NextRequest) {
   }
   batch.delete(userRef);
   try {
-    await adminAuth.deleteUser(userId);
+    await batch.commit();
   } catch (error: any) {
-    if (error?.code !== "auth/user-not-found") throw error;
+    console.error("Suspended account Firestore deletion failed", { userId, code: error?.code, message: error?.message });
+    return NextResponse.json(
+      { error: `Account data could not be deleted${error?.code ? ` (${error.code})` : ""}. Please retry or contact system support.` },
+      { status: 500 }
+    );
   }
-  await batch.commit();
-  return NextResponse.json({ ok: true, auditId: auditRef.id });
+
+  try {
+    await adminAuth.deleteUser(userId);
+    await auditRef.update({ authenticationAccountDeleted: true });
+    return NextResponse.json({ ok: true, auditId: auditRef.id });
+  } catch (error: any) {
+    if (error?.code === "auth/user-not-found") {
+      await auditRef.update({ authenticationAccountDeleted: true, authenticationAccountAlreadyMissing: true });
+      return NextResponse.json({ ok: true, auditId: auditRef.id });
+    }
+    console.error("Suspended account authentication cleanup failed", { userId, code: error?.code, message: error?.message });
+    await auditRef.update({
+      authenticationAccountDeleted: false,
+      authenticationCleanupPending: true,
+      authenticationCleanupErrorCode: String(error?.code || "unknown"),
+    });
+    return NextResponse.json({
+      ok: true,
+      auditId: auditRef.id,
+      warning: "The suspended account was removed from HCAD and its identity was released, but its sign-in record still needs system cleanup.",
+    });
+  }
 }
