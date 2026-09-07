@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   const action = String(body.action || "");
   const batchId = String(body.batchId || "").trim();
   const recordId = String(body.recordId || "").trim();
-  if (!new Set(["send_batch", "send_record", "correct_and_resend", "reject_dispute", "relink_account"]).has(action)) {
+  if (!new Set(["send_batch", "send_record", "edit_statement", "correct_and_resend", "reject_dispute", "relink_account"]).has(action)) {
     return NextResponse.json({ error: "Invalid send action." }, { status: 400 });
   }
 
@@ -161,11 +161,11 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (action === "correct_and_resend" || action === "reject_dispute") {
+  if (action === "edit_statement" || action === "correct_and_resend" || action === "reject_dispute") {
     const document = await adminDb.collection("employeeEntitlements").doc(recordId).get();
     if (!document.exists) return NextResponse.json({ error: "Entitlement record not found." }, { status: 404 });
     const data = document.data() || {};
-    if (data.status !== "disputed") {
+    if ((action === "correct_and_resend" || action === "reject_dispute") && data.status !== "disputed") {
       return NextResponse.json({ error: "Only a disputed statement can be reviewed." }, { status: 409 });
     }
     const comment = String(body.comment || "").trim();
@@ -194,25 +194,87 @@ export async function POST(request: NextRequest) {
       if (otPaid > otEntitlement || perDiemPaid > perDiemEntitlement) {
         return NextResponse.json({ error: "Paid amount cannot exceed the entitlement amount." }, { status: 400 });
       }
+      const normalizeMonthlyEntries = (value: unknown, label: string) => {
+        if (!Array.isArray(value) || value.length > 40) throw new Error(`Invalid ${label} monthly details.`);
+        return value.map((entry: any) => ({
+          month: String(entry?.month || "").trim(),
+          quantity: Number(entry?.quantity),
+        })).filter((entry) => entry.month && entry.quantity > 0);
+      };
+      let monthlyOvertime: Array<{ month: string; quantity: number }>;
+      let monthlyPerDiem: Array<{ month: string; quantity: number }>;
+      try {
+        const rawOvertime = Array.isArray(body.monthlyOvertime) ? body.monthlyOvertime : [];
+        const rawPerDiem = Array.isArray(body.monthlyPerDiem) ? body.monthlyPerDiem : [];
+        if ([...rawOvertime, ...rawPerDiem].some((entry: any) =>
+          !String(entry?.month || "").trim() || String(entry?.month || "").length > 60 || !Number.isFinite(Number(entry?.quantity)) || Number(entry?.quantity) < 0
+        )) {
+          return NextResponse.json({ error: "Monthly hours and days must be valid positive numbers or zero." }, { status: 400 });
+        }
+        monthlyOvertime = normalizeMonthlyEntries(rawOvertime, "Overtime");
+        monthlyPerDiem = normalizeMonthlyEntries(rawPerDiem, "Per Diem");
+      } catch (monthlyError) {
+        return NextResponse.json({ error: monthlyError instanceof Error ? monthlyError.message : "Invalid monthly details." }, { status: 400 });
+      }
       const overtime = { ...(data.overtime || {}), entitlement: otEntitlement, sourcePaid: otPaid, sourceRemaining: otEntitlement - otPaid, operationalPaid: otPaid, operationalRemaining: otEntitlement - otPaid };
       const perDiem = { ...(data.perDiem || {}), entitlement: perDiemEntitlement, sourceRemaining: perDiemEntitlement - perDiemPaid, operationalPaid: perDiemPaid, operationalRemaining: perDiemEntitlement - perDiemPaid };
-      await document.ref.update({
+      const remainsDraft = action === "edit_statement" && data.status === "draft";
+      const correctionUpdate: Record<string, any> = {
         overtime,
         perDiem,
+        monthlyOvertime,
+        monthlyPerDiem,
         combined: { entitlement: otEntitlement + perDiemEntitlement, paid: otPaid + perDiemPaid, remaining: otEntitlement - otPaid + perDiemEntitlement - perDiemPaid },
-        status: "sent",
+        status: remainsDraft ? "draft" : "sent",
+        version: Number(data.version || 1) + 1,
         hrResolution: { action, comment, actorId: actor.uid, actorName: actor.name, at: new Date().toISOString() },
         correctedAt: FieldValue.serverTimestamp(),
         correctedBy: actor.uid,
         correctedByName: actor.name,
-        resentAt: FieldValue.serverTimestamp(),
-        sentAt: FieldValue.serverTimestamp(),
-        sentBy: actor.uid,
-        sentByName: actor.name,
-        responseHistory,
         updatedAt: FieldValue.serverTimestamp(),
+        revisionHistory: FieldValue.arrayUnion({
+          version: Number(data.version || 1),
+          status: data.status || "draft",
+          overtime: data.overtime || {},
+          perDiem: data.perDiem || {},
+          monthlyOvertime: data.monthlyOvertime || [],
+          monthlyPerDiem: data.monthlyPerDiem || [],
+          combined: data.combined || {},
+          employeeResponse: data.employeeResponse || null,
+          archivedAt: new Date().toISOString(),
+        }),
         auditHistory: FieldValue.arrayUnion({ action, actorId: actor.uid, comment, previousCombined: data.combined || {}, at: new Date().toISOString() }),
-      });
+      };
+      if (!remainsDraft) {
+        Object.assign(correctionUpdate, {
+          resentAt: FieldValue.serverTimestamp(),
+          sentAt: FieldValue.serverTimestamp(),
+          sentBy: actor.uid,
+          sentByName: actor.name,
+          firstViewedAt: FieldValue.delete(),
+          lastViewedAt: FieldValue.delete(),
+          respondedAt: FieldValue.delete(),
+          employeeResponse: FieldValue.delete(),
+        });
+        if (data.employeeResponse) correctionUpdate.responseHistory = responseHistory;
+      }
+      await document.ref.update(correctionUpdate);
+
+      if (!remainsDraft) {
+        await adminDb.collection("notifications").add({
+          type: "employee_entitlement_hr_resolution",
+          entitlementId: document.id,
+          batchId: data.batchId,
+          recipientUserIds: [data.userId],
+          recipientEmails: data.employeeEmail ? [data.employeeEmail] : [],
+          title: "Entitlement statement corrected",
+          message: "HR corrected and resent your entitlement statement for review.",
+          link: "/crew-profile#employee-entitlements",
+          readByUserIds: [],
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      return NextResponse.json({ status: remainsDraft ? "draft" : "sent" });
     }
 
     await adminDb.collection("notifications").add({
@@ -221,13 +283,13 @@ export async function POST(request: NextRequest) {
       batchId: data.batchId,
       recipientUserIds: [data.userId],
       recipientEmails: data.employeeEmail ? [data.employeeEmail] : [],
-      title: action === "correct_and_resend" ? "Entitlement statement corrected" : "Entitlement dispute reviewed",
-      message: action === "correct_and_resend" ? "HR corrected and resent your entitlement statement for review." : "HR reviewed your adjustment request. Open your profile to view the response.",
+      title: "Entitlement dispute reviewed",
+      message: "HR reviewed your adjustment request. Open your profile to view the response.",
       link: "/crew-profile#employee-entitlements",
       readByUserIds: [],
       createdAt: FieldValue.serverTimestamp(),
     });
-    return NextResponse.json({ status: action === "correct_and_resend" ? "sent" : "dispute_rejected" });
+    return NextResponse.json({ status: "dispute_rejected" });
   }
 
   const documents = action === "send_batch"
