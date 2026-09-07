@@ -258,6 +258,27 @@ export default function EmployeeEntitlementsAdminPage() {
     } finally { setBusy(""); }
   }
 
+  async function relinkAccount(record: EntitlementRecord) {
+    const targetEmail = window.prompt(
+      `Enter the active account email for employee ID ${record.employeeId}:`,
+      record.employeeEmail || ""
+    )?.trim();
+    if (!targetEmail) return;
+    if (!window.confirm(`Move this entitlement statement to ${targetEmail}? The employee ID must match.`)) return;
+
+    setBusy(`relink:${record.id}`); setError(""); setMessage("");
+    try {
+      const result = await apiRequest("/api/employee-entitlements", {
+        method: "POST",
+        body: JSON.stringify({ action: "relink_account", recordId: record.id, targetEmail }),
+      });
+      setMessage(`Entitlement statement linked to ${result.email}. Existing amounts, status, and history were preserved.`);
+      await loadRecords();
+    } catch (relinkError) {
+      setError(relinkError instanceof Error ? relinkError.message : "Could not change the linked account.");
+    } finally { setBusy(""); }
+  }
+
   const invalidRows = previewRows.filter((row) => row.issues.length);
   const batches = useMemo(() => {
     const map = new Map<string, EntitlementRecord[]>();
@@ -411,7 +432,7 @@ export default function EmployeeEntitlementsAdminPage() {
                         <tbody>
                           {filteredItems.map((item) => (
                             <tr key={item.id} className="border-b align-top last:border-0">
-                              <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div></td>
+                              <td className="p-3"><div className="font-black">{item.employeeId} — {item.employeeName}</div><div className="mt-1 text-xs text-slate-500">{item.employeeEmail || "No email"}</div>{canSend && <button className="btn-secondary mt-2 px-3 py-2 text-xs" disabled={Boolean(busy)} onClick={() => relinkAccount(item)}>{busy === `relink:${item.id}` ? "Linking..." : "Change Linked Account"}</button>}</td>
                               <td className="p-3"><div className="font-bold">{money.format(item.overtime?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.overtime?.operationalRemaining || 0)}</div>{Boolean(item.monthlyOvertime?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyOvertime?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyOvertime?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} hrs</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-bold">{money.format(item.perDiem?.entitlement || 0)}</div><div className="text-xs text-slate-500">Remaining: {money.format(item.perDiem?.operationalRemaining || 0)}</div>{Boolean(item.monthlyPerDiem?.length) && <details className="mt-2"><summary className="cursor-pointer font-bold text-[#0F766E]">{item.monthlyPerDiem?.length} monthly entries</summary><div className="mt-1 space-y-1">{item.monthlyPerDiem?.map((entry) => <div key={entry.month} className="flex justify-between gap-4"><span>{entry.month}</span><b>{entry.quantity} days</b></div>)}</div></details>}</td>
                               <td className="p-3"><div className="font-black">{money.format(item.combined?.entitlement || 0)}</div><div className="text-xs text-slate-500">Paid: {money.format(item.combined?.paid || 0)} • Remaining: {money.format(item.combined?.remaining || 0)}</div></td>
