@@ -12,7 +12,7 @@ import {
   getEpcrDisplayCode,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
-import { isActiveCase, isClosedCase } from "@/lib/cases";
+import { isActiveCase, isClosedCase, isOperationalCase } from "@/lib/cases";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
@@ -204,7 +204,7 @@ export default function Dashboard() {
     return filteredCases.filter(isActiveCase);
   }, [filteredCases, showAllCases]);
 
-  const totalCases = filteredCases.length;
+  const totalCases = filteredCases.filter(isOperationalCase).length;
 
   const onSceneCases = filteredCases.filter(
     (c) => c.status === "OnScene"
