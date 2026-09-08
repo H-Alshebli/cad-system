@@ -145,8 +145,10 @@ export const createEpcrFromCase = async (
         caseData.patient?.idNumber ||
         caseData.patientIdOrIqama ||
         caseData.patientId ||
-        caseData.id ||
         "",
+      patientIdUnavailable: false,
+      patientIdUnavailableReason: "",
+      patientIdUnavailableOther: "",
 
       firstName: getFirstName(fullName),
       lastName: getLastName(fullName),

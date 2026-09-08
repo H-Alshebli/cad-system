@@ -51,6 +51,9 @@ type HealthClassification =
 
 type PatientInfo = {
   patientId?: string;
+  patientIdUnavailable?: boolean;
+  patientIdUnavailableReason?: string;
+  patientIdUnavailableOther?: string;
   firstName: string;
   lastName: string;
   age: number | null;
@@ -186,6 +189,9 @@ const emptyProjectInfo = (): ProjectInfo => ({
 
 const emptyPatientInfo = (): PatientInfo => ({
   patientId: "",
+  patientIdUnavailable: false,
+  patientIdUnavailableReason: "",
+  patientIdUnavailableOther: "",
   firstName: "",
   lastName: "",
   age: null,
@@ -901,6 +907,16 @@ if (destinationHospitalName && !epcrData.outcome?.hospitalName) {
 
     const m: string[] = [];
 
+    if (!patientInfo.patientId?.trim() && !patientInfo.patientIdUnavailable) {
+      m.push("Patient: ID / Iqama or unavailable reason");
+    }
+    if (patientInfo.patientIdUnavailable && !patientInfo.patientIdUnavailableReason?.trim()) {
+      m.push("Patient: ID unavailable reason");
+    }
+    if (patientInfo.patientIdUnavailableReason === "other" && !patientInfo.patientIdUnavailableOther?.trim()) {
+      m.push("Patient: Other ID unavailable reason");
+    }
+
     if (!patientInfo.firstName.trim()) m.push("Patient: First Name");
     if (!patientInfo.lastName.trim()) m.push("Patient: Last Name");
     if (!patientInfo.age || patientInfo.age <= 0) m.push("Patient: Age");
@@ -1168,7 +1184,73 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 </Section>
 
       <Section title="Patient Information">
-        <Input disabled label="Patient ID" value={patientInfo.patientId || "—"} />
+        <Input
+          disabled={locked || patientInfo.patientIdUnavailable}
+          label="Patient ID / Iqama *"
+          value={patientInfo.patientId || ""}
+          onChange={(e) =>
+            setData((prev) => ({
+              ...(prev ?? {}),
+              patientInfo: {
+                ...(prev?.patientInfo ?? emptyPatientInfo()),
+                patientId: e.target.value,
+              },
+            }))
+          }
+        />
+
+        <label className="flex items-center gap-3 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-3 text-sm font-black text-[#274C5A]">
+          <input
+            type="checkbox"
+            disabled={locked}
+            checked={patientInfo.patientIdUnavailable === true}
+            onChange={(e) =>
+              setData((prev) => ({
+                ...(prev ?? {}),
+                patientInfo: {
+                  ...(prev?.patientInfo ?? emptyPatientInfo()),
+                  patientIdUnavailable: e.target.checked,
+                  patientId: e.target.checked ? "" : prev?.patientInfo?.patientId || "",
+                  patientIdUnavailableReason: e.target.checked ? prev?.patientInfo?.patientIdUnavailableReason || "" : "",
+                  patientIdUnavailableOther: e.target.checked ? prev?.patientInfo?.patientIdUnavailableOther || "" : "",
+                },
+              }))
+            }
+          />
+          Patient ID is unavailable
+        </label>
+
+        {patientInfo.patientIdUnavailable && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Select
+              disabled={locked}
+              label="Reason *"
+              value={patientInfo.patientIdUnavailableReason || ""}
+              onChange={(e) => setData((prev) => ({
+                ...(prev ?? {}),
+                patientInfo: { ...(prev?.patientInfo ?? emptyPatientInfo()), patientIdUnavailableReason: e.target.value },
+              }))}
+            >
+              <option value="">Select reason</option>
+              <option value="unknown_patient">Unknown patient</option>
+              <option value="not_available">ID not available</option>
+              <option value="unable_to_provide">Patient unable to provide</option>
+              <option value="patient_refused">Patient refused</option>
+              <option value="other">Other</option>
+            </Select>
+            {patientInfo.patientIdUnavailableReason === "other" && (
+              <Input
+                disabled={locked}
+                label="Other reason *"
+                value={patientInfo.patientIdUnavailableOther || ""}
+                onChange={(e) => setData((prev) => ({
+                  ...(prev ?? {}),
+                  patientInfo: { ...(prev?.patientInfo ?? emptyPatientInfo()), patientIdUnavailableOther: e.target.value },
+                }))}
+              />
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <Input

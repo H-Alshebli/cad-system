@@ -383,7 +383,18 @@ export function buildEpcrPdf(data: EpcrPdfData) {
 
   infoCard(
     [
-      { label: "Patient ID", value: data.patientInfo?.patientId },
+      {
+        label: "Patient ID",
+        value:
+          data.patientInfo?.patientId ||
+          (data.patientInfo?.patientIdUnavailable
+            ? `Unavailable — ${data.patientInfo?.patientIdUnavailableReason || "reason documented"}${
+                data.patientInfo?.patientIdUnavailableReason === "other" && data.patientInfo?.patientIdUnavailableOther
+                  ? `: ${data.patientInfo.patientIdUnavailableOther}`
+                  : ""
+              }`
+            : "-"),
+      },
       {
         label: "Patient Name",
         value: `${data.patientInfo?.firstName || ""} ${
