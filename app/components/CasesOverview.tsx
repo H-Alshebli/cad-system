@@ -10,7 +10,7 @@ import {
   getProjectDisplayName,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
-import { isActiveCase, isClosedCase } from "@/lib/cases";
+import { isActiveCase, isClosedCase, isOperationalCase } from "@/lib/cases";
 
 export default function CasesOverview({
   title,
@@ -100,7 +100,7 @@ export default function CasesOverview({
   /* =========================
      STATS (same as dashboard)
   ========================= */
-  const totalCases = cases.length;
+  const totalCases = cases.filter(isOperationalCase).length;
 
   const onSceneCases = cases.filter(
     (c) => c.status === "OnScene"

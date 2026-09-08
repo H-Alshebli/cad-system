@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
-import { isActiveCase, isClosedCase } from "@/lib/cases";
+import { isActiveCase, isClosedCase, isOperationalCase } from "@/lib/cases";
 
 /* =====================================================
    🔒 ADMIN FIXED FILTER (غير التاريخ والوقت هنا فقط)
@@ -61,7 +61,7 @@ export default function Dashboard() {
   /* =====================================================
      📊 STATS
   ===================================================== */
-  const totalCases = filteredCases.length;
+  const totalCases = filteredCases.filter(isOperationalCase).length;
   const OnSceneCases = filteredCases.filter(
     (c) => c.status === "OnScene"
   ).length;

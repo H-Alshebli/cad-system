@@ -13,7 +13,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
 import { useClientI18n } from "@/lib/clientI18n";
-import { isActiveCase, isClosedCase } from "@/lib/cases";
+import { isActiveCase, isClosedCase, isOperationalCase } from "@/lib/cases";
 import { FileDown, FileText } from "lucide-react";
 import {
   ClientCaseExportLabels,
@@ -279,7 +279,7 @@ export default function ClientTimelineDashboardPage() {
     return filteredCases.filter(isActiveCase);
   }, [filteredCases, showAllCases]);
 
-  const totalCases = filteredCases.length;
+  const totalCases = filteredCases.filter(isOperationalCase).length;
 
   const activeCases = filteredCases.filter(
     isActiveCase
