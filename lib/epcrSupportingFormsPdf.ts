@@ -45,8 +45,8 @@ export type RefusalOfTreatmentPdfData = CommonFormData & {
 };
 
 export type DataSharingConsentPdfData = CommonFormData & {
-  consentStatus: "Approved" | "Rejected";
-  approvedByType: "patient" | "guardian";
+  consentStatus: "Approved" | "Rejected" | "Not Selected";
+  approvedByType: "patient" | "guardian" | "Not Selected";
   approvedByName?: string;
   relationToPatient?: string;
   guardianIdNumber?: string;
