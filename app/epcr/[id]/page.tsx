@@ -1045,6 +1045,15 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       return;
     }
 
+    const consentSnapshot = await getDoc(
+      doc(db, "epcr", epcrId, "forms", "dataSharingConsent")
+    );
+    if (!consentSnapshot.exists() || consentSnapshot.data()?.completed !== true) {
+      alert("Complete and save the required Data Sharing Consent Form before finalizing the ePCR.");
+      router.push(`/epcr/${epcrId}/data-sharing-consent`);
+      return;
+    }
+
     const ref = doc(db, "epcr", epcrId);
     await updateDoc(ref, {
       locked: true,

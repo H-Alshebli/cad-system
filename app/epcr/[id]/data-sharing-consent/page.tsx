@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { generateDataSharingConsentPdf } from "@/lib/epcrSupportingFormsPdf";
 
 type EpcrFormData = {
+  locked?: boolean;
+  finalizedAt?: unknown;
   epcrNumber?: string;
   caseNumber?: string;
   projectInfo?: {
@@ -34,12 +36,9 @@ export default function DataSharingConsentPage({
   const [loading, setLoading] = useState(true);
   const [epcrData, setEpcrData] = useState<EpcrFormData | null>(null);
 
-  const [consentStatus, setConsentStatus] = useState<"Approved" | "Rejected">(
-    "Approved"
-  );
-  const [approvedByType, setApprovedByType] = useState<"patient" | "guardian">(
-    "patient"
-  );
+  const [consentStatus, setConsentStatus] = useState<"" | "Approved" | "Rejected">("");
+  const [approvedByType, setApprovedByType] = useState<"" | "patient" | "guardian">("");
+  const [consentExists, setConsentExists] = useState(false);
   const [approvedByName, setApprovedByName] = useState("");
   const [relationToPatient, setRelationToPatient] = useState("");
   const [guardianIdNumber, setGuardianIdNumber] = useState("");
@@ -73,12 +72,13 @@ export default function DataSharingConsentPage({
       }`.trim();
 
       if (consentSnap.exists()) {
+        setConsentExists(true);
         const saved = consentSnap.data();
 
         const savedApprovedByType =
           saved.approvedByType === "guardian" ? "guardian" : "patient";
 
-        setConsentStatus(saved.consentStatus || "Approved");
+        setConsentStatus(saved.consentStatus === "Approved" || saved.consentStatus === "Rejected" ? saved.consentStatus : "");
         setApprovedByType(savedApprovedByType);
         setApprovedByName(
           savedApprovedByType === "patient"
@@ -93,8 +93,6 @@ export default function DataSharingConsentPage({
         setPatientSignatureDataUrl(saved.patientSignatureDataUrl || "");
         setGuardianSignatureDataUrl(saved.guardianSignatureDataUrl || "");
         setClinicianSignatureDataUrl(saved.clinicianSignatureDataUrl || "");
-      } else {
-        setApprovedByName(patientFullName);
       }
 
       setLoading(false);
@@ -112,12 +110,35 @@ export default function DataSharingConsentPage({
   useEffect(() => {
     if (approvedByType === "patient") {
       setApprovedByName(patientName);
-    } else {
+    } else if (approvedByType === "guardian") {
       setApprovedByName("");
     }
   }, [approvedByType, patientName]);
 
+  const formLocked = Boolean(epcrData?.locked && consentExists);
+
+  const validateForm = () => {
+    if (!consentStatus) return "Select the approval status.";
+    if (!approvedByType) return "Select whether approval was given by the patient or guardian.";
+    if (!clinicianName.trim()) return "Enter the clinician / paramedic name.";
+    if (!clinicianSignatureDataUrl) return "Clinician / paramedic signature is required.";
+    if (approvedByType === "patient" && !patientSignatureDataUrl) return "Patient signature is required.";
+    if (approvedByType === "guardian") {
+      if (!approvedByName.trim()) return "Guardian name is required.";
+      if (!relationToPatient.trim()) return "Relation to patient is required.";
+      if (!guardianIdNumber.trim()) return "Guardian ID number is required.";
+      if (!guardianSignatureDataUrl) return "Guardian signature is required.";
+    }
+    return "";
+  };
+
   const saveForm = async () => {
+    if (formLocked) return;
+    const validationError = validateForm();
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
     const ref = doc(db, "epcr", epcrId, "forms", "dataSharingConsent");
 
     await setDoc(
@@ -138,11 +159,14 @@ export default function DataSharingConsentPage({
         guardianSignatureDataUrl:
           approvedByType === "guardian" ? guardianSignatureDataUrl : "",
         clinicianSignatureDataUrl,
+        completed: true,
+        completedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
       { merge: true }
     );
 
+    setConsentExists(true);
     alert("Data sharing consent form saved.");
   };
 
@@ -153,8 +177,8 @@ export default function DataSharingConsentPage({
       caseNumber: epcrData?.caseNumber,
       projectInfo: epcrData?.projectInfo,
       patientInfo: epcrData?.patientInfo,
-      consentStatus,
-      approvedByType,
+      consentStatus: consentStatus || "Not Selected",
+      approvedByType: approvedByType || "Not Selected",
       approvedByName:
         approvedByType === "patient" ? patientName : approvedByName,
       relationToPatient,
@@ -229,15 +253,18 @@ export default function DataSharingConsentPage({
           <Select
             label="Approval Status"
             value={consentStatus}
+            disabled={formLocked}
             onChange={(e) =>
-              setConsentStatus(e.target.value as "Approved" | "Rejected")
+              setConsentStatus(e.target.value as "" | "Approved" | "Rejected")
             }
           >
+            <option value="">Not Selected</option>
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
           </Select>
 
           <Input
+            disabled={formLocked}
             label="Clinician / Paramedic Name"
             value={clinicianName}
             onChange={(e) => setClinicianName(e.target.value)}
@@ -251,6 +278,7 @@ export default function DataSharingConsentPage({
               <input
                 type="radio"
                 name="approvedByType"
+                disabled={formLocked}
                 checked={approvedByType === "patient"}
                 onChange={() => setApprovedByType("patient")}
               />
@@ -261,6 +289,7 @@ export default function DataSharingConsentPage({
               <input
                 type="radio"
                 name="approvedByType"
+                disabled={formLocked}
                 checked={approvedByType === "guardian"}
                 onChange={() => setApprovedByType("guardian")}
               />
@@ -270,7 +299,7 @@ export default function DataSharingConsentPage({
         </div>
 
         <Input
-          disabled={approvedByType === "patient"}
+          disabled={formLocked || approvedByType === "patient"}
           label={approvedByType === "guardian" ? "Guardian Name" : "Patient Name"}
           value={approvedByType === "patient" ? patientName : approvedByName}
           onChange={(e) => setApprovedByName(e.target.value)}
@@ -280,12 +309,14 @@ export default function DataSharingConsentPage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Relation to Patient"
+              disabled={formLocked}
               value={relationToPatient}
               onChange={(e) => setRelationToPatient(e.target.value)}
             />
 
             <Input
               label="Guardian ID Number"
+              disabled={formLocked}
               value={guardianIdNumber}
               onChange={(e) => setGuardianIdNumber(e.target.value)}
             />
@@ -293,6 +324,7 @@ export default function DataSharingConsentPage({
         )}
 
         <Textarea
+          disabled={formLocked}
           label="Additional Notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -310,6 +342,7 @@ export default function DataSharingConsentPage({
             label="Patient Signature"
             value={patientSignatureDataUrl}
             onChange={setPatientSignatureDataUrl}
+            disabled={formLocked}
           />
 
           {approvedByType === "guardian" && (
@@ -317,6 +350,7 @@ export default function DataSharingConsentPage({
               label="Guardian Signature"
               value={guardianSignatureDataUrl}
               onChange={setGuardianSignatureDataUrl}
+              disabled={formLocked}
             />
           )}
 
@@ -324,6 +358,7 @@ export default function DataSharingConsentPage({
             label="Clinician / Paramedic Signature"
             value={clinicianSignatureDataUrl}
             onChange={setClinicianSignatureDataUrl}
+            disabled={formLocked}
           />
         </div>
       </Section>
@@ -336,13 +371,13 @@ export default function DataSharingConsentPage({
         >
           Export PDF
         </button>
-        <button
+        {!formLocked && <button
           type="button"
           onClick={saveForm}
           className="rounded-xl bg-[#274C5A] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#274C5A]/15 transition hover:bg-[#1d3b47]"
         >
           Save Form
-        </button>
+        </button>}
       </div>
       </div>
     </div>
