@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import CaseChat from "@/app/components/CaseChat";
 import StatusButtons from "@/app/components/StatusButtons";
-import { createEpcrFromCase, getEpcrByCaseId } from "@/lib/epcr";
+import { createEpcrFromCase } from "@/lib/epcr";
 import { createReturnCadCaseFromB2CRequest } from "@/lib/b2cRequests";
 import { getCaseDisplayCode, getCaseDisplayTitle, getUnitDisplayName } from "@/lib/displayLabels";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 import {
   Activity,
   ArrowLeft,
@@ -163,6 +165,8 @@ export default function CaseDetailsPage({
   const router = useRouter();
   const pathname = usePathname();
   const caseBasePath = pathname.startsWith("/cadcases") ? "/cadcases" : "/cases";
+  const { user } = useCurrentUser();
+  const { can, isAdmin } = usePermissions(user?.role);
 
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -208,11 +212,9 @@ export default function CaseDetailsPage({
     return () => unsub();
   }, [caseId]);
 
-  useEffect(() => {
-    getEpcrByCaseId(caseId)
-      .then(setEpcr)
-      .catch(() => setEpcr(null));
-  }, [caseId]);
+  useEffect(() => onSnapshot(doc(db, "epcr", caseId), (snapshot) => {
+    setEpcr(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+  }, () => setEpcr(null)), [caseId]);
 
   const linkedProjectId = String(caseData?.projectId || "").trim();
 
@@ -276,6 +278,7 @@ export default function CaseDetailsPage({
   const destinationLocation = caseData.destinationLocation;
   const projectId = String(caseData.projectId || "").trim();
   const availableProjectHospitals = currentProjectHospitals ?? (Array.isArray(caseData.projectHospitals) ? caseData.projectHospitals : []);
+  const canEditCaseCard = (isAdmin || can("cases", "edit")) && epcr?.locked !== true;
 
   const canCreateReturnCad =
     sourceType === "B2C" &&
@@ -329,7 +332,16 @@ export default function CaseDetailsPage({
   }
 
   async function savePatientInfo() {
-    await updateDoc(doc(db, "cases", caseId), {
+    const currentEpcr = await getDoc(doc(db, "epcr", caseId));
+    if (currentEpcr.exists() && currentEpcr.data()?.locked === true) {
+      setEpcr({ id: currentEpcr.id, ...currentEpcr.data() });
+      setEditPatient(false);
+      alert("Patient information cannot be changed after the ePCR is finalized and locked.");
+      return;
+    }
+
+    const batch = writeBatch(db);
+    batch.update(doc(db, "cases", caseId), {
       patient: patientDraft,
       patientName: patientDraft.name || "",
       contactNumber: patientDraft.phone || "",
@@ -339,10 +351,40 @@ export default function CaseDetailsPage({
       patientGender: patientDraft.gender || "",
     });
 
+    if (currentEpcr.exists()) {
+      const originalPatient = normalizePatient(caseData);
+      const fullName = String(patientDraft.name || "").trim();
+      const nameParts = fullName.split(/\s+/).filter(Boolean);
+      const epcrUpdates: Record<string, any> = { updatedAt: new Date() };
+      if (patientDraft.idNumber !== originalPatient.idNumber) {
+        epcrUpdates["patientInfo.patientId"] = patientDraft.idNumber || "";
+        epcrUpdates["patientInfo.patientIdUnavailable"] = false;
+        epcrUpdates["patientInfo.patientIdUnavailableReason"] = "";
+        epcrUpdates["patientInfo.patientIdUnavailableOther"] = "";
+      }
+      if (patientDraft.name !== originalPatient.name) {
+        epcrUpdates["patientInfo.firstName"] = nameParts[0] || "";
+        epcrUpdates["patientInfo.lastName"] = nameParts.slice(1).join(" ");
+      }
+      if (patientDraft.phone !== originalPatient.phone) epcrUpdates["patientInfo.phone"] = patientDraft.phone || "";
+      if (patientDraft.age !== originalPatient.age) epcrUpdates["patientInfo.age"] = patientDraft.age || null;
+      if (patientDraft.gender !== originalPatient.gender) epcrUpdates["patientInfo.gender"] = patientDraft.gender || "unknown";
+      batch.update(currentEpcr.ref, epcrUpdates);
+    }
+
+    await batch.commit();
+
     setEditPatient(false);
   }
 
   async function saveCaseInfo() {
+    const currentEpcr = await getDoc(doc(db, "epcr", caseId));
+    if (currentEpcr.exists() && currentEpcr.data()?.locked === true) {
+      setEpcr({ id: currentEpcr.id, ...currentEpcr.data() });
+      setEditCaseInfo(false);
+      alert("Case information cannot be changed after the ePCR is finalized and locked.");
+      return;
+    }
     await updateDoc(doc(db, "cases", caseId), {
       caseInfo: caseInfoDraft,
       chiefComplaint: caseInfoDraft.complaint || "",
@@ -479,6 +521,7 @@ export default function CaseDetailsPage({
             title="Patient Information"
             icon={<UserRound size={18} />}
             editing={editPatient}
+            canEdit={canEditCaseCard}
             onEdit={() => setEditPatient(true)}
             onSave={savePatientInfo}
             onCancel={() => {
@@ -552,6 +595,7 @@ export default function CaseDetailsPage({
             title="Case Information"
             icon={<ShieldCheck size={18} />}
             editing={editCaseInfo}
+            canEdit={canEditCaseCard}
             onEdit={() => setEditCaseInfo(true)}
             onSave={saveCaseInfo}
             onCancel={() => {
@@ -743,6 +787,7 @@ function EditableSection({
   onSave,
   onCancel,
   children,
+  canEdit = true,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -751,6 +796,7 @@ function EditableSection({
   onSave: () => void;
   onCancel: () => void;
   children: React.ReactNode;
+  canEdit?: boolean;
 }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0b1220]">
@@ -761,12 +807,14 @@ function EditableSection({
         </div>
 
         {!editing ? (
+          canEdit ? (
           <button
             onClick={onEdit}
             className="text-sm font-bold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
           >
             Edit
           </button>
+          ) : null
         ) : (
           <div className="flex gap-3 text-sm font-bold">
             <button
