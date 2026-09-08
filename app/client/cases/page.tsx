@@ -13,6 +13,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { useClientI18n } from "@/lib/clientI18n";
+import { isActiveCase, isClosedCase } from "@/lib/cases";
 import { FileDown, FileText } from "lucide-react";
 import {
   ClientCaseExportLabels,
@@ -173,10 +174,10 @@ export default function ClientCasesPage() {
   const filteredCases = useMemo(() => {
     if (statusFilter === "all") return cases;
     if (statusFilter === "active") {
-      return cases.filter((c) => c.status !== "Closed");
+      return cases.filter(isActiveCase);
     }
     if (statusFilter === "closed") {
-      return cases.filter((c) => c.status === "Closed");
+      return cases.filter(isClosedCase);
     }
     return cases.filter((c) => c.status === statusFilter);
   }, [cases, statusFilter]);

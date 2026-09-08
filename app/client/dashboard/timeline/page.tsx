@@ -13,6 +13,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
 import { useClientI18n } from "@/lib/clientI18n";
+import { isActiveCase, isClosedCase } from "@/lib/cases";
 import { FileDown, FileText } from "lucide-react";
 import {
   ClientCaseExportLabels,
@@ -275,13 +276,13 @@ export default function ClientTimelineDashboardPage() {
 
   const visibleCases = useMemo(() => {
     if (showAllCases) return filteredCases;
-    return filteredCases.filter((c) => c.status !== "Closed");
+    return filteredCases.filter(isActiveCase);
   }, [filteredCases, showAllCases]);
 
   const totalCases = filteredCases.length;
 
   const activeCases = filteredCases.filter(
-    (c) => c.status !== "Closed"
+    isActiveCase
   ).length;
 
   const receivedCases = filteredCases.filter(
@@ -309,7 +310,7 @@ export default function ClientTimelineDashboardPage() {
   ).length;
 
   const completedCases = filteredCases.filter(
-    (c) => c.status === "Closed"
+    isClosedCase
   ).length;
 
   const transportingHospitalCases = filteredCases.filter(

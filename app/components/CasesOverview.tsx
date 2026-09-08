@@ -10,6 +10,7 @@ import {
   getProjectDisplayName,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
+import { isActiveCase, isClosedCase } from "@/lib/cases";
 
 export default function CasesOverview({
   title,
@@ -93,7 +94,7 @@ export default function CasesOverview({
 
   const visibleCases = useMemo(() => {
     if (showAllCases) return sortedCases;
-    return sortedCases.filter((c) => c.status !== "Closed");
+    return sortedCases.filter(isActiveCase);
   }, [sortedCases, showAllCases]);
 
   /* =========================
@@ -110,11 +111,11 @@ export default function CasesOverview({
   ).length;
 
   const activeCases = cases.filter(
-    (c) => c.status !== "Closed"
+    isActiveCase
   ).length;
 
   const closedCases = cases.filter(
-    (c) => c.status === "Closed"
+    isClosedCase
   ).length;
 
   const unreceivedCases = cases.filter(
@@ -143,13 +144,13 @@ export default function CasesOverview({
 
   const closedHospitalCases = cases.filter(
     (c) =>
-      c.status === "Closed" &&
+      isClosedCase(c) &&
       c.transportingToType === "hospital"
   ).length;
 
   const closedClinicCases = cases.filter(
     (c) =>
-      c.status === "Closed" &&
+      isClosedCase(c) &&
       c.transportingToType === "clinic"
   ).length;
 

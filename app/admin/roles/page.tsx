@@ -179,6 +179,9 @@ export default function RolesPage() {
     setPermissionSafe(next, "cases", "assign", true);
     setPermissionSafe(next, "cases", "update_status", true);
     setPermissionSafe(next, "cases", "close", true);
+    setPermissionSafe(next, "cases", "close_any", true);
+    setPermissionSafe(next, "cases", "cancel_any", true);
+    setPermissionSafe(next, "cases", "restore_cancelled", true);
 
     // CAD workspace
     setPermissionSafe(next, "cad", "view", true);
@@ -235,6 +238,7 @@ export default function RolesPage() {
     setPermissionSafe(next, "cases", "view", true);
     setPermissionSafe(next, "cases", "view_own", true);
     setPermissionSafe(next, "cases", "update_status", true);
+    setPermissionSafe(next, "cases", "close_assigned", true);
     setPermissionSafe(next, "cad_cases_new", "view", true);
     setPermissionSafe(next, "cad_cases_new", "view_assigned", true);
     setPermissionSafe(next, "missions", "create_project_case", true);

@@ -86,7 +86,7 @@ function shouldTriggerCaseAlert(
   c: AlertCase,
   audience: "dispatch" | "client" | "team"
 ) {
-  if (c.status === "Closed") return false;
+  if (["closed", "cancelled", "canceled"].includes(String(c.status || "").trim().toLowerCase())) return false;
 
   if (c.suppressInitialAlert === true) return false;
   if (c.alertOnCreate === false) return false;

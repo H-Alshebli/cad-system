@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { getCaseDisplayCode } from "@/lib/displayLabels";
+import { isActiveCase, isClosedCase } from "@/lib/cases";
 
 /* =====================================================
    🔒 ADMIN FIXED FILTER (غير التاريخ والوقت هنا فقط)
@@ -68,10 +69,10 @@ export default function Dashboard() {
     (c) => c.status === "EnRoute"
   ).length;
   const activeCases = filteredCases.filter(
-    (c) => c.status !== "Closed"
+    isActiveCase
   ).length;
   const closedCases = filteredCases.filter(
-    (c) => c.status === "Closed"
+    isClosedCase
   ).length;
   const unreceivedCases = filteredCases.filter(
     (c) => c.status === "Assigned" || c.status === "Received"
@@ -84,7 +85,7 @@ export default function Dashboard() {
   ).length;
    const closedHospitalCases = filteredCases.filter(
   (c) =>
-    c.status === "Closed" &&
+    isClosedCase(c) &&
     c.transportingToType === "hospital"
 ).length;
  const transportingHospitalCases = filteredCases.filter(
@@ -97,7 +98,7 @@ const transportingClinicCases = filteredCases.filter(
 ).length;
 const closedclinicCases = filteredCases.filter(
   (c) =>
-    c.status === "Closed" &&
+    isClosedCase(c) &&
     c.transportingToType === "clinic"
 ).length;
 
