@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -369,6 +370,7 @@ export default function RolesPage() {
             </span>{" "}
             / {totalCount}
           </div>
+          <Link href="/admin/roles/preview" className="btn-secondary">Preview Permissions Matrix</Link>
         </div>
 
         <div className="card-modern">
