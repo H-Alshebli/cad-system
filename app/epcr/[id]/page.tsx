@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, getDoc, writeBatch } from "firebase/firestore";
 import { generateEpcrPdf } from "@/lib/epcrPdf";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
@@ -160,6 +160,7 @@ type TimeSection = {
 };
 
 type EpcrDoc = {
+  caseId?: string;
   epcrNumber?: string;
   epcrSequence?: number;
   caseNumber?: string;
@@ -176,6 +177,26 @@ type EpcrDoc = {
   updatedAt?: unknown;
   finalizedAt?: unknown;
 };
+
+function casePatientSyncPayload(patientInfo: PatientInfo) {
+  const patientName = `${patientInfo.firstName || ""} ${patientInfo.lastName || ""}`.trim();
+  return {
+    "patient.idNumber": patientInfo.patientId || "",
+    "patient.idUnavailable": patientInfo.patientIdUnavailable === true,
+    "patient.idUnavailableReason": patientInfo.patientIdUnavailableReason || "",
+    "patient.idUnavailableOther": patientInfo.patientIdUnavailableOther || "",
+    "patient.name": patientName,
+    "patient.phone": patientInfo.phone || "",
+    "patient.age": patientInfo.age || null,
+    "patient.gender": patientInfo.gender || "unknown",
+    patientName,
+    patientIdOrIqama: patientInfo.patientId || "",
+    patientAge: patientInfo.age || "",
+    patientGender: patientInfo.gender || "unknown",
+    contactNumber: patientInfo.phone || "",
+    updatedAt: new Date(),
+  };
+}
 
 /* =========================
    FACTORIES
@@ -1040,7 +1061,8 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
   const saveDraft = async () => {
     const ref = doc(db, "epcr", epcrId);
-    await updateDoc(ref, {
+    const batch = writeBatch(db);
+    batch.update(ref, {
       locked: false,
       patientInfo,
       medicalHistory,
@@ -1051,6 +1073,12 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       time,
       updatedAt: new Date(),
     } satisfies EpcrDoc);
+
+    batch.update(
+      doc(db, "cases", data.caseId || epcrId),
+      casePatientSyncPayload(patientInfo)
+    );
+    await batch.commit();
 
     alert("Saved");
   };
@@ -1071,7 +1099,8 @@ patientInfo.chiefComplaints.forEach((complaint) => {
     }
 
     const ref = doc(db, "epcr", epcrId);
-    await updateDoc(ref, {
+    const batch = writeBatch(db);
+    batch.update(ref, {
       locked: true,
       patientInfo,
       medicalHistory,
@@ -1083,6 +1112,12 @@ patientInfo.chiefComplaints.forEach((complaint) => {
       finalizedAt: new Date(),
       updatedAt: new Date(),
     } satisfies EpcrDoc);
+
+    batch.update(
+      doc(db, "cases", data.caseId || epcrId),
+      casePatientSyncPayload(patientInfo)
+    );
+    await batch.commit();
 
     alert("Finalized & Locked");
   };
