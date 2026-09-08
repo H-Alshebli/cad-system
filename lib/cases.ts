@@ -22,7 +22,33 @@ export type DispatchStatus =
   | "Transporting"
   | "Hospital"
   | "Returning"
-  | "Closed";
+  | "Closed"
+  | "Cancelled";
+
+export function normalizedCaseStatus(value: unknown) {
+  const candidate =
+    value && typeof value === "object"
+      ? (value as { status?: unknown; dispatchStatus?: unknown }).status ??
+        (value as { dispatchStatus?: unknown }).dispatchStatus
+      : value;
+  return String(candidate || "").trim().toLowerCase();
+}
+
+export function isCancelledCase(value: unknown) {
+  return ["cancelled", "canceled"].includes(normalizedCaseStatus(value));
+}
+
+export function isClosedCase(value: unknown) {
+  return ["closed", "completed"].includes(normalizedCaseStatus(value));
+}
+
+export function isOperationalCase(value: unknown) {
+  return !isCancelledCase(value);
+}
+
+export function isActiveCase(value: unknown) {
+  return !isCancelledCase(value) && !isClosedCase(value);
+}
 
 export async function createB2CCase(input: any) {
   const paymentStatus = input.paymentStatus === "Paid" ? "Paid" : "Pending";

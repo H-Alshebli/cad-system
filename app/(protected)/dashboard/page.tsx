@@ -12,6 +12,7 @@ import {
   getEpcrDisplayCode,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
+import { isActiveCase, isClosedCase } from "@/lib/cases";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
@@ -200,7 +201,7 @@ export default function Dashboard() {
 
   const visibleCases = useMemo(() => {
     if (showAllCases) return filteredCases;
-    return filteredCases.filter((c) => c.status !== "Closed");
+    return filteredCases.filter(isActiveCase);
   }, [filteredCases, showAllCases]);
 
   const totalCases = filteredCases.length;
@@ -214,11 +215,11 @@ export default function Dashboard() {
   ).length;
 
   const activeCases = filteredCases.filter(
-    (c) => c.status !== "Closed"
+    isActiveCase
   ).length;
 
   const closedCases = filteredCases.filter(
-    (c) => c.status === "Closed"
+    isClosedCase
   ).length;
 
   const unreceivedCases = filteredCases.filter(
@@ -235,7 +236,7 @@ export default function Dashboard() {
 
   const closedHospitalCases = filteredCases.filter(
     (c) =>
-      c.status === "Closed" &&
+      isClosedCase(c) &&
       c.transportingToType === "hospital"
   ).length;
 
@@ -253,7 +254,7 @@ export default function Dashboard() {
 
   const closedClinicCases = filteredCases.filter(
     (c) =>
-      c.status === "Closed" &&
+      isClosedCase(c) &&
       c.transportingToType === "clinic"
   ).length;
 

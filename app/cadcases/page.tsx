@@ -19,6 +19,7 @@ import {
   getProjectDisplayName,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
+import { isActiveCase } from "@/lib/cases";
 
 function getCaseDate(item: any): Date | null {
   const raw =
@@ -193,7 +194,7 @@ export default function ModernCadCasesPage() {
           return false;
         }
 
-        if (statusFilter === "current" && item.status === "Closed") {
+        if (statusFilter === "current" && !isActiveCase(item)) {
           return false;
         }
 
@@ -231,7 +232,7 @@ export default function ModernCadCasesPage() {
   const stats = useMemo(
     () => ({
       total: cases.length,
-      active: cases.filter((item) => item.status !== "Closed").length,
+      active: cases.filter(isActiveCase).length,
       onScene: cases.filter((item) => item.status === "OnScene").length,
       transporting: cases.filter((item) =>
         ["Transporting", "Hospital"].includes(item.status)

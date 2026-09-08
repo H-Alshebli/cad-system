@@ -9,6 +9,7 @@ import {
   doc,
 } from "firebase/firestore";
 import Link from "next/link";
+import { isActiveCase } from "@/lib/cases";
 
 /* ---------------------------------------------------------
    GLOBAL ALARM HANDLING
@@ -48,7 +49,7 @@ function shouldTriggerAlarm(c: CaseData) {
   if (c.suppressInitialAlert === true) return false;
   if (c.alertOnCreate === false) return false;
 
-  return c.status !== "Closed";
+  return isActiveCase(c);
 }
 export default function CasesDashboard() {
   /* ---------------------------------------------------------
@@ -306,7 +307,7 @@ if (role === "dispatch") {
   }
 
   if (!showCompleted) {
-    visibleCases = visibleCases.filter((c) => c.status !== "Closed");
+    visibleCases = visibleCases.filter(isActiveCase);
   }
 
   /* ---------------------------------------------------------

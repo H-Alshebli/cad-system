@@ -24,6 +24,10 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
     "assign",
     "update_status",
     "close",
+    "close_assigned",
+    "close_any",
+    "cancel_any",
+    "restore_cancelled",
     "delete",
   ],
 
@@ -282,6 +286,10 @@ export const ACTION_LABELS: Record<string, string> = {
   assign: "Assign",
   update_status: "Update Status",
   close: "Close",
+  close_assigned: "Close Assigned Case",
+  close_any: "Close Any Case",
+  cancel_any: "Cancel Any CAD Case",
+  restore_cancelled: "Restore Cancelled Case",
 
   dispatch: "Dispatch",
   manage_status: "Manage Status",
@@ -417,6 +425,27 @@ export function normalizeRolePermissions(permissions: PermissionsMap = {}, role?
     typeof permissions?.missions?.create_project_case !== "boolean"
   ) {
     normalized.missions.create_project_case = true;
+  }
+  // Backward-compatible lifecycle mapping. Existing production roles keep
+  // their current abilities until the new granular controls are explicitly saved.
+  if (
+    crewRole &&
+    permissions?.cases?.update_status === true &&
+    typeof permissions?.cases?.close_assigned !== "boolean"
+  ) {
+    normalized.cases.close_assigned = true;
+  }
+  if (
+    permissions?.cases?.close === true &&
+    typeof permissions?.cases?.close_any !== "boolean"
+  ) {
+    normalized.cases.close_any = true;
+  }
+  const dispatcherRole = /dispatch/i.test(String(role || ""));
+  if (dispatcherRole && (permissions?.cad_cases_new?.view_all === true || permissions?.cases?.view_all === true)) {
+    if (typeof permissions?.cases?.close_any !== "boolean") normalized.cases.close_any = true;
+    if (typeof permissions?.cases?.cancel_any !== "boolean") normalized.cases.cancel_any = true;
+    if (typeof permissions?.cases?.restore_cancelled !== "boolean") normalized.cases.restore_cancelled = true;
   }
   return normalized;
 }

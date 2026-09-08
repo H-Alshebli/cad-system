@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { updateDoc, doc, getDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { usePermissions } from "@/lib/usePermissions";
 
 /* =============================
    TYPES
@@ -107,6 +109,16 @@ const NO_TRANSPORT_REASONS = [
   { value: "patient_refused", label: "Patient refused transport" },
   { value: "no_patient_found", label: "No patient found" },
   { value: "cancelled_by_command", label: "Cancelled by command" },
+  { value: "other", label: "Other" },
+] as const;
+
+const CANCELLATION_REASONS = [
+  { value: "duplicate", label: "Duplicate case" },
+  { value: "created_by_mistake", label: "Created by mistake" },
+  { value: "caller_cancelled", label: "Caller cancelled" },
+  { value: "service_not_required", label: "Service no longer required" },
+  { value: "wrong_project_or_location", label: "Wrong project or location" },
+  { value: "test_case", label: "Test case" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -224,6 +236,8 @@ export default function StatusButtons({
 
   onDestinationSelected,
 }: StatusButtonsProps) {
+  const { user } = useCurrentUser();
+  const { can, isAdmin } = usePermissions(user?.role);
   const [showTypePopup, setShowTypePopup] = useState(false);
   const [destinationType, setDestinationType] =
     useState<"hospital" | "clinic" | null>(null);
@@ -233,11 +247,19 @@ export default function StatusButtons({
   const [noTransportReason, setNoTransportReason] = useState("");
   const [noTransportReasonOther, setNoTransportReasonOther] = useState("");
   const [showEpcrRequired, setShowEpcrRequired] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<"cancel" | "restore" | null>(null);
+  const [lifecycleReason, setLifecycleReason] = useState("");
+  const [lifecycleNotes, setLifecycleNotes] = useState("");
+  const [lifecycleError, setLifecycleError] = useState("");
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const currentIsB2C = isB2CCase(sourceType, caseType);
   const isFinalStatus = isFinalCaseStatus(currentStatus);
-  const availableStatuses =
-    STATUS_TRANSITIONS[currentStatus] || STATUSES.filter((status) => status !== currentStatus);
+  const canClose = isAdmin || can("cases", "close_any") || can("cases", "close_assigned");
+  const canCancel = !currentIsB2C && (isAdmin || can("cases", "cancel_any"));
+  const canRestore = !currentIsB2C && (isAdmin || can("cases", "restore_cancelled"));
+  const availableStatuses = (STATUS_TRANSITIONS[currentStatus] || STATUSES.filter((status) => status !== currentStatus))
+    .filter((status) => status !== "Closed" || canClose);
 
   const resolvedB2CDestination = buildB2CDestination({
     b2cDestination,
@@ -290,6 +312,8 @@ export default function StatusButtons({
         setShowEpcrRequired(true);
         return;
       }
+      await runLifecycleAction("close");
+      return;
     }
 
     /**
@@ -333,22 +357,30 @@ export default function StatusButtons({
 
     await persistStatus(newStatus);
 
-    if (newStatus === "Closed" && assignedAmbulanceId) {
-      const ambulanceRef = doc(db, "ambulances", assignedAmbulanceId);
-      const ambulanceSnapshot = await getDoc(ambulanceRef);
-      const ambulance = ambulanceSnapshot.data();
-      const currentCaseId = ambulance?.currentCaseId || ambulance?.currentCase;
-
-      if (currentCaseId === caseId) {
-        await updateDoc(ambulanceRef, {
-          status: "available",
-          currentCase: null,
-          currentCaseId: null,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    }
   };
+
+  async function runLifecycleAction(action: "close" | "cancel" | "restore") {
+    setLifecycleBusy(true);
+    setLifecycleError("");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Please sign in again.");
+      const response = await fetch(`/api/cases/${caseId}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, reason: lifecycleReason, notes: lifecycleNotes }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "The case could not be updated.");
+      setLifecycleAction(null);
+      setLifecycleReason("");
+      setLifecycleNotes("");
+    } catch (error) {
+      setLifecycleError(error instanceof Error ? error.message : "The case could not be updated.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
 
   const confirmNoTransportReturn = async () => {
     if (!noTransportReason) {
@@ -514,6 +546,49 @@ export default function StatusButtons({
         <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
           This CAD case has been cancelled. Status changes are locked.
         </div>
+      )}
+
+      {!currentIsB2C && currentStatus !== "Cancelled" && canCancel && (
+        <button type="button" onClick={() => setLifecycleAction("cancel")} className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-black text-red-700 hover:bg-red-100">
+          Cancel Case
+        </button>
+      )}
+
+      {currentStatus === "Cancelled" && canRestore && (
+        <button type="button" onClick={() => setLifecycleAction("restore")} className="mt-3 rounded-xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white hover:bg-[#1f3f4c]">
+          Restore Cancelled Case
+        </button>
+      )}
+
+      {!lifecycleAction && lifecycleError && (
+        <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">
+          {lifecycleError}
+        </div>
+      )}
+
+      {lifecycleAction && (
+        <Modal>
+          <h2 className="mb-2 text-lg font-black text-[#274C5A]">
+            {lifecycleAction === "cancel" ? "Cancel CAD Case" : "Restore Cancelled Case"}
+          </h2>
+          <p className="mb-4 text-sm font-semibold text-[#607482]">
+            {lifecycleAction === "cancel" ? "The crew will be released and this case will be removed from operational totals." : "Record why this case is being restored. If its unit is busy, it will return for redispatch."}
+          </p>
+          {lifecycleAction === "cancel" ? (
+            <select value={lifecycleReason} onChange={(event) => setLifecycleReason(event.target.value)} className="w-full rounded-xl border border-[#86A7B2]/40 p-3 text-sm">
+              <option value="">Select cancellation reason *</option>
+              {CANCELLATION_REASONS.map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
+            </select>
+          ) : (
+            <input value={lifecycleReason} onChange={(event) => setLifecycleReason(event.target.value)} placeholder="Restoration reason *" className="w-full rounded-xl border border-[#86A7B2]/40 p-3 text-sm" />
+          )}
+          <textarea value={lifecycleNotes} onChange={(event) => setLifecycleNotes(event.target.value)} placeholder="Additional notes (optional)" className="mt-3 min-h-24 w-full rounded-xl border border-[#86A7B2]/40 p-3 text-sm" />
+          {lifecycleError && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{lifecycleError}</div>}
+          <button type="button" disabled={!lifecycleReason || lifecycleBusy} onClick={() => runLifecycleAction(lifecycleAction)} className="mt-4 w-full rounded-xl bg-[#274C5A] p-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+            {lifecycleBusy ? "Saving..." : lifecycleAction === "cancel" ? "Confirm Cancellation" : "Confirm Restoration"}
+          </button>
+          <button type="button" disabled={lifecycleBusy} onClick={() => { setLifecycleAction(null); setLifecycleError(""); }} className="mt-2 w-full text-sm font-bold text-[#7F7F7F]">Back</button>
+        </Modal>
       )}
 
       {showReturnReason && (

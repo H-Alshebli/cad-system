@@ -594,7 +594,7 @@ export default function CaseDetailsPage({
           <Section title="Case Chat" icon={<ShieldCheck size={18} />}>
             <CaseChat
               caseId={caseId}
-              disabled={caseData.status === "Closed"}
+              disabled={["closed", "cancelled", "canceled"].includes(String(caseData.status || "").trim().toLowerCase())}
             />
           </Section>
         </div>
