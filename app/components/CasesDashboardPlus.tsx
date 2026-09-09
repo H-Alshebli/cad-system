@@ -8,11 +8,14 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { db } from "@/lib/firebase";
 import { getEpcrResponseMinutes } from "@/lib/epcrResponseTime";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { getEpcrReportingDate } from "@/lib/epcrReportingDate";
 
 type GenderFilter = "male" | "female" | null;
 type TriageKey = "level1" | "level2" | "level3" | "level4" | "level5" | "death";
 
 type EpcrRecord = {
+  historicalImport?: boolean;
+  sourceType?: string;
   id: string;
   patientInfo?: {
     gender?: string;
@@ -85,21 +88,6 @@ function getProjectId(record: EpcrRecord) {
 
 function isVisibleRecord(record: EpcrRecord) {
   return record.isArchived !== true && record.projectArchived !== true;
-}
-
-function toRecordDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const date = (value as { toDate: () => Date }).toDate();
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  const date = new Date(value as string | number);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getRecordReportingDate(record: EpcrRecord) {
-  return toRecordDate(record.finalizedAt) || toRecordDate(record.updatedAt) || toRecordDate(record.createdAt);
 }
 
 export type CasesDashboardPlusProps = {
@@ -311,7 +299,7 @@ export default function CasesDashboardPlusPage({ projectId, clientMode = false }
     const byMonth = new Map(months.map((month) => [month.key, month]));
 
     triageRecords.forEach((record) => {
-      const date = getRecordReportingDate(record);
+      const date = getEpcrReportingDate(record);
       const triage = normalizeTriage(record.patientInfo?.triageColor);
       if (!date || !triage) return;
       const month = byMonth.get(`${date.getFullYear()}-${date.getMonth()}`);
