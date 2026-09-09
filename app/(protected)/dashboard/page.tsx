@@ -1,266 +1,77 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
 import CaseTimeline from "@/app/components/CaseTimeline";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import PermissionGuard from "@/app/components/PermissionGuard";
 import Link from "next/link";
 import {
   getCaseDisplayCode,
-  getEpcrDisplayCode,
   getUnitDisplayName,
 } from "@/lib/displayLabels";
-import { isActiveCase, isClosedCase, isOperationalCase } from "@/lib/cases";
 
 export default function Dashboard() {
   const { user, loading } = useCurrentUser();
-  console.log("CURRENT USER (Sidebar):", user);
-
-  const [cases, setCases] = useState<any[]>([]);
-  const [ambulances, setAmbulances] = useState<any[]>([]);
-  const [epcrs, setEpcrs] = useState<any[]>([]);
   const [showAllCases, setShowAllCases] = useState(false);
-
-  const [selectedProject, setSelectedProject] = useState<string>("");
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
-
-  function getCaseDate(item: any): Date | null {
-    const raw =
-      item.timeline?.Received ||
-      item.createdAt?.toDate?.() ||
-      item.createdAt ||
-      item.created_at ||
-      item.date ||
-      item.caseDate ||
-      null;
-
-    const parsed =
-      raw instanceof Date
-        ? raw
-        : raw?.toDate?.()
-        ? raw.toDate()
-        : raw
-        ? new Date(raw)
-        : null;
-
-    return parsed && !isNaN(parsed.getTime()) ? parsed : null;
-  }
-
-  function formatCaseDate(item: any): string {
-    const dateObj = getCaseDate(item);
-
-    if (!dateObj) return "—";
-
-    return dateObj.toLocaleString("en-GB", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }
-
-  function getMatchedEpcr(caseItem: any) {
-    return epcrs.find((e) => e.caseId === caseItem.id) || null;
-  }
-
-  function getMatchedEpcrId(caseItem: any): string {
-    const matched = getMatchedEpcr(caseItem);
-    return matched ? getEpcrDisplayCode(matched) : "";
-  }
-
-  function getMatchedProjectName(caseItem: any): string {
-    const matched = getMatchedEpcr(caseItem);
-
-    return (
-      matched?.projectInfo?.projectName ||
-      matched?.projectName ||
-      caseItem?.projectName ||
-      caseItem?.projectInfo?.projectName ||
-      "—"
-    );
-  }
-
-  function isVisibleRecord(item: any) {
-    return item?.isArchived !== true && item?.projectArchived !== true;
-  }
-
-  function matchesDateFilter(item: any) {
-    const caseDate = getCaseDate(item);
-    if (!caseDate) return !startDate && !endDate;
-
-    if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      if (caseDate < start) return false;
-    }
-
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      if (caseDate > end) return false;
-    }
-
-    return true;
-  }
+  const [selectedProject, setSelectedProject] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [result, setResult] = useState<any>(null);
+  const [pending, setPending] = useState(true);
+  const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    if (loading) return;
-    if (!user || user.role === "none") return;
-
-    console.log("Starting dashboard listeners for role:", user.role);
-
-    const unsubCases = onSnapshot(
-      collection(db, "cases"),
-      (snap) => {
-        const list: any[] = snap.docs
-          .map((d) => ({
-            id: d.id,
-            ...d.data(),
-          }))
-          .filter(isVisibleRecord);
-
-        list.sort((a, b) => {
-          const ta = getCaseDate(a)?.getTime() ?? 0;
-          const tb = getCaseDate(b)?.getTime() ?? 0;
-          return tb - ta;
+    if (loading || !user) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    setPending(true);
+    setError("");
+    async function load() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error("Please sign in again.");
+        const params = new URLSearchParams({ project: selectedProject, start: startDate, end: endDate, all: String(showAllCases), offset: String(offset) });
+        const response = await fetch(`/api/dashboards/timeline?${params}`, {
+          headers: { Authorization: `Bearer ${token}` }, signal: controller.signal,
         });
-
-        setCases(list);
-      },
-      (error) => {
-        console.error("Cases listener error:", error);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Could not load dashboard.");
+        if (!stopped) { setResult(payload); setError(""); }
+      } catch (error) {
+        if (!stopped) { setResult(null); setError(error instanceof Error ? error.message : "Could not load dashboard."); }
+      } finally {
+        if (!stopped) {
+          setPending(false);
+          timer = setTimeout(() => { if (document.visibilityState === "visible") void load(); else timer = setTimeout(load, 30000); }, 30000);
+        }
       }
-    );
+    }
+    void load();
+    return () => { stopped = true; controller.abort(); clearTimeout(timer); };
+  }, [user?.uid, user?.role, loading, selectedProject, startDate, endDate, showAllCases, offset, refresh]);
 
-    const unsubAmb = onSnapshot(
-      collection(db, "ambulances"),
-      (snap) => {
-        const list: any[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
-        setAmbulances(list);
-      },
-      (error) => {
-        console.error("Ambulances listener error:", error);
-      }
-    );
-
-    const unsubEpcr = onSnapshot(
-      collection(db, "epcr"),
-      (snap) => {
-        const list: any[] = snap.docs
-          .map((d) => ({
-            id: d.id,
-            ...d.data(),
-          }))
-          .filter(isVisibleRecord);
-
-        setEpcrs(list);
-      },
-      (error) => {
-        console.error("ePCR listener error:", error);
-      }
-    );
-
-    return () => {
-      unsubCases();
-      unsubAmb();
-      unsubEpcr();
-    };
-  }, [user, loading]);
-
-  const projectOptions = useMemo(() => {
-    const set = new Set<string>();
-
-    cases.forEach((c) => {
-      const name = getMatchedProjectName(c);
-      if (name && name !== "—") set.add(name);
-    });
-
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [cases, epcrs]);
-
-  const filteredCases = useMemo(() => {
-    return cases.filter((c) => {
-      const projectName = getMatchedProjectName(c);
-
-      const matchesProject =
-        !selectedProject || projectName === selectedProject;
-
-      const matchesDate = matchesDateFilter(c);
-
-      return matchesProject && matchesDate;
-    });
-  }, [cases, epcrs, selectedProject, startDate, endDate]);
-
-  const visibleCases = useMemo(() => {
-    if (showAllCases) return filteredCases;
-    return filteredCases.filter(isActiveCase);
-  }, [filteredCases, showAllCases]);
-
-  const totalCases = filteredCases.filter(isOperationalCase).length;
-
-  const onSceneCases = filteredCases.filter(
-    (c) => c.status === "OnScene"
-  ).length;
-
-  const enRouteCases = filteredCases.filter(
-    (c) => c.status === "EnRoute"
-  ).length;
-
-  const activeCases = filteredCases.filter(
-    isActiveCase
-  ).length;
-
-  const closedCases = filteredCases.filter(
-    isClosedCase
-  ).length;
-
-  const unreceivedCases = filteredCases.filter(
-    (c) => c.status === "Assigned" || c.status === "Received"
-  ).length;
-
-  const transportingCases = filteredCases.filter(
-    (c) => ["Transporting", "Hospital"].includes(c.status)
-  ).length;
-
-  const returningCases = filteredCases.filter(
-    (c) => c.status === "Returning"
-  ).length;
-
-  const closedHospitalCases = filteredCases.filter(
-    (c) =>
-      isClosedCase(c) &&
-      c.transportingToType === "hospital"
-  ).length;
-
-  const transportingHospitalCases = filteredCases.filter(
-    (c) =>
-      ["Transporting", "Hospital"].includes(c.status) &&
-      c.transportingToType === "hospital"
-  ).length;
-
-  const transportingClinicCases = filteredCases.filter(
-    (c) =>
-      ["Transporting", "Hospital"].includes(c.status) &&
-      c.transportingToType === "clinic"
-  ).length;
-
-  const closedClinicCases = filteredCases.filter(
-    (c) =>
-      isClosedCase(c) &&
-      c.transportingToType === "clinic"
-  ).length;
-
-  const totalAmbulances = ambulances.length;
+  const visibleCases = pending ? [] : result?.cards || [];
+  const projectOptions: string[] = result?.projects || [];
+  const stats = result?.stats || {};
+  const value = (key: string) => pending || !result ? "…" : stats[key];
+  const totalCases = value("totalCases"), activeCases = value("activeCases"), closedCases = value("closedCases");
+  const onSceneCases = value("onSceneCases"), enRouteCases = value("enRouteCases"), unreceivedCases = value("unreceivedCases");
+  const transportingCases = value("transportingCases"), returningCases = value("returningCases");
+  const closedHospitalCases = value("closedHospitalCases"), closedClinicCases = value("closedClinicCases");
+  const transportingHospitalCases = value("transportingHospitalCases"), transportingClinicCases = value("transportingClinicCases");
+  const totalAmbulances = value("totalAmbulances");
+  function getMatchedProjectName(item: any) { return item.projectName || "—"; }
+  function getMatchedEpcrId(item: any) { return item.epcrNumber || ""; }
+  function formatCaseDate(item: any) {
+    return item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB", { timeZone: "Asia/Riyadh", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true }) : "—";
+  }
 
   function clearFilters() {
+    setOffset(0);
     setSelectedProject("");
     setStartDate("");
     setEndDate("");
@@ -301,7 +112,7 @@ return (
             </label>
             <select
               value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
+              onChange={(e) => { setSelectedProject(e.target.value); setOffset(0); }}
               className="select"
             >
               <option value="">All Projects</option>
@@ -320,7 +131,7 @@ return (
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => { setStartDate(e.target.value); setOffset(0); }}
               className="select"
             />
           </div>
@@ -332,7 +143,7 @@ return (
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => { setEndDate(e.target.value); setOffset(0); }}
               className="select"
             />
           </div>
@@ -349,6 +160,8 @@ return (
       </div>
 
       {/* KPI */}
+      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error} <button className="underline" onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
+      <div role="status" className="text-sm text-[#607482]">{pending ? "Loading dashboard…" : "Refreshes every 30 seconds."} <button className="underline" onClick={() => setRefresh(value => value + 1)}>Refresh now</button></div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-[#274C5A]/20 bg-[#274C5A] p-5 text-white shadow-lg shadow-[#274C5A]/15">
           <h3 className="text-lg font-black">Total Cases</h3>
@@ -411,13 +224,13 @@ return (
         <div>
           <h2 className="text-xl font-black text-[#274C5A]">Cases Timeline</h2>
           <p className="text-sm font-medium text-[#7F7F7F]">
-            Showing {visibleCases.length} case{visibleCases.length !== 1 ? "s" : ""}
+            Showing {visibleCases.length} of {pending ? "…" : result?.totalVisible ?? "…"} cases
             {!showAllCases ? " (closed cases hidden)" : " (all cases)"}
           </p>
         </div>
 
         <button
-          onClick={() => setShowAllCases((prev) => !prev)}
+          onClick={() => { setShowAllCases((prev) => !prev); setOffset(0); }}
           className="btn-secondary"
         >
           {showAllCases ? "Hide Closed Cases" : "Show All Cases"}
@@ -425,8 +238,13 @@ return (
       </div>
 
       {/* TIMELINE CARDS */}
+      <div className="flex items-center justify-end gap-3">
+        <button className="btn-secondary" disabled={pending || offset === 0} onClick={() => setOffset(value => Math.max(0, value - 50))}>Previous</button>
+        <span>Page {Math.floor(offset / 50) + 1}</span>
+        <button className="btn-secondary" disabled={pending || !result?.hasMore} onClick={() => setOffset(value => value + 50)}>Next</button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {visibleCases.map((c) => (
+        {visibleCases.map((c: any) => (
           <Link
             href={`/cadcases/${c.id}`}
             key={c.id}
