@@ -34,7 +34,7 @@ export function useCurrentUser() {
               accountStatus: "pending",
             });
           } else {
-            setUser({ uid: fbUser.uid, ...snap.data() });
+            setUser({ ...snap.data(), uid: fbUser.uid });
           }
           setLoading(false);
         },

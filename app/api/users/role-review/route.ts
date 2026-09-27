@@ -67,13 +67,14 @@ async function authenticate(request: NextRequest) {
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
   try {
-    const token = await adminAuth.verifyIdToken(match[1]);
+    const token = await adminAuth.verifyIdToken(match[1], true);
     const snapshot = await adminDb.collection("users").doc(token.uid).get();
     if (!snapshot.exists) return null;
     const reviewer = snapshot.data() || {};
+    if (reviewer.active !== true || reviewer.accountType === "client") return null;
     const role = String(reviewer.role || "").trim();
     const normalizedRole = role.toLowerCase();
-    let allowed = /admin|human resources|\bhr\b/.test(normalizedRole);
+    let allowed = ["admin", "super_admin", "superadmin"].includes(normalizedRole);
     if (!allowed && role) {
       const roleSnapshot = await adminDb.collection("roles").doc(role).get();
       allowed = roleSnapshot.data()?.permissions?.users?.edit === true;
@@ -243,6 +244,12 @@ export async function POST(request: NextRequest) {
 
   if (!userId || !new Set(["approve", "request_changes", "reject", "suspend", "activate"]).has(action)) {
     return NextResponse.json({ error: "Invalid role review action." }, { status: 400 });
+  }
+  // Role grants and activation are privileged; a generic Users/Edit grant
+  // must not let its holder grant themselves a more powerful role.
+  if (["approve", "activate", "suspend", "reject"].includes(action)
+      && !["admin", "super_admin", "superadmin"].includes(String(authenticated.reviewer.role || "").trim().toLowerCase())) {
+    return NextResponse.json({ error: "Administrator approval is required for role and account-status changes." }, { status: 403 });
   }
   if (action === "request_changes" && !note) {
     return NextResponse.json({ error: "Please enter the required changes." }, { status: 400 });

@@ -49,6 +49,7 @@ export default function RolePermissionsPage({
         ...(prev[moduleKey] || {}),
         [action]: enabled,
       };
+      if (moduleKey === "epcr_medical_review" && enabled && action !== "view") modulePermissions.view = true;
       if (moduleKey === "cad_cases_new" && enabled) {
         if (action === "view_all") modulePermissions.view_assigned = false;
         if (action === "view_assigned") modulePermissions.view_all = false;

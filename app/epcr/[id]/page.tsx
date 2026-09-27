@@ -2,10 +2,13 @@
 
 import { useRef } from "react";
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, onSnapshot, updateDoc, getDoc, writeBatch } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { generateEpcrPdf } from "@/lib/epcrPdf";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
+import { useEpcrDraft } from "@/lib/useEpcrDraft";
+import EpcrMedicalReviewPanel from "@/app/components/EpcrMedicalReviewPanel";
+import type { MedicalReview } from "@/lib/epcrMedicalReview";
 import BodyPainSelector from "@/app/components/epcr/BodyPainSelector";
 import {
   getEpcrConsumableOptions,
@@ -51,6 +54,8 @@ type HealthClassification =
 
 type PatientInfo = {
   patientId?: string;
+  employeeId?: string;
+  buildingNumber?: string;
   patientIdUnavailable?: boolean;
   patientIdUnavailableReason?: string;
   patientIdUnavailableOther?: string;
@@ -160,6 +165,8 @@ type TimeSection = {
 };
 
 type EpcrDoc = {
+  medicalReview?: MedicalReview;
+  status?: string;
   caseId?: string;
   epcrNumber?: string;
   epcrSequence?: number;
@@ -182,6 +189,8 @@ function casePatientSyncPayload(patientInfo: PatientInfo) {
   const patientName = `${patientInfo.firstName || ""} ${patientInfo.lastName || ""}`.trim();
   return {
     "patient.idNumber": patientInfo.patientId || "",
+    "patient.employeeId": patientInfo.employeeId || "",
+    "patient.buildingNumber": patientInfo.buildingNumber || "",
     "patient.idUnavailable": patientInfo.patientIdUnavailable === true,
     "patient.idUnavailableReason": patientInfo.patientIdUnavailableReason || "",
     "patient.idUnavailableOther": patientInfo.patientIdUnavailableOther || "",
@@ -210,6 +219,8 @@ const emptyProjectInfo = (): ProjectInfo => ({
 
 const emptyPatientInfo = (): PatientInfo => ({
   patientId: "",
+  employeeId: "",
+  buildingNumber: "",
   patientIdUnavailable: false,
   patientIdUnavailableReason: "",
   patientIdUnavailableOther: "",
@@ -725,194 +736,56 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
   const epcrId = params.id;
   const router = useRouter();
 
-  const [data, setData] = useState<EpcrDoc | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const epcrRef = doc(db, "epcr", epcrId);
-
-    const unsub = onSnapshot(epcrRef, async (epcrSnap) => {
-      if (!epcrSnap.exists()) {
-        setData(null);
-        setLoading(false);
-        return;
+  const draft = useEpcrDraft(epcrId, async (record) => {
+    // Fill missing defaults in memory only. Viewing a report never writes it.
+    const source = await getDoc(doc(db, "cases", record.caseId || epcrId));
+    if (!source.exists()) return record;
+    const caseData = source.data();
+    const project = { ...(record.projectInfo ?? emptyProjectInfo()) };
+    if (String(caseData.sourceType || caseData.caseType || "").toUpperCase() === "B2C") {
+      project.projectName = "B2C";
+      project.projectId = caseData.b2cRequestId || caseData.requestId || caseData.sourceRequestId || caseData.bookingConfirmationNumber || record.caseId || epcrId;
+      project.tripLeg = caseData.tripLeg || project.tripLeg;
+    } else {
+      project.projectId ||= caseData.projectId;
+      if (project.projectId && !project.projectName) {
+        const info = await getDoc(doc(db, "projects", project.projectId));
+        if (info.exists()) project.projectName = info.data().projectName || "";
       }
-
-const epcrData = epcrSnap.data() as EpcrDoc & { caseId?: string };
-const sourceCaseId = epcrData.caseId || epcrId;
-
-const caseRef = doc(db, "cases", sourceCaseId);
-const caseSnap = await getDoc(caseRef);
-
-      if (caseSnap.exists()) {
-        const caseData = caseSnap.data();
-        const timeline = caseData.timeline;
-
-let projectUpdated = false;
-const newProjectInfo = epcrData.projectInfo ?? emptyProjectInfo();
-
-const sourceType = String(
-  caseData.sourceType || caseData.caseType || ""
-).toUpperCase();
-
-const isB2C = sourceType === "B2C";
-
-if (isB2C) {
-  const b2cRequestId =
-    caseData.b2cRequestId ||
-    caseData.requestId ||
-    caseData.sourceRequestId ||
-    caseData.bookingConfirmationNumber ||
-    sourceCaseId;
-
-  if (newProjectInfo.projectName !== "B2C") {
-    newProjectInfo.projectName = "B2C";
-    projectUpdated = true;
-  }
-
-  if (newProjectInfo.projectId !== b2cRequestId) {
-    newProjectInfo.projectId = b2cRequestId;
-    projectUpdated = true;
-  }
-
-  if (caseData.tripLeg && newProjectInfo.tripLeg !== caseData.tripLeg) {
-    newProjectInfo.tripLeg = caseData.tripLeg;
-    projectUpdated = true;
-  }
-} else {
-  if (!newProjectInfo.projectId && caseData.projectId) {
-    newProjectInfo.projectId = caseData.projectId;
-    projectUpdated = true;
-  }
-
-  if (caseData.projectId && !newProjectInfo.projectName) {
-    const projectRef = doc(db, "projects", caseData.projectId);
-    const projectSnap = await getDoc(projectRef);
-
-    if (projectSnap.exists()) {
-      const projectData = projectSnap.data();
-      newProjectInfo.projectName = projectData.projectName ?? "";
-      projectUpdated = true;
     }
-  }
-}
-
-        if (projectUpdated) {
-          await updateDoc(epcrRef, {
-            projectInfo: newProjectInfo,
-            updatedAt: new Date(),
-          });
-
-          epcrData.projectInfo = newProjectInfo;
-          setData(epcrData);
-          setLoading(false);
-          return;
+    record.projectInfo = project;
+    const outcome = { ...(record.outcome ?? emptyOutcome()) };
+    const noTransport = getNoTransportOutcomeFromCase(caseData);
+    if (noTransport && !outcome.destination) Object.assign(outcome, noTransport);
+    outcome.hospitalName ||= getCaseDestinationHospitalName(caseData);
+    record.outcome = outcome;
+    record.transferTeam = await buildAutoTransferTeam(caseData, record.transferTeam) || record.transferTeam;
+    const time = { ...(record.time ?? emptyTime()) };
+    const timeline = caseData.timeline;
+    if (timeline) {
+      const fill = (key: keyof TimeSection, current: string, legacy: string) => {
+        if (!time[key]?.timeHHMM) {
+          const value = pickTimelineTime(timeline, current, legacy);
+          if (value) time[key] = { timeHHMM: timestampToHHMM(value) };
         }
-        const destinationHospitalName = getCaseDestinationHospitalName(caseData);
+      };
+      fill("movingTime", "enRouteAt", "EnRoute");
+      fill("arrivalTime", "onSceneAt", "OnScene");
+      fill("arrivalToPTTime", "onSceneAt", "OnScene");
+      fill("leavingSceneTime", "transportingAt", "Transporting");
+      fill("leavingSceneTime", "returningAt", "Returning");
+      fill("hospitalTime", "hospitalAt", "Hospital");
+      fill("backTime", "returningAt", "Returning");
+      fill("backTime", "closedAt", "Closed");
+    }
+    record.time = time;
+    return record;
+  }, casePatientSyncPayload);
+  const data = draft.data as EpcrDoc | null;
+  const setData: React.Dispatch<React.SetStateAction<EpcrDoc | null>> = draft.setData;
+  const loading = draft.loading;
 
-        const noTransportOutcome = getNoTransportOutcomeFromCase(caseData);
-        if (noTransportOutcome && !epcrData.outcome?.destination) {
-          const nextOutcome = {
-            ...(epcrData.outcome ?? emptyOutcome()),
-            ...noTransportOutcome,
-          } as Outcome;
-
-          await updateDoc(epcrRef, {
-            outcome: nextOutcome,
-            updatedAt: new Date(),
-          });
-
-          epcrData.outcome = nextOutcome;
-          setData(epcrData);
-          setLoading(false);
-          return;
-        }
-
-if (destinationHospitalName && !epcrData.outcome?.hospitalName) {
-  const nextOutcome = {
-    ...(epcrData.outcome ?? emptyOutcome()),
-    hospitalName: destinationHospitalName,
-  };
-
-  await updateDoc(epcrRef, {
-    outcome: nextOutcome,
-    updatedAt: new Date(),
-  });
-
-  epcrData.outcome = nextOutcome;
-  setData(epcrData);
-  setLoading(false);
-  return;
-}
-
-        const autoTransferTeam = await buildAutoTransferTeam(
-          caseData,
-          epcrData.transferTeam
-        );
-
-        if (autoTransferTeam) {
-          await updateDoc(epcrRef, {
-            transferTeam: autoTransferTeam,
-            updatedAt: new Date(),
-          });
-
-          epcrData.transferTeam = autoTransferTeam;
-          setData(epcrData);
-          setLoading(false);
-          return;
-        }
-
-        if (timeline) {
-          let timeUpdated = false;
-          const newTime = { ...(epcrData.time ?? emptyTime()) };
-
-          const fill = (
-            key: keyof TimeSection,
-            newKey: string,
-            oldKey: string
-          ) => {
-            if (!newTime[key]?.timeHHMM) {
-              const ts = pickTimelineTime(timeline, newKey, oldKey);
-              if (ts) {
-                newTime[key] = { timeHHMM: timestampToHHMM(ts) };
-                timeUpdated = true;
-              }
-            }
-          };
-
-          fill("movingTime", "enRouteAt", "EnRoute");
-          fill("arrivalTime", "onSceneAt", "OnScene");
-          fill("arrivalToPTTime", "onSceneAt", "OnScene");
-          fill("leavingSceneTime", "transportingAt", "Transporting");
-          if (!newTime.leavingSceneTime?.timeHHMM) {
-            fill("leavingSceneTime", "returningAt", "Returning");
-          }
-          fill("hospitalTime", "hospitalAt", "Hospital");
-          fill("backTime", "returningAt", "Returning");
-          if (!newTime.backTime?.timeHHMM) fill("backTime", "closedAt", "Closed");
-
-          if (timeUpdated) {
-            await updateDoc(epcrRef, {
-              time: newTime,
-              updatedAt: new Date(),
-            });
-
-            epcrData.time = newTime;
-            setData(epcrData);
-            setLoading(false);
-            return;
-          }
-        }
-      }
-
-      setData(epcrData);
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, [epcrId]);
-
-  const locked = data?.locked === true;
+  const locked = data?.locked === true || draft.busy || draft.blocked;
 
   const patientInfo = data?.patientInfo ?? emptyPatientInfo();
   const projectInfo = data?.projectInfo ?? emptyProjectInfo();
@@ -1029,7 +902,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
     return (
       <div className="mx-auto max-w-5xl p-6">
         <div className="rounded-2xl border border-[#d8e6ea] bg-white p-6 text-sm font-semibold text-[#274C5A] shadow-sm">
-          ePCR not found
+          {draft.message}
         </div>
       </div>
     );
@@ -1043,6 +916,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
     ).catch(() => undefined);
 
     generateEpcrPdf({
+      medicalReview: data.medicalReview,
       brandLogoDataUrl,
       reportInfo: {
         epcrNumber: data.epcrNumber,
@@ -1059,67 +933,23 @@ patientInfo.chiefComplaints.forEach((complaint) => {
     });
   };
 
-  const saveDraft = async () => {
-    const ref = doc(db, "epcr", epcrId);
-    const batch = writeBatch(db);
-    batch.update(ref, {
-      locked: false,
-      patientInfo,
-      medicalHistory,
-      headToToe,
-      narrativeVitals,
-      outcome,
-      transferTeam,
-      time,
-      updatedAt: new Date(),
-    } satisfies EpcrDoc);
-
-    batch.update(
-      doc(db, "cases", data.caseId || epcrId),
-      casePatientSyncPayload(patientInfo)
-    );
-    await batch.commit();
-
-    alert("Saved");
+  const saveDraft = async () => { await draft.flush(); };
+  const navigateSafely = async (target?: string) => {
+    if (draft.busy || draft.blocked) return;
+    if (data?.locked === true || await draft.flush() !== "failed") {
+      if (target) router.push(target); else router.back();
+    }
   };
-
   const finalize = async () => {
     if (!canFinalize) {
       alert("Please complete required fields:\n\n- " + missing.join("\n- "));
       return;
     }
-
-    const consentSnapshot = await getDoc(
-      doc(db, "epcr", epcrId, "forms", "dataSharingConsent")
-    );
-    if (!consentSnapshot.exists() || consentSnapshot.data()?.completed !== true) {
-      alert("Complete and save the required Data Sharing Consent Form before finalizing the ePCR.");
+    const result = await draft.finalize();
+    if (result === "consent") {
+      alert("Draft saved. Complete and save the Data Sharing Consent Form, then return to finalize.");
       router.push(`/epcr/${epcrId}/data-sharing-consent`);
-      return;
     }
-
-    const ref = doc(db, "epcr", epcrId);
-    const batch = writeBatch(db);
-    batch.update(ref, {
-      locked: true,
-      patientInfo,
-      medicalHistory,
-      headToToe,
-      narrativeVitals,
-      outcome,
-      transferTeam,
-      time,
-      finalizedAt: new Date(),
-      updatedAt: new Date(),
-    } satisfies EpcrDoc);
-
-    batch.update(
-      doc(db, "cases", data.caseId || epcrId),
-      casePatientSyncPayload(patientInfo)
-    );
-    await batch.commit();
-
-    alert("Finalized & Locked");
   };
 
   return (
@@ -1142,25 +972,27 @@ patientInfo.chiefComplaints.forEach((complaint) => {
               Clinical documentation, outcome, signatures, and transfer timeline.
             </p>
           </div>
-        {locked ? (
+        {data?.locked === true ? (
             <span className="rounded-full bg-[#dff8ed] px-3 py-1 text-xs font-black text-[#137a4a]">
               Locked
             </span>
         ) : (
             <span className="rounded-full bg-[#fff4d6] px-3 py-1 text-xs font-black text-[#9a6700]">
-              Draft
+              {draft.blocked ? "Sync paused" : "Draft"}
             </span>
         )}
         </div>
       </div>
 
       <button
-        onClick={() => router.back()}
+        onClick={() => void navigateSafely()}
         className="rounded-xl border border-[#c8dce2] bg-white px-6 py-2.5 text-sm font-black text-[#274C5A] shadow-sm transition hover:border-[#74cdda] hover:bg-[#f7fbfc]"
       >
         Back
       </button>
 
+      <div role="status" aria-live="polite" className="rounded-xl border border-[#c8dce2] bg-[#f8fbfc] p-3 text-sm font-semibold">{draft.message}</div>
+      <EpcrMedicalReviewPanel id={epcrId} medicalReview={data.medicalReview} />
       <div className="flex gap-4 justify-end flex-wrap">
         {!locked && (
           <>
@@ -1173,7 +1005,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
             <button
               onClick={finalize}
-              disabled={!canFinalize}
+              disabled={!canFinalize || draft.busy || draft.blocked}
               className="rounded-xl bg-[#137a4a] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#137a4a]/15 transition hover:bg-[#0f633c] disabled:cursor-not-allowed disabled:bg-[#9aaab2]"
             >
               Finalize ePCR
@@ -1182,14 +1014,14 @@ patientInfo.chiefComplaints.forEach((complaint) => {
         )}
 
         <button
-          onClick={() => router.push(`/epcr/${epcrId}/refusal-of-treatment`)}
+          onClick={() => void navigateSafely(`/epcr/${epcrId}/refusal-of-treatment`)}
           className="rounded-xl border border-[#ffc9c9] bg-[#fff1f1] px-4 py-2.5 text-sm font-black text-[#b42318] transition hover:bg-[#ffe3e3]"
         >
           Refusal of Treatment Form
         </button>
 
         <button
-          onClick={() => router.push(`/epcr/${epcrId}/data-sharing-consent`)}
+          onClick={() => void navigateSafely(`/epcr/${epcrId}/data-sharing-consent`)}
           className="rounded-xl border border-[#b9ecf2] bg-[#effbfc] px-4 py-2.5 text-sm font-black text-[#166575] transition hover:bg-[#ddf6f9]"
         >
           Data Sharing Consent Form
@@ -1219,6 +1051,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 </Section>
 
       <Section title="Patient Information">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Input
           disabled={locked || patientInfo.patientIdUnavailable}
           label="Patient ID / Iqama *"
@@ -1233,6 +1066,16 @@ patientInfo.chiefComplaints.forEach((complaint) => {
             }))
           }
         />
+        <Input
+          disabled={locked}
+          label="Patient Employee ID"
+          value={patientInfo.employeeId ?? ""}
+          onChange={(e) => setData((prev) => ({
+            ...(prev ?? {}),
+            patientInfo: { ...(prev?.patientInfo ?? emptyPatientInfo()), employeeId: e.target.value },
+          }))}
+        />
+        </div>
 
         <label className="flex items-center gap-3 rounded-xl border border-[#c8dce2] bg-[#f7fbfc] p-3 text-sm font-black text-[#274C5A]">
           <input
@@ -1386,7 +1229,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Input
             disabled={locked}
             label="Factory Name"
@@ -1400,6 +1243,15 @@ patientInfo.chiefComplaints.forEach((complaint) => {
                 },
               }))
             }
+          />
+          <Input
+            disabled={locked}
+            label="Building Number"
+            value={patientInfo.buildingNumber ?? ""}
+            onChange={(e) => setData((prev) => ({
+              ...(prev ?? {}),
+              patientInfo: { ...(prev?.patientInfo ?? emptyPatientInfo()), buildingNumber: e.target.value },
+            }))}
           />
           <Select
             disabled={locked}
@@ -2518,7 +2370,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
             <button
               onClick={finalize}
-              disabled={!canFinalize}
+              disabled={!canFinalize || draft.busy || draft.blocked}
               className="rounded-xl bg-[#137a4a] px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-[#137a4a]/15 transition hover:bg-[#0f633c] disabled:cursor-not-allowed disabled:bg-[#9aaab2]"
             >
               Finalize ePCR

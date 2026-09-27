@@ -1,10 +1,12 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { medicalReviewLabel, MedicalReview } from "./epcrMedicalReview";
 
 /**
  * Lazem – Modern Electronic Patient Care Report (ePCR)
  */
 export type EpcrPdfData = {
+  medicalReview?: MedicalReview;
   brandLogoDataUrl?: string;
   reportInfo?: {
     epcrNumber?: string;
@@ -373,6 +375,7 @@ export function buildEpcrPdf(data: EpcrPdfData) {
         label: "Report Type",
         value: "Electronic Patient Care Report",
       },
+      { label: "Medical Review", value: medicalReviewLabel(data) },
     ],
     2
   );
@@ -396,6 +399,10 @@ export function buildEpcrPdf(data: EpcrPdfData) {
             : "-"),
       },
       {
+        label: "Patient Employee ID",
+        value: data.patientInfo?.employeeId,
+      },
+      {
         label: "Patient Name",
         value: `${data.patientInfo?.firstName || ""} ${
           data.patientInfo?.lastName || ""
@@ -407,6 +414,7 @@ export function buildEpcrPdf(data: EpcrPdfData) {
       { label: "Nationality", value: data.patientInfo?.nationality },
       { label: "Weight KG", value: data.patientInfo?.weightKg },
       { label: "Factory", value: data.patientInfo?.factoryName },
+      { label: "Building Number", value: data.patientInfo?.buildingNumber },
     ],
     2
   );

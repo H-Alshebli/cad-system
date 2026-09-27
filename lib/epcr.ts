@@ -1,12 +1,10 @@
 // lib/epcr.ts
 
 import {
-  collection,
   doc,
   getDoc,
-  setDoc,
   serverTimestamp,
-  writeBatch,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { reserveOperationalNumber } from "@/lib/operationalNumbers";
@@ -147,6 +145,8 @@ export const createEpcrFromCase = async (
         caseData.patientId ||
         "",
       patientIdUnavailable: false,
+      employeeId: String(caseData.patient?.employeeId ?? ""),
+      buildingNumber: String(caseData.patient?.buildingNumber ?? ""),
       patientIdUnavailableReason: "",
       patientIdUnavailableOther: "",
 
@@ -351,12 +351,16 @@ export const createEpcrFromCase = async (
     updatedAt: serverTimestamp(),
   });
 
-  await setDoc(ref, payload);
+  await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (!existing.exists()) transaction.set(ref, payload);
+  });
 
   return caseData.id;
 };
 
 export const createManualEpcr = async ({
+  requestId,
   projectId,
   projectName,
   unitId,
@@ -364,6 +368,7 @@ export const createManualEpcr = async ({
   createdBy,
   createdByName,
 }: {
+  requestId: string;
   projectId: string;
   projectName: string;
   unitId?: string;
@@ -375,6 +380,14 @@ export const createManualEpcr = async ({
     throw new Error("Project is required for a manual ePCR.");
   }
 
+  if (!/^[a-f0-9-]{36}$/i.test(requestId) || !createdBy) {
+    throw new Error("A stable creation request ID and signed-in user are required.");
+  }
+  const caseRef = doc(db, "cases", `manual_${createdBy}_${requestId}`);
+  const epcrRef = doc(db, "epcr", caseRef.id);
+  const existing = await getDoc(epcrRef);
+  if (existing.exists()) return caseRef.id;
+
   const [caseOperationalNumber, epcrOperationalNumber] = await Promise.all([
     reserveOperationalNumber("case"),
     reserveOperationalNumber("epcr"),
@@ -382,8 +395,6 @@ export const createManualEpcr = async ({
 
   // A manual ePCR is still an operational event. Create its CAD case and
   // clinical record atomically with the same ID so neither can be orphaned.
-  const caseRef = doc(collection(db, "cases"));
-  const epcrRef = doc(db, "epcr", caseRef.id);
   const assignedUserIds = createdBy ? [createdBy] : [];
   const assignedUnit = unitId
     ? {
@@ -473,6 +484,8 @@ export const createManualEpcr = async ({
       gender: "unknown",
       phone: "",
       factoryName: projectName,
+      employeeId: "",
+      buildingNumber: "",
       nationality: "",
       triageColor: "",
       healthClassification: "",
@@ -496,10 +509,16 @@ export const createManualEpcr = async ({
     updatedAt: serverTimestamp(),
   });
 
-  const batch = writeBatch(db);
-  batch.set(caseRef, casePayload);
-  batch.set(epcrRef, epcrPayload);
-  await batch.commit();
+  await runTransaction(db, async (transaction) => {
+    const existingCase = await transaction.get(caseRef);
+    const existingEpcr = await transaction.get(epcrRef);
+    if (existingCase.exists() && existingEpcr.exists()) return;
+    if (existingCase.exists() || existingEpcr.exists()) {
+      throw new Error("Incomplete creation record; administrator review is required.");
+    }
+    transaction.set(caseRef, casePayload);
+    transaction.set(epcrRef, epcrPayload);
+  });
 
   return caseRef.id;
 };

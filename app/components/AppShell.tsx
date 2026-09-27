@@ -12,6 +12,7 @@ import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { isClientAccount } from "@/lib/userAccounts";
 
+
 const PUBLIC_ROUTES = ["/login", "/register"];
 
 export default function AppShell({
@@ -23,6 +24,29 @@ export default function AppShell({
   const router = useRouter();
   const { user, loading } = useCurrentUser();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try { setSidebarCollapsed(localStorage.getItem("hcad.sidebar.collapsed") === "true"); }
+    catch { /* Layout still works when browser storage is unavailable. */ }
+  }, []);
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try { localStorage.setItem("hcad.sidebar.collapsed", String(next)); }
+    catch { /* Keep the preference in memory for this visit. */ }
+  };
+
+  useEffect(() => { setMobileSidebarOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileSidebarOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileSidebarOpen]);
 
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -128,8 +152,8 @@ export default function AppShell({
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-[#eef4f6] text-[#274C5A]">
       {/* Desktop Sidebar */}
-      <aside className="relative z-30 hidden h-screen w-[288px] min-w-[288px] shrink-0 overflow-hidden lg:block">
-        <Sidebar />
+      <aside id="desktop-sidebar" className={`relative z-30 hidden h-screen shrink-0 overflow-hidden transition-[width] duration-200 motion-reduce:transition-none lg:block ${sidebarCollapsed ? "w-[76px]" : "w-[288px]"}`}>
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       </aside>
 
       {/* Mobile Overlay */}
@@ -142,6 +166,8 @@ export default function AppShell({
 
       {/* Mobile Sidebar */}
       <div
+        id="mobile-sidebar"
+        hidden={!mobileSidebarOpen}
         className={`fixed left-0 top-0 z-50 h-screen w-[288px] min-w-[288px] transition-transform duration-300 lg:hidden ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -157,8 +183,10 @@ export default function AppShell({
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#86A7B2]/25 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-3 py-2 text-sm font-bold text-[#274C5A]"
+              className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-3 py-2 text-sm font-bold text-[#274C5A] lg:hidden"
               aria-label="Open menu"
+              aria-controls="mobile-sidebar"
+              aria-expanded={mobileSidebarOpen}
             >
               Menu
             </button>
@@ -175,7 +203,7 @@ export default function AppShell({
             <div className="w-10" />
           </div>
 
-          <div className="w-full px-4 py-4 lg:px-6 lg:py-5">
+          <div className="min-w-0 w-full px-4 py-4 lg:px-6 lg:py-5 [&>*]:max-w-none">
             {children}
           </div>
 

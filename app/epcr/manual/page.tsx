@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -25,6 +25,7 @@ export default function ManualEpcrPage() {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedUnitId, setSelectedUnitId] = useState("");
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
 
   useEffect(() => {
     const unsubProjects = onSnapshot(collection(db, "projects"), (snapshot) => {
@@ -59,6 +60,7 @@ export default function ManualEpcrPage() {
   );
 
   async function startManualEpcr() {
+    if (creatingRef.current) return;
     const selectedProject = projects.find((item) => item.id === selectedProjectId);
     if (!selectedProject || !user?.uid) {
       alert("Select a project before starting the manual ePCR.");
@@ -66,9 +68,16 @@ export default function ManualEpcrPage() {
     }
 
     const selectedUnit = units.find((item) => item.id === selectedUnitId);
+    creatingRef.current = true;
     setCreating(true);
     try {
+      // Keep only an opaque request token, never patient data. Retain on error
+      // or reload so an uncertain successful commit cannot create a second case.
+      const storageKey = `hcad-manual-request:${user.uid}:${selectedProjectId}:${selectedUnitId}`;
+      const requestId = sessionStorage.getItem(storageKey) || crypto.randomUUID();
+      sessionStorage.setItem(storageKey, requestId);
       const epcrId = await createManualEpcr({
+        requestId,
         projectId: selectedProject.id,
         projectName: projectName(selectedProject),
         unitId: selectedUnit?.id,
@@ -76,11 +85,13 @@ export default function ManualEpcrPage() {
         createdBy: user.uid,
         createdByName: user.name || user.displayName || user.email || user.uid,
       });
+      sessionStorage.removeItem(storageKey);
       router.push(`/epcr/${epcrId}`);
     } catch (error: any) {
       console.error("Failed to create manual ePCR", error);
       alert(error?.message || "Failed to create manual ePCR.");
       setCreating(false);
+      creatingRef.current = false;
     }
   }
 
@@ -135,7 +146,7 @@ export default function ManualEpcrPage() {
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
-            This creates a standalone ePCR. It will not create or change a CAD mission.
+            This creates a linked CAD case and ePCR. Do not start another report for the same event.
           </div>
 
           <button

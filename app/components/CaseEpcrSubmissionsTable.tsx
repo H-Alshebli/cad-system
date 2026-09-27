@@ -16,6 +16,10 @@ import Link from "next/link";
 import { getCaseDisplayCode, getEpcrDisplayCode } from "@/lib/displayLabels";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import { getEpcrStatus } from "@/lib/epcrStatus";
+import { medicalReviewLabel, MedicalReview } from "@/lib/epcrMedicalReview";
+import { matchesSubmissionDate } from "@/lib/epcrDraftCore";
+import SubmissionsExportDialog from "./SubmissionsExportDialog";
 
 const HISTORICAL_IMPORT_HEADERS = [
   "Submission ID", "Project ID", "Project Name", "Report Date", "Patient First Name",
@@ -87,6 +91,7 @@ type CaseDoc = {
 };
 
 type EpcrDoc = {
+  medicalReview?: MedicalReview;
   id: string;
   caseId?: string;
   epcrId?: string;
@@ -261,154 +266,6 @@ function statusBadge(status?: string) {
   return `${base} border-[#86A7B2]/30 bg-[#86A7B2]/12 text-[#274C5A]`;
 }
 
-function cleanExportValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-
-  if (value instanceof Timestamp) {
-    return formatDate(value);
-  }
-
-  if (value instanceof Date) {
-    return formatDate(value);
-  }
-
-  if (typeof value === "string") {
-    if (value.startsWith("data:image")) {
-      return "Signature/Image Saved";
-    }
-
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "object" && item !== null) {
-          return Object.entries(item as Record<string, unknown>)
-            .map(([key, val]) => `${key}: ${cleanExportValue(val)}`)
-            .join(" | ");
-        }
-
-        return cleanExportValue(item);
-      })
-      .join(" ; ");
-  }
-
-  if (typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>)
-      .map(([key, val]) => `${key}: ${cleanExportValue(val)}`)
-      .join(" | ");
-  }
-
-  return String(value);
-}
-
-function flattenObject(
-  obj: Record<string, unknown>,
-  prefix = "",
-  result: Record<string, string> = {}
-) {
-  Object.entries(obj || {}).forEach(([key, value]) => {
-    const newKey = prefix ? `${prefix}.${key}` : key;
-
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      !(value instanceof Timestamp) &&
-      !(value instanceof Date)
-    ) {
-      flattenObject(value as Record<string, unknown>, newKey, result);
-    } else {
-      result[newKey] = cleanExportValue(value);
-    }
-  });
-
-  return result;
-}
-
-function exportToCsv(rows: Row[]) {
-  const exportRows = rows.map(({ caseItem, epcr }) => {
-    const caseFlat = flattenObject(caseItem as Record<string, unknown>, "case");
-    const epcrFlat = epcr
-      ? flattenObject(epcr as Record<string, unknown>, "epcr")
-      : {};
-
-    return {
-      "Case Ref": getCaseDisplayCode(caseItem),
-      "ePCR Ref": epcr ? getEpcrDisplayCode(epcr) : "Not Created",
-      Project: getProjectName(caseItem, epcr),
-      Patient: getPatientName(caseItem, epcr),
-      Age: cleanExportValue(epcr?.patientInfo?.age),
-      Gender: epcr?.patientInfo?.gender || "",
-      Phone: epcr?.patientInfo?.phone || caseItem.patient?.phone || caseItem.contactNumber || "",
-      "Chief Complaint": getChiefComplaint(caseItem, epcr),
-      "Signs And Symptoms": epcr?.patientInfo?.signsAndSymptoms?.join(", ") || "",
-      "Triage / Level": getTriage(caseItem, epcr),
-      "Health Classification": epcr?.patientInfo?.healthClassification || "",
-      "Case Status": caseItem.status || "",
-      "ePCR Status": epcr?.status || "Not Created",
-      "Case Created At": formatDate(caseItem.createdAt),
-      "ePCR Created At": formatDate(epcr?.createdAt),
-      "ePCR Finalized At": formatDate(epcr?.finalizedAt),
-      "Moving Time": epcr?.time?.movingTime?.timeHHMM || "",
-      "Arrival Time": epcr?.time?.arrivalTime?.timeHHMM || "",
-      "Arrival To Patient Time": epcr?.time?.arrivalToPTTime?.timeHHMM || "",
-      "Leaving Scene Time": epcr?.time?.leavingSceneTime?.timeHHMM || "",
-      "Hospital Time": epcr?.time?.hospitalTime?.timeHHMM || "",
-      "Discharge Time": epcr?.time?.dischargeTime?.timeHHMM || "",
-      "Back Time": epcr?.time?.backTime?.timeHHMM || "",
-      Destination: getDestination(caseItem, epcr),
-      "Created By": epcr?.createdBy || "",
-      Locked: cleanExportValue(epcr?.locked),
-
-      ...caseFlat,
-      ...epcrFlat,
-    };
-  });
-
-  const headers = Array.from(
-    new Set(exportRows.flatMap((row) => Object.keys(row)))
-  );
-
-  const csvContent = [
-    headers,
-    ...exportRows.map((row) =>
-      headers.map((header) => {
-        const value = row[header as keyof typeof row];
-        return value === undefined || value === null ? "" : String(value);
-      })
-    ),
-  ]
-    .map((row) =>
-      row
-        .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
-        .join(",")
-    )
-    .join("\n");
-
-  const blob = new Blob(["\uFEFF" + csvContent], {
-    type: "text/csv;charset=utf-8;",
-  });
-
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `hcad-full-case-epcr-export-${new Date()
-    .toISOString()
-    .slice(0, 10)}.csv`;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(url);
-}
 
 export default function CaseEpcrSubmissionsTable({
   projectId,
@@ -421,10 +278,19 @@ export default function CaseEpcrSubmissionsTable({
   const [cases, setCases] = useState<CaseDoc[]>([]);
   const [epcrs, setEpcrs] = useState<EpcrDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [epcrLoading, setEpcrLoading] = useState(true);
+  const [exportSelection, setExportSelection] = useState<Row[] | null>(null);
+  const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
   const [caseStatusFilter, setCaseStatusFilter] = useState("all");
   const [epcrStatusFilter, setEpcrStatusFilter] = useState("all");
+  const [selectedProject, setSelectedProject] = useState("all");
+  const [fromDateTime, setFromDateTime] = useState("");
+  const [toDateTime, setToDateTime] = useState("");
+  const [detailed, setDetailed] = useState(true);
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, caseStatusFilter, epcrStatusFilter, selectedProject, fromDateTime, toDateTime, projectId]);
   const [importFileName, setImportFileName] = useState("");
   const [importRows, setImportRows] = useState<Record<string, unknown>[]>([]);
   const [importPreview, setImportPreview] = useState<ImportPreviewRow[]>([]);
@@ -537,6 +403,7 @@ export default function CaseEpcrSubmissionsTable({
       },
       (error) => {
         console.error("Failed to load cases:", error);
+        setLoadError("Could not load cases. Check your connection and refresh.");
         setLoading(false);
       }
     );
@@ -550,9 +417,12 @@ export default function CaseEpcrSubmissionsTable({
         }));
 
         setEpcrs(list);
+        setEpcrLoading(false);
       },
       (error) => {
         console.error("Failed to load ePCR records:", error);
+        setEpcrLoading(false);
+        setLoadError("Could not load reports. Missing-report labels are unavailable until loading succeeds.");
       }
     );
 
@@ -563,11 +433,14 @@ export default function CaseEpcrSubmissionsTable({
   }, []);
 
   const rows = useMemo<Row[]>(() => {
+    const byId = new Map(epcrs.map(report => [report.id, report]));
+    const byCase = new Map<string, EpcrDoc>();
+    for (const report of epcrs) if (report.caseId && !byCase.has(report.caseId)) byCase.set(report.caseId, report);
     return cases
       .filter((caseItem) => {
         if (!projectId) return true;
 
-        const linkedEpcr = epcrs.find((epcr) => epcr.caseId === caseItem.id);
+        const linkedEpcr = byId.get(caseItem.id) || byCase.get(caseItem.id);
 
         return (
           caseItem.projectId === projectId ||
@@ -576,7 +449,7 @@ export default function CaseEpcrSubmissionsTable({
         );
       })
       .map((caseItem) => {
-        const linkedEpcr = epcrs.find((epcr) => epcr.caseId === caseItem.id);
+        const linkedEpcr = byId.get(caseItem.id) || byCase.get(caseItem.id);
 
         return {
           caseItem,
@@ -605,7 +478,7 @@ export default function CaseEpcrSubmissionsTable({
         epcr?.patientInfo?.phone,
         caseItem.contactNumber,
         caseItem.status,
-        epcr?.status,
+        getEpcrStatus(epcr),
         getTriage(caseItem, epcr),
         getDestination(caseItem, epcr),
       ]
@@ -619,15 +492,21 @@ export default function CaseEpcrSubmissionsTable({
         caseStatusFilter === "all" ||
         caseItem.status?.toLowerCase() === caseStatusFilter.toLowerCase();
 
-      const epcrStatus = epcr?.status || "Not Created";
+      const epcrStatus = getEpcrStatus(epcr);
 
       const matchesEpcrStatus =
         epcrStatusFilter === "all" ||
         epcrStatus.toLowerCase() === epcrStatusFilter.toLowerCase();
 
-      return matchesSearch && matchesCaseStatus && matchesEpcrStatus;
+      const matchesProject = selectedProject === "all" || getProjectName(caseItem, epcr) === selectedProject;
+      const validRange = !fromDateTime || !toDateTime || fromDateTime <= toDateTime;
+      return matchesSearch && matchesCaseStatus && matchesEpcrStatus && matchesProject && validRange && matchesSubmissionDate(caseItem.createdAt, fromDateTime, toDateTime);
     });
-  }, [rows, search, caseStatusFilter, epcrStatusFilter]);
+  }, [rows, search, caseStatusFilter, epcrStatusFilter, selectedProject, fromDateTime, toDateTime]);
+  const projectOptions = Array.from(new Set(rows.map(({ caseItem, epcr }) => getProjectName(caseItem, epcr)))).sort();
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / 50));
+  const currentPage = Math.min(page, totalPages - 1);
+  const visibleRows = filteredRows.slice(currentPage * 50, (currentPage + 1) * 50);
 
   const totalCases = rows.length;
   const totalWithEpcr = rows.filter((row) => row.epcr).length;
@@ -642,11 +521,12 @@ export default function CaseEpcrSubmissionsTable({
 
   const epcrStatuses = Array.from(
     new Set(
-      rows.map((row) => row.epcr?.status || "Not Created").filter(Boolean)
+      rows.map((row) => getEpcrStatus(row.epcr)).filter(Boolean)
     )
   ) as string[];
 
-  if (loading) {
+  if (loadError) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{loadError}</p>;
+  if (loading || epcrLoading) {
     return (
       <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-6 text-[#274C5A] shadow-sm">
         Loading submissions...
@@ -655,7 +535,13 @@ export default function CaseEpcrSubmissionsTable({
   }
 
   return (
-    <div className="w-full max-w-none space-y-4">
+    <div className="min-w-0 w-full max-w-full space-y-4">
+      {exportSelection && <SubmissionsExportDialog count={exportSelection.length}
+        onClose={() => setExportSelection(null)}
+        onExport={async mode => {
+          const { downloadSubmissions } = await import("@/lib/submissionsWorkbook");
+          await downloadSubmissions(exportSelection, mode);
+        }} />}
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
           <p className="text-sm font-semibold text-[#7F7F7F]">Total Cases</p>
@@ -725,7 +611,7 @@ export default function CaseEpcrSubmissionsTable({
       )}
 
       <div className="rounded-2xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 xl:grid-cols-[minmax(320px,1fr)_220px_220px_180px]">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -760,17 +646,68 @@ export default function CaseEpcrSubmissionsTable({
           </select>
 
           <button
-            onClick={() => exportToCsv(filteredRows)}
+            onClick={() => setExportSelection([...filteredRows])}
+            disabled={!filteredRows.length}
             className="rounded-xl bg-[#274C5A] px-4 py-2 text-sm font-black text-white shadow-sm shadow-[#274C5A]/20 transition hover:bg-[#1f3f4c]"
           >
-            Export Full CSV
+            Export Excel
           </button>
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="min-w-0 text-xs font-bold">Project
+            <select className="mt-1 w-full rounded-lg border p-2 text-sm" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+              <option value="all">All projects</option>{projectOptions.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0 text-xs font-bold">Case created — from
+            <input type="datetime-local" className="mt-1 w-full min-w-0 rounded-lg border p-2 text-sm" value={fromDateTime} onChange={e => setFromDateTime(e.target.value)} />
+          </label>
+          <label className="min-w-0 text-xs font-bold">Case created — to
+            <input type="datetime-local" className="mt-1 w-full min-w-0 rounded-lg border p-2 text-sm" value={toDateTime} onChange={e => setToDateTime(e.target.value)} />
+          </label>
+          <button className="self-end rounded-lg border p-2 text-sm font-bold" onClick={() => { setSearch(""); setSelectedProject("all"); setFromDateTime(""); setToDateTime(""); setCaseStatusFilter("all"); setEpcrStatusFilter("all"); }}>Reset filters</button>
+        </div>
+        <p className="mt-2 text-xs">Dates and times use your device timezone. Export includes all matching results, not just this page.</p>
+        {fromDateTime && toDateTime && fromDateTime > toDateTime && <p role="alert" className="mt-2 text-sm text-red-700">The end date/time must be after the start.</p>}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <span>{filteredRows.length} matching results · Page {currentPage + 1} of {totalPages}</span>
+        <div className="flex flex-wrap gap-2">
+          <button className="rounded-lg border px-3 py-2" onClick={() => setDetailed(!detailed)}>{detailed ? "Compact view" : "Detailed table"}</button>
+          <button className="rounded-lg border px-3 py-2 disabled:opacity-40" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button>
+          <button className="rounded-lg border px-3 py-2 disabled:opacity-40" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>Next</button>
+        </div>
+      </div>
+      {!detailed && <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        {visibleRows.map(({ caseItem, epcr }) => <article key={caseItem.id} className="min-w-0 rounded-xl border border-[#86A7B2]/25 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap justify-between gap-2">
+            <div className="font-black">{getCaseDisplayCode(caseItem)} <span className="font-normal">/ {epcr ? getEpcrDisplayCode(epcr) : "No ePCR"}</span></div>
+            <div className="flex flex-wrap gap-2"><span className={statusBadge(caseItem.status)}>{caseItem.status || "—"}</span><span className={statusBadge(getEpcrStatus(epcr))}>{getEpcrStatus(epcr)}</span></div>
+          </div>
+          <p className="mt-3 break-words font-semibold">{getPatientName(caseItem, epcr)}</p>
+          <p className="break-words text-sm">{getProjectName(caseItem, epcr)}</p>
+          <p className="mt-1 text-sm">Medical review: {epcr ? medicalReviewLabel(epcr) : "—"}</p>
+          <p className="mt-1 text-xs text-slate-600">{formatDate(caseItem.createdAt)}</p>
+          <details className="mt-3 text-sm"><summary className="cursor-pointer font-bold">Clinical and trip details</summary>
+            <dl className="mt-2 grid grid-cols-2 gap-2 break-words">
+              <dt>Age / Gender</dt><dd>{epcr?.patientInfo?.age || "—"} / {epcr?.patientInfo?.gender || "—"}</dd>
+              <dt>Chief complaint</dt><dd>{getChiefComplaint(caseItem, epcr)}</dd>
+              <dt>Triage</dt><dd>{getTriage(caseItem, epcr)}</dd>
+              <dt>Moving / Arrival PT</dt><dd>{epcr?.time?.movingTime?.timeHHMM || "—"} / {epcr?.time?.arrivalToPTTime?.timeHHMM || "—"}</dd>
+              <dt>Destination</dt><dd>{getDestination(caseItem, epcr)}</dd>
+            </dl>
+          </details>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+            <Link className="rounded-lg border px-3 py-2" href={`/cadcases/${caseItem.id}`}>View Case</Link>
+            <Link className="rounded-lg bg-[#274C5A] px-3 py-2 text-white" href={epcr ? `/epcr/${epcr.id}` : `/epcr/new?caseId=${caseItem.id}`}>{epcr ? "View ePCR" : "Create ePCR"}</Link>
+          </div>
+        </article>)}
+        {!visibleRows.length && <p className="p-4 text-sm">No submissions found.</p>}
+      </div>}
+      {detailed && <div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-[#86A7B2]/25 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[1720px] text-left text-sm">
+          <table className="w-full min-w-[1720px] text-left text-sm">
             <thead className="border-b border-[#86A7B2]/25 bg-[#f8fbfc] text-xs uppercase text-[#7F7F7F]">
               <tr>
                 <th className="px-4 py-3">Case Ref</th>
@@ -783,6 +720,7 @@ export default function CaseEpcrSubmissionsTable({
                 <th className="px-4 py-3">Triage / Level</th>
                 <th className="px-4 py-3">Case Status</th>
                 <th className="px-4 py-3">ePCR Status</th>
+                <th className="px-4 py-3">Medical Review</th>
                 <th className="px-4 py-3">Created At</th>
                 <th className="px-4 py-3">Times</th>
                 <th className="px-4 py-3">Destination</th>
@@ -793,12 +731,12 @@ export default function CaseEpcrSubmissionsTable({
             <tbody className="divide-y divide-[#86A7B2]/20">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-8 text-center text-[#7F7F7F]">
+                  <td colSpan={15} className="px-4 py-8 text-center text-[#7F7F7F]">
                     No submissions found.
                   </td>
                 </tr>
               ) : (
-                filteredRows.map(({ caseItem, epcr }) => (
+                visibleRows.map(({ caseItem, epcr }) => (
                   <tr key={caseItem.id} className="hover:bg-[#f8fbfc]">
                     <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       <div className="font-black">
@@ -849,10 +787,12 @@ export default function CaseEpcrSubmissionsTable({
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-4">
-                      <span className={statusBadge(epcr?.status || "Not Created")}>
-                        {epcr?.status || "Not Created"}
+                      <span className={statusBadge(getEpcrStatus(epcr))}>
+                        {getEpcrStatus(epcr)}
                       </span>
                     </td>
+
+                    <td className="px-4 py-4 text-sm">{epcr ? medicalReviewLabel(epcr) : "—"}</td>
 
                     <td className="whitespace-nowrap px-4 py-4 text-[#274C5A]">
                       {formatDate(caseItem.createdAt)}
@@ -911,7 +851,7 @@ export default function CaseEpcrSubmissionsTable({
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </div>
   ); 
 }

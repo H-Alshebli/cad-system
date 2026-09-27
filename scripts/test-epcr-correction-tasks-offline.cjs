@@ -1,0 +1,17 @@
+const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), ts = require('typescript'), assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..'), policy = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, 'lib/epcrCorrectionTasks.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: policy, Date });
+const record = (id, uid, status, date) => ({ id, epcrNumber: `TEST-${id}`, caseNumber: 'CLOSED-TEST', caseStatus: 'Closed', patientInfo: { firstName: 'MUST-NOT-APPEAR' }, medicalReview: { submittedBy: uid, status, reviewedAt: date, notes: 'Synthetic correction' } });
+const records = [record('old','crew','returned','2026-09-01T00:00:00Z'), record('new','crew','returned','2026-09-02T00:00:00Z'), record('other','other','returned','2026-09-03T00:00:00Z'), record('pending','crew','pending',''), record('approved','crew','approved','')];
+const tasks = policy.correctionTasks(records, 'crew');
+assert.equal(tasks.length, 2); assert.equal(tasks[0].id, 'new'); assert.equal(tasks[1].id, 'old');
+assert(!JSON.stringify(tasks).includes('MUST-NOT-APPEAR'));
+assert.equal(policy.correctionTasks(records, '').length, 0);
+records[1].medicalReview.status = 'pending'; assert.equal(policy.correctionTasks(records, 'crew').length, 1);
+const component = fs.readFileSync(path.join(root, 'app/components/EpcrCorrectionTasks.tsx'), 'utf8');
+assert(component.includes('where("medicalReview.submittedBy", "==", uid)'));
+assert(component.includes('state.uid === uid'));
+assert(component.includes('active = false; stop();'));
+const missions = fs.readFileSync(path.join(root, 'app/missions/MyMissionsExperience.tsx'), 'utf8');
+assert(missions.includes('<EpcrCorrectionTasks uid={user.uid} />'));
+console.log('PASS: responsible submitter only, closed cases included, latest return first, resubmitted/approved excluded, no patient fields in cards, account switch guard, subscription cleanup, shared Missions/Missions+ integration. Synthetic only.');

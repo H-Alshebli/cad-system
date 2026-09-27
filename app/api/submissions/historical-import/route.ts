@@ -311,6 +311,10 @@ export async function POST(request: NextRequest) {
   if (action === "preview") return NextResponse.json({ preview, summary, projectOptions: projects.map(({ id, projectName, projectCode }) => ({ id, projectName, projectCode })).sort((left, right) => left.projectName.localeCompare(right.projectName)) });
   if (action !== "import") return NextResponse.json({ error: "Invalid import action." }, { status: 400 });
 
+  if (normalized.some((row) => !row.submissionId)) {
+    return NextResponse.json({ error: "Review rows with a missing Submission ID and supply a stable source ID before importing. This prevents duplicate records on retry." }, { status: 400 });
+  }
+
   const importable = normalized.filter((_, index) => preview[index].status !== "duplicate");
   const batchRef = adminDb.collection("epcrImportBatches").doc();
   const [caseStart, epcrStart] = await reserveRanges(importable.length, authenticated.uid);

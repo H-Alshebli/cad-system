@@ -6,6 +6,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
+import EpcrCorrectionTasks from "@/app/components/EpcrCorrectionTasks";
 import {
   doesChecklistShiftMatch,
   getChecklistDeploymentTypeFromMission,
@@ -581,6 +582,7 @@ export function MyMissionsExperience({ enhanced = false }: { enhanced?: boolean 
       </div>
 
       <div className={enhanced ? "flex flex-col gap-5 sm:gap-7" : "contents"}>
+      {user?.active === true && <div className={enhanced ? "order-first" : ""}><EpcrCorrectionTasks uid={user.uid} /></div>}
       <section className={`space-y-3 ${enhanced ? "order-3" : ""}`}>
         <div className="flex items-center justify-between">
           <div>

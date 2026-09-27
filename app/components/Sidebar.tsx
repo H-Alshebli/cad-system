@@ -21,6 +21,8 @@ import {
   Users,
   WalletCards,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 import { auth } from "@/lib/firebase";
@@ -38,7 +40,7 @@ type NavItem = {
   visible: boolean;
 };
 
-export default function Sidebar({ onClose }: { onClose?: () => void }) {
+export default function Sidebar({ onClose, collapsed = false, onToggle }: { onClose?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -107,6 +109,12 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   ];
 
   const operationsItems: NavItem[] = [
+    {
+      href: "/medical-review",
+      label: "Medical Review",
+      icon: <ClipboardList size={18} />,
+      visible: isAdmin || can(permissions, "epcr_medical_review", "view"),
+    },
     {
       href: "/call-intake",
       label: "New Case / Call Intake",
@@ -235,7 +243,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   if (userLoading || permLoading) {
     return (
-      <aside className="h-screen w-[288px] min-w-[288px] shrink-0 border-r border-[#86A7B2]/25 bg-white p-4 text-[#274C5A]">
+      <aside className="h-screen w-full shrink-0 border-r border-[#86A7B2]/25 bg-white p-4 text-[#274C5A]">
         <div className="h-full animate-pulse rounded-2xl border border-[#86A7B2]/25 bg-[#f8fbfc] p-4 text-sm text-[#7F7F7F]">
           Loading sidebar...
         </div>
@@ -247,6 +255,46 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     return null;
   }
 
+  const toggleControl = onToggle && (
+    <button type="button" onClick={onToggle}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-expanded={!collapsed} aria-controls="desktop-sidebar"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#607482] transition hover:bg-[#eaf2f5] hover:text-[#274C5A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#274C5A]">
+      {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+    </button>
+  );
+
+  if (collapsed) {
+    const groups = [
+      { label: "Client Portal", items: isClientPortalUser ? clientItems : [] },
+      { label: "Operations", items: clientAccount ? [] : operationsItems },
+      { label: "Management", items: clientAccount ? [] : managementItems },
+    ].filter(group => group.items.some(item => item.visible));
+    const iconButton = "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#607482] hover:bg-[#eaf2f5] hover:text-[#274C5A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#274C5A]";
+    return (
+      <aside aria-label="Main navigation" className="flex h-screen w-full flex-col items-center border-r border-[#86A7B2]/25 bg-white">
+        <div className="flex w-full flex-col items-center gap-2 border-b border-[#86A7B2]/25 py-3">
+          <img src="/brand/lazem-secondary-logo-solid.svg" alt="Lazem HCAD" className="h-9 w-9 object-contain" />
+          {toggleControl}
+        </div>
+        <nav aria-label="Main navigation" className="w-full flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-3 py-3">
+          {groups.map((group, index) => <div key={group.label} aria-label={group.label} className={index ? "space-y-1 border-t border-[#86A7B2]/25 pt-3" : "space-y-1"}>
+            {group.items.filter(item => item.visible).map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? "page" : undefined}
+              className={`${iconButton} ${isActive(item.href) ? "bg-[#274C5A] !text-white shadow-sm hover:bg-[#1f3f4c]" : ""}`}>
+              {item.icon}
+            </Link>)}
+          </div>)}
+        </nav>
+        <div className="flex w-full flex-col items-center gap-1 border-t border-[#86A7B2]/25 py-3">
+          {!clientAccount && <Link href="/settings/notifications" title="Notification Settings" aria-label="Notification Settings" className={iconButton}><Bell size={18} /></Link>}
+          {clientAccount && <button type="button" onClick={toggleLanguage} title={language === "ar" ? "English" : "العربية"} aria-label="Change language" className={iconButton}><Languages size={18} /></button>}
+          <button type="button" onClick={logout} title={clientText("Logout")} aria-label={clientText("Logout")} className={iconButton}><LogOut size={18} /></button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="flex h-screen w-[288px] min-w-[288px] shrink-0 flex-col border-r border-[#86A7B2]/25 bg-white shadow-sm"
@@ -254,6 +302,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       lang={clientAccount ? language : "en"}
     >
       <div className="border-b border-[#86A7B2]/25 p-4">
+        {onToggle && <div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7F7F7F]">Navigation</span>{toggleControl}</div>}
         {onClose && (
           <button
             onClick={onClose}

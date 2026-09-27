@@ -1,0 +1,88 @@
+rules_version = '2';
+// STAGED: deploy to sandbox and pass emulator/acceptance tests before production.
+// Deploy together with the server-side ePCR submission/review API.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isActiveUser() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && userDoc().data.get('active', false) == true;
+    }
+    function isAdmin() { return isActiveUser() && userDoc().data.get('role', '') in ['admin', 'super_admin', 'superadmin']; }
+    function can(module, action) {
+      return isAdmin() || (isActiveUser() && userDoc().data.get('accountType', '') != 'client'
+        && get(/databases/$(database)/documents/roles/$(userDoc().data.role)).data.get('permissions', {}).get(module, {}).get(action, false) == true);
+    }
+    function draftOpen(data) { return data.get('locked', false) == false && data.get('finalizedAt', null) == null; }
+    function canEditReport() { return can('epcr', 'edit'); }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || (isSignedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['name','email','active','accountStatus','accountType','crewProfileRequirementMode','role','crewProfile','createdAt'])
+        && request.resource.data.role == 'none' && request.resource.data.active == false
+        && request.resource.data.accountStatus == 'pending'
+        && request.resource.data.accountType in ['employee','client']
+        && request.resource.data.crewProfileRequirementMode == 'full'
+        && request.resource.data.email == request.auth.token.email);
+      // No client self-promotion, UID spoofing, account activation or role edits.
+      allow update: if isAdmin()
+        || ((can('ambulances','create') || can('ambulances','edit') || can('ambulances','assign') || can('projects','create') || can('projects','edit') || can('projects','assign'))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ambulanceIds','updatedAt']))
+        || (can('users','edit') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountType'])
+          && request.resource.data.accountType in ['employee','client'])
+        || (can('crew_profile','edit_all') && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'crewProfileAttachments','crewProfileCompletion','crewProfileMissingFields','crewProfilePendingVerificationFields',
+          'crewProfileRejectedFields','crewProfileExpiredFields','crewProfileExpiringSoonFields','crewProfileStatus',
+          'crewProfileComplianceStatus','crewProfileIsComplete','crewProfileIsCompliant','profileUpdatedAt','updatedAt'
+        ]));
+      allow delete: if false;
+    }
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+    match /epcr/{id} {
+      // Keep the current read scope; this change hardens writes, not patient visibility.
+      allow read: if isActiveUser();
+      allow create: if can('epcr','create') && draftOpen(request.resource.data)
+        && request.resource.data.get('status', '') == 'draft'
+        && request.resource.data.createdBy == request.auth.uid
+        && !request.resource.data.keys().hasAny(['medicalReview']);
+      allow update: if canEditReport() && draftOpen(resource.data) && draftOpen(request.resource.data)
+        && request.resource.data.get('status', '') == 'draft'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'patientInfo','projectInfo','medicalHistory','headToToe','narrativeVitals','outcome','transferTeam','time',
+          'status','updatedAt','draftRevision','lastDraftMutationId'
+        ]);
+      // Includes admins: lifecycle changes use the authenticated, audited server API.
+      allow delete: if false;
+      match /forms/{formId} {
+        allow read: if isActiveUser();
+        allow create, update: if canEditReport() && draftOpen(getAfter(/databases/$(database)/documents/epcr/$(id)).data);
+        allow delete: if false;
+      }
+      match /reviewEvents/{eventId} { allow read: if isActiveUser(); allow write: if false; }
+      match /reviewVersions/{versionId} { allow read: if can('epcr_medical_review','view'); allow write: if false; }
+    }
+    // Existing operational access is preserved in this limited hardening phase.
+    match /cases/{caseId} {
+      allow read, create, update, delete: if isActiveUser();
+      match /chat/{messageId} { allow read, create: if isActiveUser(); allow update, delete: if false; }
+    }
+    match /b2cRequests/{requestId} {
+      allow read, create, update, delete: if isActiveUser();
+      match /chat/{messageId} { allow read, create: if isActiveUser(); allow update, delete: if false; }
+    }
+    match /transport_requests/{id} { allow read, create, update: if isActiveUser(); allow delete: if false; }
+    match /projects/{id} { allow read, create, update, delete: if isActiveUser(); }
+    match /destinations/{id} { allow read: if isActiveUser(); allow write: if false; }
+    match /clinics/{id} { allow read, create, update, delete: if isActiveUser(); }
+    match /ambulances/{id} { allow read, create, update, delete: if isActiveUser(); }
+    match /roaming/{id} { allow read, create, update, delete: if isActiveUser(); }
+    match /projectChecklists/{id} { allow read, create, update: if isActiveUser(); allow delete: if isAdmin(); }
+    match /projectExpiryItems/{id} { allow read: if isActiveUser(); allow create, update, delete: if isAdmin(); }
+    match /logs/{id} { allow read, create, update, delete: if isActiveUser(); }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

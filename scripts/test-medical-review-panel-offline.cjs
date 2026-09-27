@@ -1,0 +1,61 @@
+const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm'), ts = require('typescript'), React = require('react'), assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+const compile = file => ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 } }).outputText;
+const policy = {}; vm.runInNewContext(compile('lib/epcrMedicalReview.ts'), { exports: policy });
+const code = compile('app/components/EpcrMedicalReviewPanel.tsx');
+function harness(send, uid = 'director', allowed = true, isAdmin = false) {
+  const slots = []; let index = 0, effect, success, failure; const exports = {};
+  vm.runInNewContext(code, { exports, Error, Date, crypto: { randomUUID }, window: { confirm: () => true }, require: name => {
+    if (name === 'react') return { useState: initial => { const i = index++; if (!(i in slots)) slots[i] = initial; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; }, useRef: initial => { const i = index++; return slots[i] ||= { current: initial }; }, useEffect: fn => { effect = fn; } };
+    if (name === 'react/jsx-runtime') return require(name);
+    if (name === 'firebase/firestore') return { collection: () => ({}), orderBy: () => ({}), query: () => ({}), onSnapshot: (_query, ok, fail) => { success = ok; failure = fail; return () => {}; } };
+    if (name === '@/lib/firebase') return {};
+    if (name === '@/lib/useCurrentUser') return { useCurrentUser: () => ({ user: { uid, role: 'custom' } }) };
+    if (name === '@/lib/usePermissions') return { usePermissions: () => ({ can: () => allowed, isAdmin }) };
+    if (name === '@/lib/epcrMedicalReview') return policy;
+    if (name === '@/lib/epcrReviewClient') return { sendMedicalReview: send };
+    throw Error('Unexpected dependency: ' + name);
+  } });
+  return { subscribe: () => effect(), failHistory: code => failure({ code }), showHistory: entries => success({ docs: entries.map((entry, i) => ({ id: String(i), data: () => entry })) }), render: (revision = 1, status = 'pending') => { index = 0; return exports.default({ id: 'TEST', medicalReview: { status, revision, submission: 1, submittedBy: 'crew', submittedAt: '2026-09-21T00:00:00Z' } }); } };
+}
+function nodes(tree, type) { if (!tree || typeof tree !== 'object') return []; return [...(tree.type === type ? [tree] : []), ...React.Children.toArray(tree.props?.children).flatMap(child => nodes(child, type))]; }
+const tick = () => new Promise(resolve => setImmediate(resolve));
+(async () => {
+  const requests = []; let finish;
+  const h = harness((_id, body) => { requests.push(body); return new Promise(resolve => finish = resolve); });
+  nodes(h.render(), 'textarea')[0].props.onChange({ target: { value: 'SYNTHETIC COMMENT' } });
+  const buttons = nodes(h.render(), 'button'); buttons[0].props.onClick(); buttons[0].props.onClick();
+  assert.equal(requests.length, 1); assert(nodes(h.render(), 'button').every(b => b.props.disabled));
+  finish({ result: 'done' }); await tick();
+  assert.equal(nodes(h.render(), 'textarea')[0].props.value, '');
+  const own = nodes(harness(async () => {}, 'crew').render(), 'button'); assert(own[1].props.disabled && own[2].props.disabled);
+  const adminTree = harness(async () => {}, 'crew', true, true).render();
+  const adminButtons = nodes(adminTree, 'button'); assert.equal(adminButtons[2].props.disabled, false); assert.equal(adminButtons[1].props.disabled, true);
+  assert(JSON.stringify(adminTree).includes('Administrator self-approval is enabled'));
+  const adminReturn = harness(async () => ({ result: 'done' }), 'crew', true, true);
+  nodes(adminReturn.render(), 'textarea')[0].props.onChange({ target: { value: 'Correction reason' } });
+  assert.equal(nodes(adminReturn.render(), 'button')[1].props.disabled, false);
+  assert.equal(nodes(harness(async () => {}, 'crew', false).render(), 'button').length, 0);
+  assert.equal(nodes(h.render(2, 'approved'), 'button').length, 0);
+  const uncertain = [];
+  const retry = harness(async (_id, body) => { uncertain.push(body); if (uncertain.length === 1) throw Error('Lost response'); return { result: 'done' }; });
+  nodes(retry.render(), 'textarea')[0].props.onChange({ target: { value: 'SYNTHETIC' } });
+  nodes(retry.render(), 'button')[0].props.onClick(); await tick();
+  nodes(retry.render(2), 'button')[0].props.onClick(); await tick();
+  assert.equal(uncertain[0].requestId, uncertain[1].requestId); assert.equal(uncertain[1].expectedRevision, 1);
+  const history = harness(async () => ({ result: 'done' }));
+  history.render(); history.subscribe(); history.failHistory('permission-denied');
+  assert(JSON.stringify(history.render()).includes('Review history access was denied'));
+  nodes(history.render(), 'textarea')[0].props.onChange({ target: { value: 'SYNTHETIC COMMENT' } });
+  nodes(history.render(), 'button')[0].props.onClick(); await tick();
+  const savedWithError = JSON.stringify(history.render());
+  assert(savedWithError.includes('Review saved.')); assert(savedWithError.includes('Review history access was denied'));
+  const retryHistory = nodes(history.render(), 'button').find(b => b.props.children === 'Retry History'); assert(retryHistory);
+  retryHistory.props.onClick(); history.render(); history.subscribe();
+  assert(JSON.stringify(history.render()).includes('Loading review history'));
+  history.showHistory([{ notes: 'SYNTHETIC FIRST' }, { notes: 'SYNTHETIC SECOND' }]);
+  const shown = JSON.stringify(history.render()); assert(shown.includes('SYNTHETIC FIRST')); assert(shown.includes('SYNTHETIC SECOND')); assert(!shown.includes('access was denied'));
+  assert.equal(nodes(history.render(), 'details')[0].props.open, true);
+  history.showHistory([]); assert(JSON.stringify(history.render()).includes('No review events found.'));
+  console.log('PASS actual review panel: permission visibility, self-review guard, double-click exclusion, terminal states, uncertain response retries keep ID and original revision.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

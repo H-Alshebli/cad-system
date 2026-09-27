@@ -1,0 +1,13 @@
+# Submissions Excel export
+
+Export Excel opens a native modal dialog with Basic details (23 columns) and Full details (84 columns). Both include a separate Medical Review status. Full details includes optional Patient Employee ID and Building Number as text, preserving leading zeros. The selection is a snapshot of all currently filtered rows, not the 50-row page. No extra database reads or writes are performed by the exporter. Zero matches disables export.
+
+Basic includes references, project/patient, age/gender, chief complaint, triage, case/report statuses, creation/finalization dates, all eight report times and destination. Full adds patient ID/contact, medical history, complaint categories/details, examination, narrative, vitals, medications, consumables, available assessment/treatment fields, outcome and two separately labeled crew members. The authoritative column definitions are in `lib/submissionsExport.ts`.
+
+Full is a curated ePCR export, not a database backup. Separate consent/refusal form subcollections, signature images, arbitrary legacy raw columns, internal IDs and sync metadata are deliberately excluded. Missing source fields remain blank. No clinical values or units are inferred. Date/time values use the device timezone to match existing filters; Excel timestamps themselves have no timezone metadata.
+
+Both modes download XLSX with a dark header, alternating row shading, explicit widths, fixed 30pt data rows, wrapped text, header/first-two-column freezing and filters. Long text is retained; expand row height or use the formula bar to read it. Strings over Excel's 32,767-character cell limit block export with a specific message, never silently truncate. Strings remain text, including formula-like input and leading-zero identifiers. Numbers/date/time values are typed.
+
+The application uses its existing SheetJS writer plus pinned fflate 0.8.2 to apply styles/frozen panes to the newly generated XLSX ZIP. This does not modify imported workbooks or the historical import path.
+
+Tests: `node scripts/test-submissions-export-offline.cjs` and `node scripts/test-export-dialog-offline.cjs`. Only synthetic records are used. Roundtrip tests cover both schemas, unknown-field exclusion, no formulas, retained text/Arabic, identifiers, zero/midnight, missing reports, >50 rows, formatting and filter/freeze metadata, empty/oversized results, repeated clicks and errors. Actual dialog SSR was visually inspected at desktop and 390px widths; generated workbooks were independently imported/rendered using the bundled spreadsheet runtime. Authenticated browser download and native Excel opening remain acceptance checks for the user.

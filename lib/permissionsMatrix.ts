@@ -118,6 +118,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   ],
 
   submissions: ["view", "export", "import"],
+  epcr_medical_review: ["view", "review", "approve", "return_for_correction"],
 
   // Controls visibility of the external Lazem IT support desk link.
   it_support: ["view"],
@@ -170,6 +171,7 @@ export const MODULE_LABELS: Record<string, string> = {
   epcr: "ePCR",
   epcr_legacy: "Legacy Cases Dashboard",
   submissions: "Submissions",
+  epcr_medical_review: "ePCR Medical Review — All Projects",
   it_support: "IT Support",
   ambulances: "Ambulances",
   destinations: "Hospitals / Destinations",
@@ -236,6 +238,8 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 
   submissions:
     "Case and ePCR submission review, consolidated visibility, and export access.",
+  epcr_medical_review:
+    "Medical review across all projects. Review adds comments; Approve signs off; Return for Correction unlocks the same report for resubmission. No role name is hardcoded.",
 
   it_support:
     "Open the Lazem IT ticketing portal in a separate browser tab.",
@@ -358,6 +362,7 @@ export const PERMISSION_GROUPS = [
       "checklist_review_global",
       "epcr",
       "submissions",
+      "epcr_medical_review",
       "it_support",
     ],
   },

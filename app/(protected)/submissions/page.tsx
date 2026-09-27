@@ -6,7 +6,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 export default function SubmissionsPage() {
   return (
     <PermissionGuard module="submissions" action="view" showMessage={true}>
-      <div className="w-full max-w-none space-y-6 p-6 text-[#274C5A]">
+      <div className="min-w-0 w-full max-w-full space-y-6 p-3 sm:p-6 text-[#274C5A]">
         <div className="rounded-2xl border border-[#86A7B2]/25 bg-[#274C5A] p-6 text-white shadow-sm">
           <div className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide">
             Submissions
