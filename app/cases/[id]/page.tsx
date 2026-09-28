@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { doc, getDoc, onSnapshot, updateDoc, writeBatch } from "firebase/firestore";
@@ -166,7 +166,10 @@ export default function CaseDetailsPage({
   const pathname = usePathname();
   const caseBasePath = pathname.startsWith("/cadcases") ? "/cadcases" : "/cases";
   const { user } = useCurrentUser();
-  const { can, isAdmin } = usePermissions(user?.role);
+  const { can, isAdmin, loading: permissionsLoading } = usePermissions(user?.role);
+  const epcrOpeningRef = useRef(false);
+  const [epcrOpening, setEpcrOpening] = useState(false);
+  const [epcrError, setEpcrError] = useState("");
 
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -290,18 +293,39 @@ export default function CaseDetailsPage({
     !caseData.returnCadCaseId;
 
   async function handleEpcr() {
-    if (epcr) {
-      router.push(`/epcr/${epcr.id}`);
+    if (epcrOpeningRef.current) return;
+    setEpcrError("");
+    if (!user?.uid || user.active !== true || user.accountType === "client") {
+      setEpcrError("An active employee account is required to open an ePCR.");
       return;
     }
-
-    const epcrId = await createEpcrFromCase(caseData, "system-dev");
-
-    await updateDoc(doc(db, "cases", caseId), {
-      epcrId,
-    });
-
-    router.push(`/epcr/${epcrId}`);
+    if (permissionsLoading) {
+      setEpcrError("Permissions are loading. Please try again shortly.");
+      return;
+    }
+    if (!isAdmin && (!can("epcr", "view") || (!epcr && !can("epcr", "create")))) {
+      setEpcrError(epcr ? "You do not have permission to view ePCR reports." : "You need ePCR View and Create permissions to create this report.");
+      return;
+    }
+    epcrOpeningRef.current = true;
+    setEpcrOpening(true);
+    try {
+      if (epcr) {
+        router.push(`/epcr/${epcr.id}`);
+        return;
+      }
+      const epcrId = await createEpcrFromCase({ ...caseData, id: caseId }, user.uid);
+      await updateDoc(doc(db, "cases", caseId), { epcrId });
+      router.push(`/epcr/${epcrId}`);
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code;
+      setEpcrError(code === "permission-denied"
+        ? "Access denied. Ask an administrator to check your ePCR permissions."
+        : "Could not open the ePCR. Check your connection and retry from this case; an existing report will be reused.");
+    } finally {
+      epcrOpeningRef.current = false;
+      setEpcrOpening(false);
+    }
   }
 
   async function handleCreateReturnCad() {
@@ -463,10 +487,12 @@ export default function CaseDetailsPage({
 
             <button
               onClick={handleEpcr}
+              disabled={epcrOpening || permissionsLoading}
               className="rounded-2xl bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700"
             >
-              {epcr ? "View ePCR" : "Create ePCR"}
+              {epcrOpening ? "Opening ePCR..." : epcr ? "View ePCR" : "Create ePCR"}
             </button>
+            {epcrError && <p role="alert" className="w-full rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">{epcrError}</p>}
 
             {canCreateReturnCad && (
               <button
