@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { useEpcrDraft } from "@/lib/useEpcrDraft";
 import EpcrMedicalReviewPanel from "@/app/components/EpcrMedicalReviewPanel";
+import EpcrDraftRecoveryPanel from "@/app/components/EpcrDraftRecoveryPanel";
 import type { MedicalReview } from "@/lib/epcrMedicalReview";
 import BodyPainSelector from "@/app/components/epcr/BodyPainSelector";
 import {
@@ -993,6 +994,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
       <div role="status" aria-live="polite" className="rounded-xl border border-[#c8dce2] bg-[#f8fbfc] p-3 text-sm font-semibold">{draft.message}</div>
       <EpcrMedicalReviewPanel id={epcrId} medicalReview={data.medicalReview} />
+      {draft.blocked && <EpcrDraftRecoveryPanel previewRecovery={draft.previewRecovery} recoverDraft={draft.recoverDraft} />}
       <div className="flex gap-4 justify-end flex-wrap">
         {!locked && (
           <>

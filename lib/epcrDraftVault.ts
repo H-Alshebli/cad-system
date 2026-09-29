@@ -1,10 +1,12 @@
 // Encrypted browser-local recovery store. The non-exportable key is scoped to
 // this origin + Firebase project + account. It is not protection against XSS
 // or another person with control of the device/browser profile.
+import type { DraftReceipt } from "./epcrDraftCore";
 type CipherRecord = { id: string; scope: string; iv: Uint8Array; cipher: ArrayBuffer };
 export type LocalDraft = {
   record: Record<string, any>; baseVersion: string; mutationId: string;
   savedAt: number;
+  receipts?: DraftReceipt[];
 };
 function openVault(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

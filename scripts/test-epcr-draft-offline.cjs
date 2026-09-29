@@ -27,6 +27,7 @@ function harness(options = {}) {
   };
   const snapshot = () => ({ metadata: { fromCache: false, hasPendingWrites: false }, exists: () => true, data: () => ({ ...server }) });
   const api = {
+    getDocFromServer: async () => snapshot(),
     doc: (_db, ...parts) => parts.join('/'),
     onSnapshot: (_ref, _options, handler) => { callback = handler; void handler(snapshot()); return () => {}; },
     runTransaction: async (_db, fn) => {

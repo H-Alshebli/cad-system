@@ -9,9 +9,26 @@ export function draftVersion(record: Record<string, any>): string {
   return JSON.stringify([record.draftRevision || 0,
     value?.toMillis ? value.toMillis() : value instanceof Date ? value.getTime() : value || null]);
 }
-export function checkDraftWrite(remote: Record<string, any>, baseVersion: string, mutationId: string) {
-  if (remote.lastDraftMutationId === mutationId) return "already-saved";
+export type DraftReceipt = { mutationId: string; payload: string; version: string };
+export function draftFingerprint(record: Record<string, any>): string {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
+    return value;
+  };
+  return JSON.stringify(canonical(draftPayload(record)));
+}
+export function matchesDraftReceipt(remote: Record<string, any>, receipts: DraftReceipt[]): boolean {
+  if (remote.locked === true || remote.finalizedAt) return false;
+  return receipts.some(receipt => receipt.mutationId === remote.lastDraftMutationId && receipt.version === draftVersion(remote) && receipt.payload === draftFingerprint(remote));
+}
+export function checkDraftWrite(remote: Record<string, any>, baseVersion: string, mutationId: string, receipts: DraftReceipt[] = []) {
   if (remote.locked === true || remote.finalizedAt) throw new Error("REPORT_LOCKED");
+  if (remote.lastDraftMutationId === mutationId) {
+    if (receipts.length && !matchesDraftReceipt(remote, receipts)) throw new Error("REPORT_CONFLICT");
+    return "already-saved";
+  }
+  if (matchesDraftReceipt(remote, receipts)) return "write";
   if (draftVersion(remote) !== baseVersion) throw new Error("REPORT_CONFLICT");
   return "write";
 }
