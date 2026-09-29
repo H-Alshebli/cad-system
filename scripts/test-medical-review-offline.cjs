@@ -26,6 +26,7 @@ function load(file) {
     if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ body, status: options?.status || 200 }) } };
     if (name.endsWith('/server/firebaseAdmin')) return { adminDb: db };
     if (name.endsWith('/server/epcrReviewAuth')) return { epcrActor: async () => actor };
+    if (name.endsWith('/server/reviewNotificationOutbox')) return { enqueueReviewNotice: () => {} };
     if (name.startsWith('@/')) return load(name.slice(2) + '.ts');
     throw Error('Unexpected dependency: ' + name);
   } }); return exports;

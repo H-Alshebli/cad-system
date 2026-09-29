@@ -4,6 +4,7 @@ import { epcrActor } from "@/lib/server/epcrReviewAuth";
 import { draftVersion, draftPayload } from "@/lib/epcrDraftCore";
 import { reviewTransition, MedicalReview, ReviewAction } from "@/lib/epcrMedicalReview";
 import { submissionErrors } from "@/lib/epcrSubmissionValidation";
+import { enqueueReviewNotice } from "@/lib/server/reviewNotificationOutbox";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -57,6 +58,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         if (action === "return") patch = { status: "draft", locked: false, finalizedAt: null };
       }
       tx.update(ref, { ...patch, medicalReview: next, updatedAt: now });
+      enqueueReviewNotice(tx, body.requestId, { kind: "epcr", recordId: params.id, action,
+        ownerId: next.submittedBy, at: now.toISOString() }, next.submittedAt);
       tx.create(eventRef, { actorId: actor.uid, actorName: actor.name, action, notes: body.notes.trim(), at: now, revision: next.revision, submission: next.submission,
         requestVersion: action === "submit" ? body.baseVersion : body.expectedRevision,
         adminSelfApproval: action === "approve" && actor.isAdmin === true && current?.submittedBy === actor.uid,

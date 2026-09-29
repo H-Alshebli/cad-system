@@ -89,6 +89,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   ],
 
   readiness_checklists: [
+    "receive_notifications",
     "view",
     "view_all",
     "view_own",
@@ -118,7 +119,7 @@ export const PERMISSION_MATRIX: Record<string, string[]> = {
   ],
 
   submissions: ["view", "export", "import"],
-  epcr_medical_review: ["view", "review", "approve", "return_for_correction"],
+  epcr_medical_review: ["view", "review", "approve", "return_for_correction", "receive_notifications"],
 
   // Controls visibility of the external Lazem IT support desk link.
   it_support: ["view"],
@@ -276,6 +277,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
 };
 
 export const ACTION_LABELS: Record<string, string> = {
+  receive_notifications: "Receive Review Notifications",
   view: "View",
   view_all: "View All",
   view_own: "View Own",

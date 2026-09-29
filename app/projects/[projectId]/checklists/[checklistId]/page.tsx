@@ -276,7 +276,7 @@ export default function ChecklistDetailsPage({
           policiesUrl: READINESS_POLICIES_URL,
         },
         durationSeconds: Number(checklist?.durationSeconds || 0) + elapsedSeconds,
-      });
+      }, String(checklist?.updatedAt?.toMillis?.() || 0));
       alert("Checklist submitted.");
     } catch (error: any) {
       console.error(error);
@@ -286,11 +286,11 @@ export default function ChecklistDetailsPage({
     }
   }
 
-  async function review(action: "approved" | "returned_for_correction") {
+  async function review(action: "approved" | "returned_for_correction" | "comment") {
     setSaving(true);
     try {
-      await reviewReadinessChecklist(params.checklistId, action, user, reviewNotes);
-      alert(action === "approved" ? "Checklist approved." : "Checklist returned for correction.");
+      await reviewReadinessChecklist(params.checklistId, action, user, reviewNotes, String(checklist?.updatedAt?.toMillis?.() || 0));
+      alert(action === "approved" ? "Checklist approved." : action === "comment" ? "Review comment saved." : "Checklist returned for correction.");
     } catch (error: any) {
       console.error(error);
       alert(error?.message || "Failed to review checklist.");
@@ -451,6 +451,7 @@ export default function ChecklistDetailsPage({
               placeholder="Review notes or correction instructions"
             />
             <div className="mt-3 flex flex-wrap gap-2">
+              <button className="btn-secondary" disabled={saving || !reviewNotes.trim()} onClick={() => review("comment")}>Add Comment</button>
               {reviewerCanReturn && (
                 <button
                   className="btn-secondary"
@@ -687,7 +688,7 @@ export default function ChecklistDetailsPage({
         </div>
       )}
 
-      {checklist.reviewNotes && checklist.status !== "submitted" && (
+      {checklist.reviewNotes && (
         <div className="card-modern">
           <h3 className="font-black text-[#123746]">Review Notes</h3>
           <p className="mt-2 text-sm font-semibold text-[#607482]">{checklist.reviewNotes}</p>

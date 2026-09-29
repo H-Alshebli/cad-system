@@ -15,8 +15,37 @@ service cloud.firestore {
     }
     function draftOpen(data) { return data.get('locked', false) == false && data.get('finalizedAt', null) == null; }
     function canEditReport() { return can('epcr', 'edit'); }
+    // Evaluate identity and load the role once for this multi-permission path.
+    function employeeUserUpdateAllowed(actor) {
+      let permissions = get(/databases/$(database)/documents/roles/$(actor.role)).data.get('permissions', {});
+      let ambulances = permissions.get('ambulances', {});
+      let projects = permissions.get('projects', {});
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (changed.hasOnly(['ambulanceIds','updatedAt'])
+          && (ambulances.get('create', false) == true || ambulances.get('edit', false) == true || ambulances.get('assign', false) == true
+            || projects.get('create', false) == true || projects.get('edit', false) == true || projects.get('assign', false) == true))
+        || (changed.hasOnly(['accountType']) && request.resource.data.accountType in ['employee','client']
+          && permissions.get('users', {}).get('edit', false) == true)
+        || (changed.hasOnly([
+          'crewProfileAttachments','crewProfileCompletion','crewProfileMissingFields','crewProfilePendingVerificationFields',
+          'crewProfileRejectedFields','crewProfileExpiredFields','crewProfileExpiringSoonFields','crewProfileStatus',
+          'crewProfileComplianceStatus','crewProfileIsComplete','crewProfileIsCompliant','profileUpdatedAt','updatedAt'
+        ]) && permissions.get('crew_profile', {}).get('edit_all', false) == true);
+    }
+    function activeUserUpdateAllowed() {
+      let actor = userDoc().data;
+      return actor.get('role', '') in ['admin', 'super_admin', 'superadmin']
+        || (actor.get('accountType', '') != 'client' && employeeUserUpdateAllowed(actor));
+    }
 
     match /users/{userId} {
+      match /reviewNotifications/{notificationId} {
+        allow read: if isActiveUser() && request.auth.uid == userId;
+        allow update: if isActiveUser() && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow create, delete: if false;
+      }
       allow read: if isSignedIn();
       allow create: if isAdmin() || (isSignedIn() && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['name','email','active','accountStatus','accountType','crewProfileRequirementMode','role','crewProfile','createdAt'])
@@ -26,16 +55,7 @@ service cloud.firestore {
         && request.resource.data.crewProfileRequirementMode == 'full'
         && request.resource.data.email == request.auth.token.email);
       // No client self-promotion, UID spoofing, account activation or role edits.
-      allow update: if isAdmin()
-        || ((can('ambulances','create') || can('ambulances','edit') || can('ambulances','assign') || can('projects','create') || can('projects','edit') || can('projects','assign'))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ambulanceIds','updatedAt']))
-        || (can('users','edit') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountType'])
-          && request.resource.data.accountType in ['employee','client'])
-        || (can('crew_profile','edit_all') && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'crewProfileAttachments','crewProfileCompletion','crewProfileMissingFields','crewProfilePendingVerificationFields',
-          'crewProfileRejectedFields','crewProfileExpiredFields','crewProfileExpiringSoonFields','crewProfileStatus',
-          'crewProfileComplianceStatus','crewProfileIsComplete','crewProfileIsCompliant','profileUpdatedAt','updatedAt'
-        ]));
+      allow update: if isActiveUser() && activeUserUpdateAllowed();
       allow delete: if false;
     }
     match /roles/{roleId} {
@@ -80,7 +100,22 @@ service cloud.firestore {
     match /clinics/{id} { allow read, create, update, delete: if isActiveUser(); }
     match /ambulances/{id} { allow read, create, update, delete: if isActiveUser(); }
     match /roaming/{id} { allow read, create, update, delete: if isActiveUser(); }
-    match /projectChecklists/{id} { allow read, create, update: if isActiveUser(); allow delete: if isAdmin(); }
+    match /projectChecklists/{id} {
+      allow read: if isActiveUser();
+      // Creation, submission and review now go through the server API.
+      allow create: if false;
+      allow update: if can('readiness_checklists','edit_own_draft')
+        && resource.data.inspectorUserId == request.auth.uid
+        && resource.data.status in ['draft','returned_for_correction']
+        && request.resource.data.status == 'draft'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'items','notes','durationSeconds','status','updatedAt','readinessScore','result',
+          'missingItems','someItems','unavailableItems','insufficientQuantityItems','criticalIssues',
+          'vehicleRedIssues','vehicleYellowIssues','vehicleGreenIssues','shortageIssues','controlRoomWarnings','checkedCount','applicableCount'
+        ]);
+      allow delete: if isAdmin();
+      match /reviewEvents/{eventId} { allow read: if isActiveUser(); allow write: if false; }
+    }
     match /projectExpiryItems/{id} { allow read: if isActiveUser(); allow create, update, delete: if isAdmin(); }
     match /logs/{id} { allow read, create, update, delete: if isActiveUser(); }
     match /{document=**} { allow read, write: if false; }

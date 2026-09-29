@@ -12,10 +12,15 @@ function client(uid, owner = false) {
   connectFirestoreEmulator(db, '127.0.0.1', 8089, { mockUserToken: owner ? 'owner' : { sub: uid, user_id: uid, email: `${uid}@example.invalid` } });
   return db;
 }
-async function denied(promise) { await assert.rejects(promise, e => e.code === 'permission-denied'); }
+async function denied(promise) {
+  await assert.rejects(promise, e => {
+    assert(!/maximum of 1000|expressions to evaluate|evaluation limit/i.test(String(e.message)), 'Rule evaluation limit is not a valid authorization denial');
+    return e.code === 'permission-denied';
+  });
+}
 (async () => {
   const seed = client('seed', true);
-  const roles = { crew: { epcr: { create: true, edit: true, finalize: true } }, dispatcher: { ambulances: { assign: true } }, director: { epcr_medical_review: { view: true, approve: true } } };
+  const roles = { crew: { epcr: { create: true, edit: true, finalize: true }, readiness_checklists: { edit_own_draft: true } }, dispatcher: { ambulances: { assign: true } }, director: { epcr_medical_review: { view: true, approve: true } } };
   for (const [role, permissions] of Object.entries(roles)) await setDoc(doc(seed, 'roles', role), { permissions });
   for (const [uid, role, active] of [['crew','crew',true], ['admin','admin',true], ['dispatcher','dispatcher',true], ['director','director',true], ['inactive','crew',false]]) {
     await setDoc(doc(seed, 'users', uid), { name: 'SYNTHETIC', role, active, accountType: 'employee' });
@@ -30,6 +35,16 @@ async function denied(promise) { await assert.rejects(promise, e => e.code === '
   await updateDoc(doc(dispatcher,'users','crew'), { ambulanceIds: ['TEST'], updatedAt: new Date() });
   await denied(updateDoc(doc(dispatcher,'users','crew'), { ambulanceIds: ['TEST'], role: 'admin' }));
   await updateDoc(doc(admin,'users','new'), { active: true, role: 'crew' });
+  // Exercise every non-admin user-update branch, including the final branch.
+  for (const [module, action] of [['ambulances','create'], ['ambulances','edit'], ['ambulances','assign'], ['projects','create'], ['projects','edit'], ['projects','assign'], ['users','edit'], ['crew_profile','edit_all']]) {
+    await setDoc(doc(seed,'roles','branch'), { permissions: { [module]: { [action]: true } } });
+    await setDoc(doc(seed,'users','branch'), { active: true, role: 'branch', accountType: 'employee' });
+    const branch = client(`branch-${module}-${action}`);
+    await setDoc(doc(seed,'users',`branch-${module}-${action}`), { active: true, role: 'branch', accountType: 'employee' });
+    const allowed = module === 'users' ? { accountType: 'employee' } : module === 'crew_profile' ? { crewProfileIsComplete: true } : { ambulanceIds: ['BRANCH'], updatedAt: new Date() };
+    await updateDoc(doc(branch,'users','crew'), allowed);
+    await denied(updateDoc(doc(branch,'users','crew'), { ...allowed, role: 'admin' }));
+  }
   await denied(updateDoc(doc(crew,'roles','crew'), { permissions: { epcr_medical_review: { approve: true } } }));
   const draft = { status: 'draft', locked: false, finalizedAt: null, createdBy: 'crew', caseId: 'TEST' };
   await setDoc(doc(crew,'epcr','TEST'), draft);
@@ -49,6 +64,20 @@ async function denied(promise) { await assert.rejects(promise, e => e.code === '
   await denied(getDoc(doc(inactive,'epcr','TEST')));
   await updateDoc(doc(seed,'epcr','TEST'), { locked: false, finalizedAt: null, status: 'draft', medicalReview: { status: 'returned' } });
   await updateDoc(doc(crew,'epcr','TEST'), { patientInfo: { firstName: 'CORRECTED' } });
+  await setDoc(doc(seed,'users','crew','reviewNotifications','N'), { title: 'Synthetic', link: '/epcr/TEST', read: false, createdAt: new Date() });
+  await getDoc(doc(crew,'users','crew','reviewNotifications','N'));
+  await denied(getDoc(doc(director,'users','crew','reviewNotifications','N')));
+  await updateDoc(doc(crew,'users','crew','reviewNotifications','N'), { read: true });
+  await denied(updateDoc(doc(crew,'users','crew','reviewNotifications','N'), { title: 'forged' }));
+  await denied(setDoc(doc(admin,'reviewNotificationOutbox','fake'), { status: 'pending' }));
+  await denied(setDoc(doc(crew,'projectChecklists','C'), { status: 'submitted', inspectorUserId: 'crew' }));
+  await setDoc(doc(seed,'projectChecklists','C'), { status: 'draft', inspectorUserId: 'crew' });
+  await updateDoc(doc(crew,'projectChecklists','C'), { notes: 'Synthetic draft', updatedAt: new Date() });
+  await denied(updateDoc(doc(crew,'projectChecklists','C'), { status: 'submitted' }));
+  await denied(updateDoc(doc(admin,'projectChecklists','C'), { status: 'approved' }));
+  await denied(updateDoc(doc(crew,'projectChecklists','C'), { notificationCohortAt: '2026-10-01' }));
+  await updateDoc(doc(seed,'projectChecklists','C'), { status: 'submitted' });
+  await denied(updateDoc(doc(crew,'projectChecklists','C'), { status: 'draft', notes: 'tamper' }));
   console.log('PASS Firestore emulator: safe signup, self-promotion/activation denied, admin user management, assignment compatibility, role forgery, draft/consent writes, server-only review, immutable audit, locked records, returned edits.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   await Promise.all(apps.map(async app => { await terminate(getFirestore(app)); await deleteApp(app); }));

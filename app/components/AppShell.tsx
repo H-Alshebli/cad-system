@@ -8,6 +8,7 @@ import CaseAlertListener from "./CaseAlertListener";
 import ChatNotificationListener from "./ChatNotificationListener";
 import EnvironmentBanner from "./EnvironmentBanner";
 import ItSupportWidget from "./ItSupportWidget";
+import ReviewNotificationInbox from "./ReviewNotificationInbox";
 import { auth } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { isClientAccount } from "@/lib/userAccounts";
@@ -204,6 +205,7 @@ export default function AppShell({
           </div>
 
           <div className="min-w-0 w-full px-4 py-4 lg:px-6 lg:py-5 [&>*]:max-w-none">
+            <ReviewNotificationInbox />
             {children}
           </div>
 
