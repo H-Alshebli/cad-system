@@ -20,6 +20,7 @@ import { getEpcrStatus } from "@/lib/epcrStatus";
 import { medicalReviewLabel, MedicalReview } from "@/lib/epcrMedicalReview";
 import { matchesSubmissionDate } from "@/lib/epcrDraftCore";
 import SubmissionsExportDialog from "./SubmissionsExportDialog";
+import SubmissionsMultiSelect from "./SubmissionsMultiSelect";
 
 const HISTORICAL_IMPORT_HEADERS = [
   "Submission ID", "Project ID", "Project Name", "Report Date", "Patient First Name",
@@ -283,9 +284,9 @@ export default function CaseEpcrSubmissionsTable({
   const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [caseStatusFilter, setCaseStatusFilter] = useState("all");
-  const [epcrStatusFilter, setEpcrStatusFilter] = useState("all");
-  const [selectedProject, setSelectedProject] = useState("all");
+  const [caseStatusFilter, setCaseStatusFilter] = useState<string[]>([]);
+  const [epcrStatusFilter, setEpcrStatusFilter] = useState<string[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string[]>([]);
   const [fromDateTime, setFromDateTime] = useState("");
   const [toDateTime, setToDateTime] = useState("");
   const [detailed, setDetailed] = useState(true);
@@ -489,16 +490,16 @@ export default function CaseEpcrSubmissionsTable({
       const matchesSearch = !keyword || searchableText.includes(keyword);
 
       const matchesCaseStatus =
-        caseStatusFilter === "all" ||
-        caseItem.status?.toLowerCase() === caseStatusFilter.toLowerCase();
+        caseStatusFilter.length === 0 ||
+        caseStatusFilter.some(status => caseItem.status?.toLowerCase() === status.toLowerCase());
 
       const epcrStatus = getEpcrStatus(epcr);
 
       const matchesEpcrStatus =
-        epcrStatusFilter === "all" ||
-        epcrStatus.toLowerCase() === epcrStatusFilter.toLowerCase();
+        epcrStatusFilter.length === 0 ||
+        epcrStatusFilter.some(status => epcrStatus.toLowerCase() === status.toLowerCase());
 
-      const matchesProject = selectedProject === "all" || getProjectName(caseItem, epcr) === selectedProject;
+      const matchesProject = selectedProject.length === 0 || selectedProject.includes(getProjectName(caseItem, epcr));
       const validRange = !fromDateTime || !toDateTime || fromDateTime <= toDateTime;
       return matchesSearch && matchesCaseStatus && matchesEpcrStatus && matchesProject && validRange && matchesSubmissionDate(caseItem.createdAt, fromDateTime, toDateTime);
     });
@@ -619,31 +620,10 @@ export default function CaseEpcrSubmissionsTable({
             className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none placeholder:text-[#7F7F7F] focus:border-[#274C5A]"
           />
 
-          <select
-            value={caseStatusFilter}
-            onChange={(e) => setCaseStatusFilter(e.target.value)}
-            className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#274C5A]"
-          >
-            <option value="all">All Case Statuses</option>
-            {caseStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={epcrStatusFilter}
-            onChange={(e) => setEpcrStatusFilter(e.target.value)}
-            className="rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] outline-none focus:border-[#274C5A]"
-          >
-            <option value="all">All ePCR Statuses</option>
-            {epcrStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
+          <SubmissionsMultiSelect label="Case Status" allLabel="All Case Statuses" options={caseStatuses}
+            value={caseStatusFilter} onChange={setCaseStatusFilter} />
+          <SubmissionsMultiSelect label="ePCR Status" allLabel="All ePCR Statuses" options={epcrStatuses}
+            value={epcrStatusFilter} onChange={setEpcrStatusFilter} />
 
           <button
             onClick={() => setExportSelection([...filteredRows])}
@@ -654,18 +634,17 @@ export default function CaseEpcrSubmissionsTable({
           </button>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="min-w-0 text-xs font-bold">Project
-            <select className="mt-1 w-full rounded-lg border p-2 text-sm" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
-              <option value="all">All projects</option>{projectOptions.map(name => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
+          <div className="min-w-0 text-xs font-bold">Project
+            <div className="mt-1"><SubmissionsMultiSelect label="Project" allLabel="All projects" options={projectOptions}
+              value={selectedProject} onChange={setSelectedProject} /></div>
+          </div>
           <label className="min-w-0 text-xs font-bold">Case created — from
             <input type="datetime-local" className="mt-1 w-full min-w-0 rounded-lg border p-2 text-sm" value={fromDateTime} onChange={e => setFromDateTime(e.target.value)} />
           </label>
           <label className="min-w-0 text-xs font-bold">Case created — to
             <input type="datetime-local" className="mt-1 w-full min-w-0 rounded-lg border p-2 text-sm" value={toDateTime} onChange={e => setToDateTime(e.target.value)} />
           </label>
-          <button className="self-end rounded-lg border p-2 text-sm font-bold" onClick={() => { setSearch(""); setSelectedProject("all"); setFromDateTime(""); setToDateTime(""); setCaseStatusFilter("all"); setEpcrStatusFilter("all"); }}>Reset filters</button>
+          <button className="self-end rounded-lg border p-2 text-sm font-bold" onClick={() => { setSearch(""); setSelectedProject([]); setFromDateTime(""); setToDateTime(""); setCaseStatusFilter([]); setEpcrStatusFilter([]); }}>Reset filters</button>
         </div>
         <p className="mt-2 text-xs">Dates and times use your device timezone. Export includes all matching results, not just this page.</p>
         {fromDateTime && toDateTime && fromDateTime > toDateTime && <p role="alert" className="mt-2 text-sm text-red-700">The end date/time must be after the start.</p>}
