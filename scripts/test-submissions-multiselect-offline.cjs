@@ -35,19 +35,25 @@ const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../app/com
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX }
 }).outputText;
 const exportsObject = {};
-vm.runInNewContext(code, { exports: exportsObject, require: name => name === 'react' ? { useRef: () => ({ current: null }) } : require(name) });
+let open = false;
+vm.runInNewContext(code, { exports: exportsObject, require: name => name === 'react' ? {
+  useRef: () => ({ current: null }), useId: () => 'test-panel', useEffect: () => {},
+  useState: () => [open, next => { open = typeof next === 'function' ? next(open) : next; }],
+} : require(name) });
 function nodes(tree, type) {
   if (!tree || typeof tree !== 'object') return [];
   return [...(tree.type === type ? [tree] : []), ...React.Children.toArray(tree.props?.children).flatMap(child => nodes(child, type))];
 }
 let value = [];
 function render() { return exportsObject.default({ label: 'Project', allLabel: 'All projects', options: ['A', 'B'], value, onChange: next => { value = Array.from(next); } }); }
+assert.equal(nodes(render(), 'input').length, 0);
+nodes(render(), 'button')[0].props.onClick();
 nodes(render(), 'input')[0].props.onChange({ target: { checked: true } });
 nodes(render(), 'input')[1].props.onChange({ target: { checked: true } });
 assert.deepEqual(value, ['A', 'B']);
 assert(nodes(render(), 'input').every(node => node.props.checked));
 nodes(render(), 'input')[0].props.onChange({ target: { checked: false } });
 assert.deepEqual(value, ['B']);
-nodes(render(), 'button')[0].props.onClick();
+nodes(render(), 'button')[1].props.onClick();
 assert.deepEqual(value, []);
 console.log('PASS multiple selections, deselection, clear, OR within filters, AND across filters, search/date compatibility, reset and full matching export wiring. Synthetic data only.');

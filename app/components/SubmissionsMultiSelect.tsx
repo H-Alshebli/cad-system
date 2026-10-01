@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type Props = {
   label: string;
@@ -11,21 +11,36 @@ type Props = {
 };
 
 export default function SubmissionsMultiSelect({ label, allLabel, options, value, onChange }: Props) {
-  const details = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!container.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
   return (
-    <details ref={details} className="relative min-w-0"
-      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }}
+    <div ref={container} className="relative min-w-0"
+      onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false); }}
       onKeyDown={event => {
-        if (event.key === "Escape" && details.current?.open) {
-          details.current.open = false;
-          details.current.querySelector("summary")?.focus();
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          setOpen(false);
+          trigger.current?.focus();
         }
       }}>
-      <summary aria-label={`${label}: ${value.length ? value.join(", ") : allLabel}`}
-        className="cursor-pointer rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-sm font-semibold text-[#274C5A] focus-visible:outline focus-visible:outline-2">
+      <button ref={trigger} type="button" aria-expanded={open} aria-controls={panelId}
+        aria-label={`${label}: ${value.length ? `${value.length} selected` : allLabel}`}
+        onClick={() => setOpen(previous => !previous)}
+        className="w-full cursor-pointer rounded-xl border border-[#86A7B2]/30 bg-[#f8fbfc] px-4 py-2 text-left text-sm font-semibold text-[#274C5A] focus-visible:outline focus-visible:outline-2">
+        <span aria-hidden="true">{open ? "▾ " : "▸ "}</span>
         {value.length ? `${label} (${value.length})` : allLabel}
-      </summary>
-      <div role="group" aria-label={label} className="absolute left-0 top-full z-30 mt-1 max-h-72 w-full min-w-0 overflow-y-auto rounded-xl border bg-white p-2 shadow-lg">
+      </button>
+      {open && <div id={panelId} role="group" aria-label={label} className="absolute left-0 top-full z-30 mt-1 max-h-72 w-full min-w-0 overflow-y-auto rounded-xl border bg-white p-2 shadow-lg">
         <button type="button" onClick={() => onChange([])} className="w-full rounded p-2 text-left text-sm font-bold text-[#274C5A] hover:bg-slate-100">
           {allLabel} / Clear selection
         </button>
@@ -36,7 +51,7 @@ export default function SubmissionsMultiSelect({ label, allLabel, options, value
             <span className="min-w-0 break-words">{option}</span>
           </label>
         ))}
-      </div>
-    </details>
+      </div>}
+    </div>
   );
 }

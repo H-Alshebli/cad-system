@@ -504,7 +504,7 @@ export default function CaseEpcrSubmissionsTable({
       return matchesSearch && matchesCaseStatus && matchesEpcrStatus && matchesProject && validRange && matchesSubmissionDate(caseItem.createdAt, fromDateTime, toDateTime);
     });
   }, [rows, search, caseStatusFilter, epcrStatusFilter, selectedProject, fromDateTime, toDateTime]);
-  const projectOptions = Array.from(new Set(rows.map(({ caseItem, epcr }) => getProjectName(caseItem, epcr)))).sort();
+  const projectOptions = useMemo(() => Array.from(new Set(rows.map(({ caseItem, epcr }) => getProjectName(caseItem, epcr)))).sort(), [rows]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / 50));
   const currentPage = Math.min(page, totalPages - 1);
   const visibleRows = filteredRows.slice(currentPage * 50, (currentPage + 1) * 50);
@@ -516,15 +516,15 @@ export default function CaseEpcrSubmissionsTable({
     (row) => row.caseItem.status?.toLowerCase() === "closed"
   ).length;
 
-  const caseStatuses = Array.from(
+  const caseStatuses = useMemo(() => Array.from(
     new Set(rows.map((row) => row.caseItem.status).filter(Boolean))
-  ) as string[];
+  ) as string[], [rows]);
 
-  const epcrStatuses = Array.from(
+  const epcrStatuses = useMemo(() => Array.from(
     new Set(
       rows.map((row) => getEpcrStatus(row.epcr)).filter(Boolean)
     )
-  ) as string[];
+  ) as string[], [rows]);
 
   if (loadError) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{loadError}</p>;
   if (loading || epcrLoading) {
