@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, doc, getDoc, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, doc, documentId, getDoc, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
@@ -512,35 +512,72 @@ export default function NewProjectChecklistPage({
     });
   }, [isManualMode]);
 
+  const selectedExistingProject = useMemo(
+    () => projects.find((entry) => entry.id === selectedProjectId),
+    [projects, selectedProjectId]
+  );
+  const projectForUnitDetection =
+    isManualMode && selectedExistingProject ? selectedExistingProject : project;
+
   useEffect(() => {
+    /* A manual checklist has no project context until the user picks one. Do
+       not subscribe to every ambulance on mobile just to render the first step. */
+    if (isManualMode && !selectedProjectId) {
+      setAmbulances([]);
+      return;
+    }
+
+    const assignedUnitIds = Array.from(getProjectAssignedUnitIds(projectForUnitDetection));
+    if (isManualMode && assignedUnitIds.length === 0) {
+      setAmbulances([]);
+      return;
+    }
+
+    if (isManualMode) {
+      let cancelled = false;
+      const chunks = Array.from({ length: Math.ceil(assignedUnitIds.length / 30) }, (_, index) =>
+        assignedUnitIds.slice(index * 30, index * 30 + 30)
+      );
+      Promise.all(chunks.map((ids) => getDocs(query(collection(db, "ambulances"), where(documentId(), "in", ids)))))
+        .then((snapshots) => {
+          if (cancelled) return;
+          setAmbulances(
+            snapshots.flatMap((snap) => snap.docs)
+              .map((entry) => ({ id: entry.id, ...entry.data() } as any))
+              .filter((unit) => !unit.archived && !unit.disabled)
+          );
+        })
+        .catch((loadError) => {
+          console.error("Failed to load assigned ambulances for readiness checklist", loadError);
+          if (!cancelled) setAmbulances([]);
+        });
+      return () => { cancelled = true; };
+    }
+
     const unsub = onSnapshot(
       collection(db, "ambulances"),
-      (snap) => {
-        const rows = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as any))
-          .filter((unit) => !unit.archived && !unit.disabled);
-        setAmbulances(rows);
-      },
+      (snap) => setAmbulances(snap.docs.map((entry) => ({ id: entry.id, ...entry.data() } as any)).filter((unit) => !unit.archived && !unit.disabled)),
       (loadError) => {
         console.error("Failed to load ambulances for readiness checklist", loadError);
         setAmbulances([]);
       }
     );
-
     return () => unsub();
-  }, []);
+  }, [isManualMode, projectForUnitDetection, selectedProjectId]);
 
   useEffect(() => {
+    const checklistProjectId = isManualMode ? selectedProjectId : params.projectId;
+    if (!checklistProjectId || (isManualMode && !selectedProjectId)) {
+      setProjectChecklists([]);
+      return;
+    }
     const unsub = onSnapshot(
-      collection(db, "projectChecklists"),
-      (snap) => {
-        setProjectChecklists(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
+      query(collection(db, "projectChecklists"), where("projectId", "==", checklistProjectId)),
+      (snap) => setProjectChecklists(snap.docs.map((entry) => ({ id: entry.id, ...entry.data() }))),
       () => setProjectChecklists([])
     );
-
     return () => unsub();
-  }, []);
+  }, [isManualMode, params.projectId, selectedProjectId]);
 
   useEffect(() => {
     const targetProjectId = isManualMode ? selectedProjectId : params.projectId;
@@ -549,10 +586,9 @@ export default function NewProjectChecklistPage({
       return;
     }
 
-    const unsub = onSnapshot(
-      collection(db, "cases"),
-      (snap) => {
-        const missionUnits = snap.docs
+    const snapshots = new Map<string, any[]>();
+    const updateMissionUnits = () => {
+      const missionUnits = Array.from(snapshots.values()).flat()
           .map((d) => ({ id: d.id, ...d.data() } as any))
           .filter((mission) => {
             const missionProjectId = mission.projectId || mission.assignedProjectId || "";
@@ -576,21 +612,17 @@ export default function NewProjectChecklistPage({
               : null;
           })
           .filter(Boolean) as any[];
-
-        setProjectMissionUnits(missionUnits);
-      },
-      () => setProjectMissionUnits([])
+      setProjectMissionUnits(missionUnits);
+    };
+    const subscribe = (field: "projectId" | "assignedProjectId") => onSnapshot(
+      query(collection(db, "cases"), where(field, "==", targetProjectId)),
+      (snap) => { snapshots.set(field, snap.docs); updateMissionUnits(); },
+      () => { snapshots.delete(field); updateMissionUnits(); }
     );
-
-    return () => unsub();
+    const unsubProject = subscribe("projectId");
+    const unsubAssigned = subscribe("assignedProjectId");
+    return () => { unsubProject(); unsubAssigned(); };
   }, [isB2CMode, isManualMode, params.projectId, selectedProjectId]);
-
-  const selectedExistingProject = useMemo(
-    () => projects.find((entry) => entry.id === selectedProjectId),
-    [projects, selectedProjectId]
-  );
-  const projectForUnitDetection =
-    isManualMode && selectedExistingProject ? selectedExistingProject : project;
 
   useEffect(() => {
     if (sourceChecklistId && checklistPhase === "closing") return;
