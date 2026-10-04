@@ -100,7 +100,7 @@ export type ReadinessChecklistPayload = {
   shiftStartTime?: string;
   shiftEndTime?: string;
   crewUserIds?: string[];
-  crewAssignmentSource?: "shift" | "legacy";
+  crewAssignmentSource?: "shift" | "legacy" | "clinic";
   serviceType?: ServiceType | string;
   deploymentType?: DeploymentType | string;
   checklistCategory?: DeploymentType | string;
