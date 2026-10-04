@@ -36,6 +36,7 @@ import {
   resolveCurrentProjectShift,
 } from "@/lib/readinessChecklist";
 import { normalizeShiftCrewAssignments } from "@/lib/projectShiftCrew";
+import { ClinicUnit, createClinicUnit, normalizeClinicUnits } from "@/lib/clinicUnits";
 
 const REQUEST_TYPES = [
   "Clinic",
@@ -211,6 +212,7 @@ export default function EditProjectPage({
     useState<Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">>("Ambulance");
   const [readinessUnitOverrides, setReadinessUnitOverrides] =
     useState<ReadinessUnitOverrides>({});
+  const [clinicUnits, setClinicUnits] = useState<ClinicUnit[]>([]);
 
   const [users, setUsers] = useState<User[]>([]);
   const [ambulances, setAmbulances] = useState<Ambulance[]>([]);
@@ -298,6 +300,7 @@ export default function EditProjectPage({
           "Ambulance") as Extract<DeploymentType, "Clinic" | "Ambulance" | "Ambulance + Clinic" | "Walking Team">
       );
       setReadinessUnitOverrides(data.readinessUnitOverrides || {});
+      setClinicUnits(normalizeClinicUnits(data.clinicUnits));
 
       const ambIds = Array.isArray(data.assignedAmbulanceIds)
         ? data.assignedAmbulanceIds
@@ -471,6 +474,26 @@ export default function EditProjectPage({
         })
         .filter(Boolean) as Array<[string, ProjectReadinessUnitOverride]>
     );
+  };
+
+  const addClinic = () => setClinicUnits((current) => [...current, createClinicUnit(current.length + 1)]);
+
+  const updateClinic = (clinicId: string, patch: Partial<ClinicUnit>) => {
+    setClinicUnits((current) => current.map((clinic) => clinic.id === clinicId ? { ...clinic, ...patch } : clinic));
+  };
+
+  const removeClinic = (clinicId: string) => {
+    setClinicUnits((current) => current.filter((clinic) => clinic.id !== clinicId));
+  };
+
+  const toggleClinicUser = (clinicId: string, userId: string) => {
+    setClinicUnits((current) => current.map((clinic) => {
+      if (clinic.id !== clinicId) return clinic;
+      const assignedUserIds = clinic.assignedUserIds.includes(userId)
+        ? clinic.assignedUserIds.filter((id) => id !== userId)
+        : [...clinic.assignedUserIds, userId];
+      return { ...clinic, assignedUserIds };
+    }));
   };
 
   const visibleUsers = useMemo(() => {
@@ -918,6 +941,7 @@ export default function EditProjectPage({
 
       assignedAmbulanceIds: selectedAmbulanceIds,
       assignedAmbulances: selectedAmbulancesWithCrew,
+      clinicUnits,
       shiftSchedule: selectedShiftSchedule,
       shiftSchedulePreset: shiftPreset,
       readinessDefaults: {
@@ -1833,6 +1857,55 @@ return (
               </div>
             )}
           </div>
+        </div>
+
+        <div className={cardClass}>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[#123746]">Clinic Units</h2>
+              <p className="mt-1 text-xs text-[#607482]">
+                Clinics are operational units, not ambulances. Each clinic receives the Clinic readiness checklist for its assigned team.
+              </p>
+            </div>
+            <button type="button" onClick={addClinic} className="rounded-xl bg-[#166575] px-3 py-2 text-xs font-black text-white hover:bg-[#0f5360]">
+              Add Clinic
+            </button>
+          </div>
+
+          {clinicUnits.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#b9d8df] p-4 text-sm text-[#607482]">No clinic units configured for this project.</div>
+          ) : (
+            <div className="space-y-3">
+              {clinicUnits.map((clinic) => (
+                <div key={clinic.id} className="rounded-xl border border-[#d8e6ea] bg-[#f7fbfc] p-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                    <label className={labelClass}>Clinic name
+                      <input className={inputClass} value={clinic.name} onChange={(event) => updateClinic(clinic.id, { name: event.target.value })} />
+                    </label>
+                    <label className={labelClass}>Clinic code
+                      <input className={inputClass} value={clinic.unitCode} onChange={(event) => updateClinic(clinic.id, { unitCode: event.target.value })} />
+                    </label>
+                    <button type="button" onClick={() => removeClinic(clinic.id)} className="self-end rounded-xl border border-red-300 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50">Remove</button>
+                  </div>
+                  <div className="mt-4">
+                    <p className={labelClass}>Clinic team</p>
+                    {selectedUsers.length === 0 ? (
+                      <p className="mt-1 text-xs text-amber-700">Add project team members first, then assign them to this clinic.</p>
+                    ) : (
+                      <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                        {selectedUsers.map((member) => (
+                          <label key={member.id} className="flex items-center gap-2 rounded-lg border border-[#d8e6ea] bg-white p-2 text-xs text-[#123746]">
+                            <input type="checkbox" checked={clinic.assignedUserIds.includes(member.id)} onChange={() => toggleClinicUser(clinic.id, member.id)} />
+                            <span>{getUserName(member)} - {getUserRole(member)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* HOSPITALS + MEDICAL INFO */}

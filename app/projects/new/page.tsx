@@ -16,6 +16,7 @@ import PermissionGuard from "@/app/components/PermissionGuard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { usePermissions } from "@/lib/usePermissions";
 import { uploadProjectLogo } from "@/lib/storageUploads";
+import { createClinicUnit } from "@/lib/clinicUnits";
 import {
   CREW_COMPLIANCE_ENFORCEMENT_ENABLED,
   getCrewDeploymentReadiness,
@@ -728,6 +729,10 @@ export default function NewProjectPage() {
 
       assignedAmbulanceIds: selectedAmbulanceIds,
       assignedAmbulances: assignedAmbulancesPayload,
+      clinicUnits:
+        defaultReadinessDeploymentType === "Clinic" || defaultReadinessDeploymentType === "Ambulance + Clinic"
+          ? [createClinicUnit(1)]
+          : [],
       shiftSchedule: selectedShiftSchedule,
       shiftSchedulePreset: shiftPreset,
       readinessDefaults: {

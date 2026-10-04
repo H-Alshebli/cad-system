@@ -37,6 +37,7 @@ import {
 } from "@/lib/readinessChecklist";
 import { getProjectDisplayName, getUnitDisplayName } from "@/lib/displayLabels";
 import { normalizeShiftCrewAssignments, resolveAmbulanceCrewForShift } from "@/lib/projectShiftCrew";
+import { projectClinicUnits } from "@/lib/clinicUnits";
 
 const STATUS_OPTIONS = [
   { value: "unchecked", label: "Select" },
@@ -257,10 +258,19 @@ function getProjectAssignedUnitIds(project: any) {
     });
   }
 
+  projectClinicUnits(project).forEach((unit) => ids.add(unit.unitId));
+
   return ids;
 }
 
 function getUnitAssignedUserIds(unit: any, shiftId?: string) {
+  if (unit?.unitType === "Clinic") {
+    return new Set(
+      (Array.isArray(unit?.assignedUserIds) ? unit.assignedUserIds : [])
+        .map((id: unknown) => String(id || "").trim())
+        .filter(Boolean)
+    );
+  }
   return new Set(resolveAmbulanceCrewForShift(unit, shiftId).crewUserIds);
 }
 
@@ -607,12 +617,10 @@ export default function NewProjectChecklistPage({
           typeof unit === "string" ? { id: unit, unitId: unit, unitCode: unit } : unit
         )
       : [];
-    const projectUnits =
-      assignedUnitIds.size > 0
-        ? ambulances.filter((unit) => assignedUnitIds.has(getUnitIdFromRecord(unit)))
-        : ambulances;
+    const projectUnits = ambulances.filter((unit) => assignedUnitIds.has(getUnitIdFromRecord(unit)));
+    const clinicUnits = projectClinicUnits(projectForUnitDetection);
 
-    return mergeUnitOptions(projectUnits, embeddedProjectUnits, projectMissionUnits);
+    return mergeUnitOptions(projectUnits, embeddedProjectUnits, clinicUnits, projectMissionUnits);
   }, [ambulances, projectForUnitDetection, projectMissionUnits]);
   const selectedUnit = useMemo(
     () => unitOptions.find((unit) => getUnitIdFromRecord(unit) === selectedUnitId),
@@ -1120,7 +1128,16 @@ export default function NewProjectChecklistPage({
     }
     setSaving(true);
     try {
-      const checklistCrew = resolveAmbulanceCrewForShift(selectedUnit, resolvedShift.shiftId);
+      const clinicCrew = selectedUnit?.unitType === "Clinic";
+      const checklistCrew = clinicCrew
+        ? null
+        : resolveAmbulanceCrewForShift(selectedUnit, resolvedShift.shiftId);
+      const checklistCrewUserIds: string[] = clinicCrew
+        ? Array.from(getUnitAssignedUserIds(selectedUnit, resolvedShift.shiftId)).map((id) => String(id))
+        : checklistCrew?.crewUserIds || [];
+      const crewAssignmentSource: "clinic" | "shift" | "legacy" = clinicCrew
+        ? "clinic"
+        : checklistCrew?.source || "legacy";
       const nowMs = Date.now();
       const durationSeconds = Math.max(1, Math.round((nowMs - startedAtMs) / 1000));
       const ref = await createReadinessChecklist(
@@ -1138,8 +1155,8 @@ export default function NewProjectChecklistPage({
           shiftDate: resolvedShift.shiftDate,
           shiftStartTime: resolvedShift.shiftStartTime,
           shiftEndTime: resolvedShift.shiftEndTime,
-          crewUserIds: checklistCrew.crewUserIds,
-          crewAssignmentSource: checklistCrew.source,
+          crewUserIds: checklistCrewUserIds,
+          crewAssignmentSource,
           serviceType,
           deploymentType,
           checklistCategory: deploymentType,
