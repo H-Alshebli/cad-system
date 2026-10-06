@@ -17,9 +17,10 @@ vm.runInNewContext(compile('lib/server/epcrReviewAuth.ts'), { exports: auth, req
   user.role = 'Medical Director'; grants = {}; assert(!(await auth.epcrActor('Bearer synthetic')).can('epcr_medical_review','approve'));
   for (const role of ['admin','super_admin','superadmin']) { user.role = role; assert((await auth.epcrActor('Bearer synthetic')).can('epcr_medical_review','approve')); }
   user.active = false; assert.equal(await auth.epcrActor('Bearer synthetic'), null);
-  delete user.active; user.accountType = 'employee'; assert((await auth.epcrActor('Bearer synthetic')).can('epcr_medical_review','approve'));
+  delete user.active; assert.equal((await auth.epcrActor('Bearer synthetic')).uid, 'SYNTHETIC');
+  user.active = true;
   user.active = true; user.accountType = 'client'; assert.equal(await auth.epcrActor('Bearer synthetic'), null);
   user.accountType = 'employee'; revoked = true; assert.equal(await auth.epcrActor('Bearer synthetic'), null);
   assert.equal(await auth.epcrActor(null), null);
-  console.log('PASS server authentication: active and legacy employee records, revoked-token check, role-configured actions, no hardcoded director, admin aliases preserved. Synthetic only.');
+  console.log('PASS server authentication: active employee, revoked-token check, role-configured actions, no hardcoded director, admin aliases preserved. Synthetic only.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

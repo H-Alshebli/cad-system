@@ -8,9 +8,8 @@ export async function epcrActor(authorization: string | null) {
     const token = await adminAuth.verifyIdToken(bearer[1], true);
     const snapshot = await adminDb.collection("users").doc(token.uid).get();
     const user = snapshot.data();
-    // Legacy employee records predate the explicit `active` field.  The admin
-    // UI and the rest of the server treat them as active unless they were
-    // explicitly suspended, so this authentication gate must do the same.
+    // Older employee records do not always carry `active: true`; only an
+    // explicit deactivation should block a signed-in employee.
     if (!user || user.active === false || user.accountType === "client") return null;
     const role = String(user.role || "");
     const isAdmin = ["admin", "super_admin", "superadmin"].includes(role.toLowerCase().trim());

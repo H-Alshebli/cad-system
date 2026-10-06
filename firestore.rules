@@ -69,13 +69,11 @@ service cloud.firestore {
         && request.resource.data.get('status', '') == 'draft'
         && request.resource.data.createdBy == request.auth.uid
         && !request.resource.data.keys().hasAny(['medicalReview']);
-      allow update: if canEditReport() && draftOpen(resource.data) && draftOpen(request.resource.data)
-        && request.resource.data.get('status', '') == 'draft'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'patientInfo','projectInfo','medicalHistory','headToToe','narrativeVitals','outcome','transferTeam','time',
-          'status','updatedAt','draftRevision','lastDraftMutationId'
-        ]);
-      // Includes admins: lifecycle changes use the authenticated, audited server API.
+      // Draft changes go through the authenticated server route.  This prevents
+      // another tab or screen from bypassing version checks and overwriting a
+      // field currently being entered by a medic.
+      allow update: if false;
+      // Includes admins: lifecycle changes use authenticated, audited server APIs.
       allow delete: if false;
       match /forms/{formId} {
         allow read: if isActiveUser();
