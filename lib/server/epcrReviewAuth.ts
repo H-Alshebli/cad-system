@@ -8,7 +8,9 @@ export async function epcrActor(authorization: string | null) {
     const token = await adminAuth.verifyIdToken(bearer[1], true);
     const snapshot = await adminDb.collection("users").doc(token.uid).get();
     const user = snapshot.data();
-    if (!user || user.active !== true || user.accountType === "client") return null;
+    // Older employee records do not always carry `active: true`; only an
+    // explicit deactivation should block a signed-in employee.
+    if (!user || user.active === false || user.accountType === "client") return null;
     const role = String(user.role || "");
     const isAdmin = ["admin", "super_admin", "superadmin"].includes(role.toLowerCase().trim());
     const roleDoc = isAdmin ? null : await adminDb.collection("roles").doc(role).get();

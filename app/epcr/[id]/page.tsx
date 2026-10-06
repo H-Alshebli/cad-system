@@ -786,7 +786,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
   const setData: React.Dispatch<React.SetStateAction<EpcrDoc | null>> = draft.setData;
   const loading = draft.loading;
 
-  const locked = data?.locked === true || draft.busy || draft.blocked;
+  const locked = data?.locked === true || draft.busy || draft.blocked || draft.readOnly;
 
   const patientInfo = data?.patientInfo ?? emptyPatientInfo();
   const projectInfo = data?.projectInfo ?? emptyProjectInfo();
@@ -994,7 +994,7 @@ patientInfo.chiefComplaints.forEach((complaint) => {
 
       <div role="status" aria-live="polite" className="rounded-xl border border-[#c8dce2] bg-[#f8fbfc] p-3 text-sm font-semibold">{draft.message}</div>
       <EpcrMedicalReviewPanel id={epcrId} medicalReview={data.medicalReview} />
-      {draft.blocked && <EpcrDraftRecoveryPanel previewRecovery={draft.previewRecovery} recoverDraft={draft.recoverDraft} />}
+      {draft.blocked && <EpcrDraftRecoveryPanel previewRecovery={draft.previewRecovery} recoverDraft={draft.recoverDraft} continueWithServer={draft.continueWithServer} />}
       <div className="flex gap-4 justify-end flex-wrap">
         {!locked && (
           <>

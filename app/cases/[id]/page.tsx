@@ -357,10 +357,10 @@ export default function CaseDetailsPage({
 
   async function savePatientInfo() {
     const currentEpcr = await getDoc(doc(db, "epcr", caseId));
-    if (currentEpcr.exists() && currentEpcr.data()?.locked === true) {
+    if (currentEpcr.exists()) {
       setEpcr({ id: currentEpcr.id, ...currentEpcr.data() });
       setEditPatient(false);
-      alert("Patient information cannot be changed after the ePCR is finalized and locked.");
+      alert("Patient information for an existing ePCR must be updated from the ePCR report. This prevents a case edit from overwriting field documentation.");
       return;
     }
 
@@ -374,27 +374,6 @@ export default function CaseDetailsPage({
       patientAge: patientDraft.age || "",
       patientGender: patientDraft.gender || "",
     });
-
-    if (currentEpcr.exists()) {
-      const originalPatient = normalizePatient(caseData);
-      const fullName = String(patientDraft.name || "").trim();
-      const nameParts = fullName.split(/\s+/).filter(Boolean);
-      const epcrUpdates: Record<string, any> = { updatedAt: new Date() };
-      if (patientDraft.idNumber !== originalPatient.idNumber) {
-        epcrUpdates["patientInfo.patientId"] = patientDraft.idNumber || "";
-        epcrUpdates["patientInfo.patientIdUnavailable"] = false;
-        epcrUpdates["patientInfo.patientIdUnavailableReason"] = "";
-        epcrUpdates["patientInfo.patientIdUnavailableOther"] = "";
-      }
-      if (patientDraft.name !== originalPatient.name) {
-        epcrUpdates["patientInfo.firstName"] = nameParts[0] || "";
-        epcrUpdates["patientInfo.lastName"] = nameParts.slice(1).join(" ");
-      }
-      if (patientDraft.phone !== originalPatient.phone) epcrUpdates["patientInfo.phone"] = patientDraft.phone || "";
-      if (patientDraft.age !== originalPatient.age) epcrUpdates["patientInfo.age"] = patientDraft.age || null;
-      if (patientDraft.gender !== originalPatient.gender) epcrUpdates["patientInfo.gender"] = patientDraft.gender || "unknown";
-      batch.update(currentEpcr.ref, epcrUpdates);
-    }
 
     await batch.commit();
 

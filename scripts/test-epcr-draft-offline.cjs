@@ -10,6 +10,9 @@ const root = path.resolve(__dirname, '..');
 const compile = file => ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
 const core = {};
 vm.runInNewContext(compile('lib/epcrDraftCore.ts'), { exports: core, Date, Error });
+const changedPatient = core.draftPatch({ patientInfo: { patientId: '1234567890', lastName: 'Updated' } }, { patientInfo: { patientId: '123456', lastName: 'Original', firstName: 'Keep' } });
+assert.deepEqual(JSON.parse(JSON.stringify(changedPatient)), { 'patientInfo.patientId': '1234567890', 'patientInfo.lastName': 'Updated' });
+assert.deepEqual(JSON.parse(JSON.stringify(core.applyDraftPatch({ patientInfo: { patientId: '123456', lastName: 'Original', firstName: 'Keep' } }, changedPatient))), { patientInfo: { patientId: '1234567890', lastName: 'Updated', firstName: 'Keep' } });
 function harness(options = {}) {
   const uid = 'SYNTHETIC-USER';
   const original = { caseId: 'SYNTHETIC-CASE', locked: false, status: 'draft', updatedAt: new Date(1000), patientInfo: { firstName: 'TEST', lastName: 'ONLY' }, narrativeVitals: { narrative: 'synthetic' } };
@@ -37,7 +40,7 @@ function harness(options = {}) {
         get: async ref => ref.includes('/forms/') ? { exists: () => true, data: () => ({ completed: options.consent !== false }) } : snapshot(),
         update: (ref, patch) => pending.push([ref, patch]),
       });
-      for (const [ref, patch] of pending) if (ref === 'epcr/TEST') { Object.assign(server, patch); writes++; }
+      for (const [ref, patch] of pending) if (ref === 'epcr/TEST') { Object.assign(server, core.applyDraftPatch(server, patch)); writes++; }
       if (lostAck && pending.length) { lostAck = false; throw new Error('commit acknowledged late'); }
       return result;
     },
@@ -54,6 +57,17 @@ function harness(options = {}) {
       if (name === 'firebase/firestore') return api;
       if (name === './firebase') return { auth, db: { app: { options: { projectId: 'OFFLINE-TEST' } } } };
       if (name === './epcrDraftCore') return core;
+      if (name === './epcrDraftClient') return { sendEpcrDraft: async (_id, body) => {
+        if (options.serverFailure) throw new Error('network unavailable');
+        if (server.locked || server.finalizedAt) throw new Error('REPORT_LOCKED');
+        if (server.lastDraftMutationId === body.mutationId) return { record: core.draftPayload(server), version: core.draftVersion(server), duplicate: true };
+        if (core.draftVersion(server) !== body.baseVersion) throw new Error('REPORT_CONFLICT');
+        const next = core.applyDraftPatch(server, body.patch);
+        Object.assign(server, next, { status: 'draft', updatedAt: new Date(server.updatedAt.getTime() + 1), draftRevision: Number(server.draftRevision || 0) + 1, lastDraftMutationId: body.mutationId }); writes++;
+        if (lostAck) { lostAck = false; throw new Error('commit acknowledged late'); }
+        return { record: core.draftPayload(server), version: core.draftVersion(server), updatedAt: server.updatedAt, draftRevision: server.draftRevision, lastDraftMutationId: server.lastDraftMutationId };
+      } };
+      if (name === './epcrEditSessionClient') return { claimEpcrEditSession: async () => ({ editor: true }) };
       if (name === './epcrReviewClient') return { sendMedicalReview: async (_id, body) => {
         if (options.consent === false) return { result: 'consent' };
         assert.equal(body.action, 'submit');

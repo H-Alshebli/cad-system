@@ -19,9 +19,10 @@ function Value({ value }: { value: unknown }) {
   if (typeof value === "object") return <dl className="space-y-2">{Object.entries(value).map(([key, item]) => <div key={key}><dt className="font-bold">{key}</dt><dd className="ml-2 whitespace-pre-wrap break-words"><Value value={item} /></dd></div>)}</dl>;
   return <span className="whitespace-pre-wrap break-words">{String(value) || "Empty"}</span>;
 }
-export default function EpcrDraftRecoveryPanel({ previewRecovery, recoverDraft }: {
+export default function EpcrDraftRecoveryPanel({ previewRecovery, recoverDraft, continueWithServer }: {
   previewRecovery: () => Promise<RecoveryPreview>;
   recoverDraft: (token: string, choices: Record<string, "local" | "server">) => Promise<"server" | "local" | "failed">;
+  continueWithServer?: () => Promise<void>;
 }) {
   const [preview, setPreview] = useState<RecoveryPreview | null>(null);
   const [choices, setChoices] = useState<Record<string, "local" | "server">>({});
@@ -44,10 +45,17 @@ export default function EpcrDraftRecoveryPanel({ previewRecovery, recoverDraft }
     } catch (e) { setError(e instanceof Error ? e.message : "Recovery failed. Keep this page open."); }
     finally { setBusy(false); }
   }
+  async function useServer() {
+    if (!continueWithServer || busy || !window.confirm("Continue with the latest server copy? Your device copy will be archived on this device first.")) return;
+    setBusy(true); setError("");
+    try { await continueWithServer(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Server recovery failed. Your device copy was retained."); }
+    finally { setBusy(false); }
+  }
   return <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
     <h2 className="font-bold">Recover paused draft</h2>
     <p className="text-sm">Compare this device with the latest server copy. Nothing is merged automatically. Review signatures and test values carefully. Finalized reports cannot be unlocked here.</p>
-    <button type="button" disabled={busy} onClick={() => void compare()} className="rounded border bg-white px-3 py-2 disabled:opacity-50">{busy ? "Please wait…" : "Compare local and server copies"}</button>
+    <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void compare()} className="rounded border bg-white px-3 py-2 disabled:opacity-50">{busy ? "Please wait…" : "Compare local and server copies"}</button>{continueWithServer && <button type="button" disabled={busy} onClick={() => void useServer()} className="rounded border border-[#274C5A] bg-[#274C5A] px-3 py-2 text-white disabled:opacity-50">Continue with server version</button>}</div>
     {error && <p role="alert" className="text-red-800">{error}</p>}
     {preview && <>
       {DRAFT_FIELDS.map(field => <details key={field} className="rounded border bg-white p-3">
