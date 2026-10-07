@@ -326,6 +326,25 @@ const emptyTime = (): TimeSection => ({
   backTime: emptyTimeValue(),
 });
 
+// Older reports can contain a partial `time` object (for example, no
+// `arrivalTime`). Normalize it for display so one absent legacy field never
+// prevents a supervisor from opening the entire report.
+const normalizeTimeSection = (value?: Partial<TimeSection> | null): TimeSection => {
+  const defaults = emptyTime();
+  return {
+    ...defaults,
+    ...value,
+    movingTime: { ...defaults.movingTime, ...value?.movingTime },
+    leavingSceneTime: { ...defaults.leavingSceneTime, ...value?.leavingSceneTime },
+    waitingTime: { ...defaults.waitingTime, ...value?.waitingTime },
+    arrivalTime: { ...defaults.arrivalTime, ...value?.arrivalTime },
+    arrivalToPTTime: { ...defaults.arrivalToPTTime, ...value?.arrivalToPTTime },
+    hospitalTime: { ...defaults.hospitalTime, ...value?.hospitalTime },
+    dischargeTime: { ...defaults.dischargeTime, ...value?.dischargeTime },
+    backTime: { ...defaults.backTime, ...value?.backTime },
+  };
+};
+
 /* =========================
    OPTIONS
 ========================= */
@@ -761,7 +780,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
     outcome.hospitalName ||= getCaseDestinationHospitalName(caseData);
     record.outcome = outcome;
     record.transferTeam = await buildAutoTransferTeam(caseData, record.transferTeam) || record.transferTeam;
-    const time = { ...(record.time ?? emptyTime()) };
+    const time = normalizeTimeSection(record.time);
     const timeline = caseData.timeline;
     if (timeline) {
       const fill = (key: keyof TimeSection, current: string, legacy: string) => {
@@ -795,7 +814,7 @@ export default function EpcrPage({ params }: { params: { id: string } }) {
   const narrativeVitals = data?.narrativeVitals ?? emptyNarrativeVitals();
   const outcome = data?.outcome ?? emptyOutcome();
   const transferTeam = data?.transferTeam ?? emptyTransferTeam();
-  const time = data?.time ?? emptyTime();
+  const time = normalizeTimeSection(data?.time);
 
   const missing = useMemo(() => {
     if (!data) return [];
