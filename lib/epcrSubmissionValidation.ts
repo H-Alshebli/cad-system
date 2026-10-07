@@ -1,4 +1,22 @@
 // Server-side minimum submission checks. Keep aligned with the report form.
+// Legacy reports can carry complaint names that are no longer offered by the
+// current form. Only require a detail selection when the form can actually
+// present detail options for that complaint.
+const COMPLAINTS_WITH_DETAILS = new Set([
+  "Cardiac complaints",
+  "Respiratory complaints",
+  "Musculoskeletal complaints",
+  "Digestive complaints",
+  "Metabolic and endocrine complaints",
+  "General medical complaints",
+  "Environmental and toxicological complaints",
+  "Obstetric and gynecology complaints",
+  "Gastrointestinal complaints",
+  "Behavioral and psychological complaints",
+  "Infectious disease complaints",
+  "Other critical complaints",
+  "Other",
+]);
 export function submissionErrors(report: Record<string, any>): string[] {
   const missing: string[] = [];
   const p = report.patientInfo || {}, n = report.narrativeVitals || {}, o = report.outcome || {};
@@ -12,7 +30,9 @@ export function submissionErrors(report: Record<string, any>): string[] {
   need(text(p.triageColor), "Triage"); need(text(p.healthClassification), "Health classification");
   need(Array.isArray(p.chiefComplaints) && p.chiefComplaints.length, "Chief complaints");
   for (const complaint of Array.isArray(p.chiefComplaints) ? p.chiefComplaints : []) {
-    need(Array.isArray(p.chiefComplaintDetails?.[complaint]) && p.chiefComplaintDetails[complaint].some(text), `Complaint details: ${complaint}`);
+    if (COMPLAINTS_WITH_DETAILS.has(complaint)) {
+      need(Array.isArray(p.chiefComplaintDetails?.[complaint]) && p.chiefComplaintDetails[complaint].some(text), `Complaint details: ${complaint}`);
+    }
   }
   need(Array.isArray(p.signsAndSymptoms) && p.signsAndSymptoms.length, "Signs and symptoms");
   need(text(n.contactedMedicalDirector), "Contacted medical director"); need(text(n.narrative), "Narrative");
